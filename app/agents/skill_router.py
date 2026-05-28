@@ -18,63 +18,72 @@ from app.skills.registry import GENERIC_SKILL_NAME, get_skill_registry
 
 
 class SkillChoice(BaseModel):
-    is_oncall: bool = Field(default=True, description="用户输入是否属于 OnCall/运维诊断范围")
+    is_oncall: bool = Field(default=True, description="用户输入是否属于农业领域范围")
     skill_name: str = Field(..., description="选中的 Skill name (snake_case), 必须是给定菜单中已存在的项")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="路由置信度, 0 到 1")
     reason: str = Field(default="", description="一句话说明为什么选这个 Skill, 用于可观测")
 
 
-_ONCALL_KEYWORDS = (
-    "告警", "故障", "异常", "报错", "错误", "打不开", "打不开了", "无法打开", "无法访问",
-    "访问不了", "访问失败", "宕机", "挂了", "挂掉", "白屏", "黑屏", "空白页", "不可用",
-    "没反应", "请求失败", "加载失败", "登录失败", "支付失败", "超时", "延迟", "慢", "卡顿",
-    "连接", "断开", "重启", "崩溃", "排查", "诊断", "根因", "事故", "复盘", "发布",
-    "变更", "回滚", "扩容", "限流", "降级", "日志", "监控", "指标", "服务", "页面", "网站",
-    "网页", "前端", "后端", "应用", "系统", "业务", "用户", "客户", "接口", "数据库", "缓存",
-    "队列", "内存", "磁盘", "负载", "流量", "cpu", "memory", "disk", "load", "oom", "error",
-    "exception", "timeout", "latency", "redis", "mysql", "mongodb", "mongo", "kafka", "etcd", "nginx",
-    "jvm", "gc", "pod", "k8s", "kubernetes", "prometheus", "jaeger", "trace", "slo", "http", "rpc",
-    "5xx", "4xx", "qps", "inode", "我电脑", "我的电脑", "我笔记本", "我的笔记本", "本机",
-    "这台电脑", "这台机器", "自己的电脑", "我的机器", "本地电脑", "本地机器", "localhost",
-    "my computer", "my laptop", "my pc",
+# 农业领域关键词
+_AGRICULTURE_KEYWORDS = (
+    "种植", "播种", "栽培", "育苗", "插秧", "施肥", "肥料", "追肥", "底肥", "复合肥",
+    "病虫害", "打药", "农药", "虫害", "病害", "杀虫", "杀菌", "除草", "除虫",
+    "灌溉", "浇水", "排水", "补水", "浇灌", "喷灌", "滴灌",
+    "收获", "采收", "收割", "采摘", "丰收",
+    "天气", "温度", "降雨", "风速", "气象", "气温", "降水", "霜冻", "干旱",
+    "营销", "广告", "文案", "销售", "推广", "直播", "带货", "电商",
+    "知识库", "查资料", "检索", "文档", "农技", "农学",
+    "庄稼", "作物", "农田", "田地", "土地", "土壤", "耕地",
+    "水稻", "小麦", "玉米", "大豆", "棉花", "蔬菜", "水果", "果树",
+    "水稻", "稻谷", "麦子", "高粱", "花生", "芝麻", "油菜",
+    "番茄", "黄瓜", "辣椒", "茄子", "白菜", "萝卜", "土豆", "红薯",
+    "苹果", "梨", "桃", "葡萄", "西瓜", "草莓", "樱桃", "柑橘", "橙子",
+    "养殖", "畜牧", "家禽", "家畜", "养猪", "养鸡", "养鱼", "水产",
+    "农机", "农具", "拖拉机", "收割机", "播种机",
+    "种子", "种苗", "秧苗", "苗木", "化肥", "有机肥", "农家肥",
+    "温室", "大棚", "设施农业", "滴灌", "喷灌", "地膜",
+    "节气", "农时", "农事", "田间管理", "中耕", "除草", "间苗", "定苗",
 )
 
 _OUT_OF_SCOPE_KEYWORDS = (
-    "动漫", "漫画", "电影", "电视剧", "小说", "游戏", "天气", "旅游", "美食", "菜谱", "星座", "八卦",
+    "动漫", "漫画", "电影", "电视剧", "小说", "游戏", "编程", "代码", "开发",
+    "股票", "基金", "理财", "金融", "炒股",
 )
 
-_AMBIGUOUS_INCIDENT_HINTS = (
-    "打不开", "无法打开", "无法访问", "访问不了", "挂了", "白屏", "黑屏", "没反应", "失败", "慢", "卡",
+_AMBIGUOUS_AGRI_HINTS = (
+    "庄稼", "地里", "叶子", "苗", "根", "果实", "长势", "收成",
+    "生虫", "发黄", "枯萎", "烂根", "死苗", "不结果",
 )
 
 
-def _looks_like_oncall_input(text: str) -> bool:
+def _looks_like_agriculture_input(text: str) -> bool:
     normalized = (text or "").lower()
     if any(keyword in normalized for keyword in _OUT_OF_SCOPE_KEYWORDS):
         return False
-    if any(keyword in normalized for keyword in _AMBIGUOUS_INCIDENT_HINTS):
+    if any(keyword in normalized for keyword in _AMBIGUOUS_AGRI_HINTS):
         return True
-    return any(keyword in normalized for keyword in _ONCALL_KEYWORDS)
+    return any(keyword in normalized for keyword in _AGRICULTURE_KEYWORDS)
 
 
 def _build_out_of_scope_response(user_input: str) -> str:
     return (
-        "# 无法启动 OnCall 诊断\n\n"
+        "# 无法启动农业智能服务\n\n"
         f"你输入的内容是：`{user_input.strip() or '(空)'}`。\n\n"
-        "它看起来不是运维告警、故障现象、监控指标异常、日志异常、发布变更或系统稳定性问题，"
-        "因此我没有继续调用知识库、监控工具或日志工具。\n\n"
-        "如果你想进行故障诊断，请补充类似下面的信息：\n\n"
-        "- **服务/实例**：例如 `redis-master-01`、`web-api`、`mysql-master-01`\n"
-        "- **异常现象**：例如 CPU 高、内存 98%、5xx 升高、连接超时、Pod 重启\n"
-        "- **持续时间**：例如持续 10 分钟、最近 1 小时\n"
-        "- **影响范围**：例如部分用户失败、核心接口不可用、客户端连接被断开"
+        "它看起来不属于农业领域（种植、养殖、病虫害、天气农事、农产品营销、农业知识检索等），"
+        "因此我没有继续调用知识库或天气工具。\n\n"
+        "如果你想咨询农业问题，可以尝试以下类型：\n\n"
+        "- **种植技术**：例如 `玉米什么时候播种最好`、`水稻如何施肥`\n"
+        "- **病虫害防治**：例如 `叶子发黄是什么原因`、`如何防治蚜虫`\n"
+        "- **天气农事**：例如 `今天适合喷药吗`、`明天会下雨吗`\n"
+        "- **农产品营销**：例如 `帮我写一段苹果的推广文案`\n"
+        "- **知识检索**：例如 `查一下葡萄种植技术`"
     )
 
 
 def _build_router_fallback_result(user_input: str) -> PlanExecuteState:
-    if not _looks_like_oncall_input(user_input):
-        reason = "Router LLM 调用失败后, 规则兜底判断为非 OnCall 输入"
-        logger.info(f"[Router] fallback 非 OnCall 输入, 直接结束: {user_input[:100]!r}")
+    if not _looks_like_agriculture_input(user_input):
+        reason = "Router LLM 调用失败后, 规则兜底判断为非农业输入"
+        logger.info(f"[Router] fallback 非农业输入, 直接结束: {user_input[:100]!r}")
         return {
             "selected_skill": GENERIC_SKILL_NAME,
             "skill_reason": reason,
@@ -130,9 +139,9 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
         return result
 
     if not choice.is_oncall:
-        reason = choice.reason or "Router 判断输入不属于 OnCall/运维诊断范围"
+        reason = choice.reason or "Router 判断输入不属于农业领域范围"
         logger.info(
-            f"[Router] LLM 判断非 OnCall, 直接结束: confidence={choice.confidence}, input={user_input[:100]!r}"
+            f"[Router] LLM 判断非农业, 直接结束: confidence={choice.confidence}, input={user_input[:100]!r}"
         )
         logger.info(f"[transition] node=skill_router reason={ROUTER_OUT_OF_SCOPE}")
         return {

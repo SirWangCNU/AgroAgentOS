@@ -1,5 +1,5 @@
 // ============================================================
-// AIOps Platform - Frontend Logic (Cyber-Tech Redesign)
+// AgroAgentOS 智农协同平台 - Frontend Logic
 // ============================================================
 
 const API = "/api/v1";
@@ -97,9 +97,8 @@ const router = {
         // Trigger page-specific init
         if (page === "dashboard") initDashboard();
         if (page === "kb" && !kbLoaded) loadDocs();
-        if (page === "alerts" && !alertsLoaded) loadAlerts();
         if (page === "history" && !historyLoaded) loadHistory();
-        if (page === "observability" && !obsLoaded) loadObservability();
+        if (page === "weather") loadWeatherPage();
     }
 };
 
@@ -128,12 +127,12 @@ const sidebar = {
 // ============================================================
 const searchItems = [
     { icon: "fa-grip", label: "工作台", hint: "Dashboard", page: "dashboard" },
-    { icon: "fa-shield-halved", label: "智能诊断", hint: "AIOps", page: "aiops" },
-    { icon: "fa-message", label: "AI Copilot", hint: "Chat", page: "copilot" },
-    { icon: "fa-book-open", label: "知识库管理", hint: "KB", page: "kb" },
-    { icon: "fa-bell", label: "告警中心", hint: "Alerts", page: "alerts" },
-    { icon: "fa-clock-rotate-left", label: "诊断历史", hint: "History", page: "history" },
-    { icon: "fa-chart-line", label: "可观测性", hint: "Observability", page: "observability" },
+    { icon: "fa-comments", label: "智能问答", hint: "农业问答", page: "copilot" },
+    { icon: "fa-cloud-sun", label: "天气农事", hint: "Weather", page: "weather" },
+    { icon: "fa-book-open", label: "农业知识库", hint: "KB", page: "kb" },
+    { icon: "fa-bullhorn", label: "营销助手", hint: "Marketing", page: "marketing" },
+    { icon: "fa-bug", label: "病虫害诊断", hint: "Pest", page: "pest" },
+    { icon: "fa-clock-rotate-left", label: "历史记录", hint: "History", page: "history" },
 ];
 
 const searchModal = {
@@ -361,7 +360,7 @@ async function loadDashboardAlerts() {
 async function initDashboard() {
     if (dashInitialized) return;
     dashInitialized = true;
-    loadDashboardAlerts();
+    fetchWeather("北京").then(updateDashboardWeather);
 }
 
 // Quick action buttons
@@ -1519,6 +1518,120 @@ $("#obs-refresh")?.addEventListener("click", () => {
     obsLoaded = false;
     loadObservability();
 });
+
+// ============================================================
+// Weather API
+// ============================================================
+const weatherIcons = {
+    "晴": "fa-sun", "多云": "fa-cloud-sun", "阴": "fa-cloud",
+    "小雨": "fa-cloud-rain", "中雨": "fa-cloud-showers-heavy", "大雨": "fa-cloud-showers-heavy",
+    "暴雨": "fa-poo-storm", "雷阵雨": "fa-bolt", "雪": "fa-snowflake", "雾": "fa-smog",
+};
+
+function getWeatherIcon(condition) {
+    return weatherIcons[condition] || "fa-cloud";
+}
+
+async function fetchWeather(location) {
+    try {
+        const r = await fetch(`${API}/weather?location=${encodeURIComponent(location)}`);
+        const data = await r.json();
+        if (data?.code === "SUCCESS") return data.data;
+    } catch (e) {
+        console.warn("[weather] fetch failed:", e);
+    }
+    return null;
+}
+
+function updateDashboardWeather(data) {
+    if (!data) return;
+    const c = data.current;
+    const icon = getWeatherIcon(c.condition);
+
+    // Update status bar weather
+    const statusWeather = $("#current-weather");
+    if (statusWeather) statusWeather.textContent = `${c.location} ${c.temperature}℃ ${c.condition}`;
+
+    // Update dashboard weather card
+    const card = $(".weather-card");
+    if (!card) return;
+    const weatherIcon = card.querySelector(".weather-icon i");
+    const weatherTemp = card.querySelector(".weather-temp");
+    const weatherLocation = card.querySelector(".weather-location");
+    const details = card.querySelectorAll(".weather-details div");
+    const advice = card.querySelector(".weather-advice span");
+
+    if (weatherIcon) weatherIcon.className = `fa-solid ${icon}`;
+    if (weatherTemp) weatherTemp.textContent = `${c.temperature}℃`;
+    if (weatherLocation) weatherLocation.textContent = c.location;
+    if (details[0]) details[0].innerHTML = `<i class="fa-solid fa-droplet"></i> 湿度 ${c.humidity}%`;
+    if (details[1]) details[1].innerHTML = `<i class="fa-solid fa-wind"></i> 风速 ${c.wind_level}级`;
+    if (details[2]) details[2].innerHTML = `<i class="fa-solid fa-cloud-rain"></i> 降雨 ${c.rain_probability}%`;
+    if (advice) advice.textContent = data.agriculture_advice.split("；")[0] || "天气条件正常";
+}
+
+function updateWeatherPage(data) {
+    if (!data) return;
+    const c = data.current;
+    const icon = getWeatherIcon(c.condition);
+
+    // Update weather detail card
+    const locationSpan = $(".weather-location span");
+    if (locationSpan) locationSpan.textContent = c.location;
+    const tempLarge = $(".weather-temp-large");
+    if (tempLarge) tempLarge.textContent = `${c.temperature}℃`;
+    const desc = $(".weather-desc");
+    if (desc) desc.textContent = c.condition;
+    const iconLarge = $(".weather-icon-large i");
+    if (iconLarge) iconLarge.className = `fa-solid ${icon}`;
+
+    // Update metrics
+    const metrics = $(".weather-metrics");
+    if (metrics) {
+        const metricValues = metrics.querySelectorAll(".metric-value");
+        if (metricValues[0]) metricValues[0].textContent = `${c.humidity}%`;
+        if (metricValues[1]) metricValues[1].textContent = `${c.wind_level}级`;
+        if (metricValues[2]) metricValues[2].textContent = `${c.rain_probability}%`;
+    }
+
+    // Update advice
+    const adviceSection = $(".weather-advice-section .advice-content");
+    if (adviceSection && data.agriculture_advice) {
+        const adviceList = data.agriculture_advice.split("；");
+        adviceSection.innerHTML = adviceList.map(a => {
+            const isWarning = a.includes("不建议") || a.includes("注意") || a.includes("避免");
+            const cls = isWarning ? "advice-item-warning" : "advice-item-good";
+            const iconCls = isWarning ? "fa-exclamation-triangle" : "fa-check-circle";
+            return `<div class="${cls}"><i class="fa-solid ${iconCls}"></i><span>${escapeHtml(a)}</span></div>`;
+        }).join("");
+    }
+
+    // Update forecast
+    if (data.forecast) {
+        const forecastList = $(".forecast-list");
+        if (forecastList) {
+            forecastList.innerHTML = data.forecast.map(d => {
+                const fIcon = getWeatherIcon(d.condition);
+                return `<div class="forecast-item">
+                    <div class="forecast-date">${escapeHtml(d.date)}</div>
+                    <div class="forecast-icon"><i class="fa-solid ${fIcon}"></i></div>
+                    <div class="forecast-temp">${d.temp_low}~${d.temp_high}℃</div>
+                    <div class="forecast-rain">${d.rain_probability}%</div>
+                </div>`;
+            }).join("");
+        }
+    }
+
+    // Update last update time
+    const updateTime = $(".weather-update span");
+    if (updateTime) updateTime.textContent = `数据来源: ${data.source}`;
+}
+
+async function loadWeatherPage() {
+    const location = "北京";
+    const data = await fetchWeather(location);
+    if (data) updateWeatherPage(data);
+}
 
 // ============================================================
 // Init

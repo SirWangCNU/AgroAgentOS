@@ -25,7 +25,6 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 import app.services.aiops_service as aiops_service
-import app.services.alert_service as alert_service
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
@@ -218,25 +217,6 @@ async def alertmanager_webhook(
             "fingerprint": fingerprint,
             "startsAt": alert.startsAt,
         }
-
-        # \u5199\u5165 SQLite alerts \u8868 (\u7ed3\u6784\u5316\u5b58\u50a8)
-        try:
-            await alert_service.ingest_alert(
-                alertname=alertname,
-                severity=alert.labels.get("severity", "warning"),
-                status="firing",
-                instance=instance,
-                service=alert.labels.get("service", ""),
-                summary=alert.annotations.get("summary", ""),
-                description=alert.annotations.get("description", ""),
-                labels=dict(alert.labels),
-                annotations=dict(alert.annotations),
-                fingerprint=fingerprint,
-                source="alertmanager",
-                starts_at=alert.startsAt,
-            )
-        except Exception as e:
-            logger.warning(f"[webhook] \u5199\u5165 SQLite \u544a\u8b66\u5931\u8d25: {type(e).__name__}: {e}")
 
         background.add_task(
             _run_diagnosis_background, query, session_id, alert_meta
