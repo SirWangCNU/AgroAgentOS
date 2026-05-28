@@ -1,23 +1,21 @@
 # ============================================================
-# Multi-Agent AIOps Platform - Windows launcher
+# AgroAgentOS 智农协同平台 - Windows launcher
 # ============================================================
 # Startup order:
 #   1. Start / check Milvus container
 #   2. Start / check Redis container (RAG Chat session memory)
-#   3. Start MCP servers in background
-#   4. Wait for MCP ports
-#   5. Start FastAPI by uvicorn in foreground
+#   3. Start open-webSearch daemon
+#   4. Start FastAPI by uvicorn in foreground
 #
 # Usage:
 #   .\run.ps1
-#   .\run.ps1 -NoMcp
 #   .\run.ps1 -NoMilvus
 #   .\run.ps1 -NoRedis
+#   .\run.ps1 -NoWebSearch
 #   .\run.ps1 -Stop
 # ============================================================
 
 param(
-    [switch]$NoMcp,
     [switch]$NoMilvus,
     [switch]$NoRedis,
     [switch]$NoWebSearch,
@@ -333,12 +331,11 @@ function Test-HttpReady {
 }
 
 if ($Stop) {
-    Write-Host "[stop] stopping multi_agent services..." -ForegroundColor Yellow
+    Write-Host "[stop] stopping AgroAgentOS services..." -ForegroundColor Yellow
     Stop-OpenWebSearchDocker
     Get-CimInstance Win32_Process | Where-Object {
         $_.CommandLine -and (
             $_.CommandLine -like "*$ProjectRoot*" -or
-            $_.CommandLine -like "*mcp_servers*" -or
             $_.CommandLine -like "*uvicorn app.main:app*"
         )
     } | ForEach-Object {
@@ -349,7 +346,7 @@ if ($Stop) {
         }
     }
     $openWebSearchStopPort = Get-PortFromUrl -Url (Get-EnvValue -Name "OPEN_WEBSEARCH_BASE_URL" -DefaultValue "http://127.0.0.1:3210") -DefaultPort 3210
-    8005,8006,8008,8009,8011,9900,$openWebSearchStopPort | ForEach-Object {
+    8006,9800,$openWebSearchStopPort | ForEach-Object {
         Stop-PortProcess -Port $_
     }
     Write-Host "[stop] done" -ForegroundColor Green
@@ -370,7 +367,7 @@ if (-not (Test-Path "$ProjectRoot\.env")) {
     exit 1
 }
 
-$AppPortText = Get-EnvValue -Name "PORT" -DefaultValue "9900"
+$AppPortText = Get-EnvValue -Name "PORT" -DefaultValue "9800"
 $AppPort = [int]$AppPortText
 
 if (-not $NoMilvus) {
@@ -414,15 +411,8 @@ if (-not $NoWebSearch) {
     Write-Host "[skip] open-webSearch auto-start disabled by -NoWebSearch" -ForegroundColor DarkYellow
 }
 
-if (-not $NoMcp) {
-    Start-PythonServer -Name "system_server" -Script "$ProjectRoot\mcp_servers\system_server.py" -Port 8005
-    Start-PythonServer -Name "websearch_server" -Script "$ProjectRoot\mcp_servers\websearch_server.py" -Port 8006
-    Start-PythonServer -Name "winlog_server" -Script "$ProjectRoot\mcp_servers\winlog_server.py" -Port 8008
-    Start-PythonServer -Name "network_server" -Script "$ProjectRoot\mcp_servers\network_server.py" -Port 8009
-    Start-PythonServer -Name "docker_server" -Script "$ProjectRoot\mcp_servers\docker_server.py" -Port 8011
-} else {
-    Write-Host "[skip] MCP auto-start disabled by -NoMcp" -ForegroundColor DarkYellow
-}
+# Start MCP websearch server (weather is a local tool, no MCP server needed)
+Start-PythonServer -Name "websearch_server" -Script "$ProjectRoot\mcp_servers\websearch_server.py" -Port 8006
 
 if (Test-TcpPort -HostName "127.0.0.1" -Port $AppPort) {
     if (Test-HttpReady -Port $AppPort) {

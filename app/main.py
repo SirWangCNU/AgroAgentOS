@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.middleware import setup_middlewares
-from app.api.v1 import alerts, aiops, chat, diagnosis, documents, health, history, observability, skills, webhook
+from app.api.v1 import aiops, chat, diagnosis, documents, health, history, observability, skills, weather, webhook
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
 from app.core.milvus import milvus_manager
@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="企业级多智能体智能运维诊断平台 - 基于 LangGraph + RAG + MCP",
+    description="AgroAgentOS 智农协同平台 - 基于 LangGraph + RAG + MCP",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -153,9 +153,9 @@ app.include_router(documents.router, prefix=API_PREFIX)
 app.include_router(skills.router, prefix=API_PREFIX)
 app.include_router(webhook.router, prefix=API_PREFIX)
 app.include_router(history.router, prefix=API_PREFIX)
-app.include_router(alerts.router, prefix=API_PREFIX)
 app.include_router(observability.router, prefix=API_PREFIX)
 app.include_router(diagnosis.router, prefix=API_PREFIX)
+app.include_router(weather.router, prefix=API_PREFIX)
 
 
 # ============================================================

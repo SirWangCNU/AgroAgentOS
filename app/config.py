@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     app_version: str = Field(default="1.0.0", description="应用版本")
     debug: bool = Field(default=False, description="调试模式")
     host: str = Field(default="0.0.0.0", description="监听地址")
-    port: int = Field(default=9900, description="监听端口")
+    port: int = Field(default=9800, description="监听端口")
 
     # ==================== DashScope LLM ====================
     dashscope_api_key: str = Field(default="", description="DashScope API Key")

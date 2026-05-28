@@ -100,8 +100,8 @@ python -m app.main
 
 ### 4. 访问应用
 
-- 前端界面：http://localhost:9900
-- API 文档：http://localhost:9900/docs
+- 前端界面：http://localhost:9800
+- API 文档：http://localhost:9800/docs
 
 ---
 
@@ -375,7 +375,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
 默认会启动：
 
 ```text
-FastAPI       http://localhost:9900
+FastAPI       http://localhost:9800
 system MCP    http://localhost:8005/mcp
 winlog MCP    http://localhost:8008/mcp
 network MCP   http://localhost:8009/mcp
@@ -392,11 +392,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Stop
 
 | 页面 | 地址 |
 |---|---|
-| Web UI | http://localhost:9900 |
-| Swagger | http://localhost:9900/docs |
-| ReDoc | http://localhost:9900/redoc |
-| 健康检查 | http://localhost:9900/api/v1/health |
-| 就绪检查 | http://localhost:9900/api/v1/health/ready |
+| Web UI | http://localhost:9800 |
+| Swagger | http://localhost:9800/docs |
+| ReDoc | http://localhost:9800/redoc |
+| 健康检查 | http://localhost:9800/api/v1/health |
+| 就绪检查 | http://localhost:9800/api/v1/health/ready |
 | Attu Milvus UI | http://localhost:8000 |
 
 ## 使用示例
