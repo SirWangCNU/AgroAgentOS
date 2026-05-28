@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroAgentOS 智农协同平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+<!-- ====== Sidebar ====== -->
+<aside id="sidebar">
+    <div class="logo">
+        <div class="logo-icon">
+            <i class="fa-solid fa-seedling"></i>
+        </div>
+        <span class="logo-text">智农</span>
+    </div>
+    <nav>
+        <a class="nav-item active" data-page="dashboard">
+            <i class="fa-solid fa-grip"></i>
+            <span class="nav-label">工作台</span>
+        </a>
+        <a class="nav-item" data-page="copilot">
+            <i class="fa-solid fa-comments"></i>
+            <span class="nav-label">智能问答</span>
+        </a>
+        <a class="nav-item" data-page="weather">
+            <i class="fa-solid fa-cloud-sun"></i>
+            <span class="nav-label">天气农事</span>
+        </a>
+        <a class="nav-item" data-page="kb">
+            <i class="fa-solid fa-book-open"></i>
+            <span class="nav-label">农业知识库</span>
+        </a>
+        <a class="nav-item" data-page="marketing">
+            <i class="fa-solid fa-bullhorn"></i>
+            <span class="nav-label">营销助手</span>
+        </a>
+        <a class="nav-item" data-page="pest">
+            <i class="fa-solid fa-bug"></i>
+            <span class="nav-label">病虫害诊断</span>
+        </a>
+        <a class="nav-item" data-page="history">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span class="nav-label">历史记录</span>
+        </a>
+    </nav>
+    <div class="sidebar-toggle" id="sidebar-toggle">
+        <i class="fa-solid fa-angles-right"></i>
+    </div>
+</aside>
+
+<!-- ====== Main Area ====== -->
+<div id="main-area">
+    <!-- Status Bar -->
+    <header id="status-bar">
+        <div class="search-trigger" id="search-trigger">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>搜索农业知识或功能...</span>
+            <kbd>Ctrl+K</kbd>
+        </div>
+        <div class="status-right">
+            <div class="health-indicator">
+                <div class="health-dot ok" id="health-dot"></div>
+                <span id="health-text">系统正常</span>
+            </div>
+            <div class="weather-info">
+                <i class="fa-solid fa-cloud-sun"></i>
+                <span id="current-weather">北京 28℃ 多云</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Page Content -->
+    <main id="app-content">
+
+        <!-- ======== Dashboard ======== -->
+        <div class="page active" id="page-dashboard">
+            <div class="section-title">
+                <i class="fa-solid fa-seedling" style="color:var(--accent-green)"></i> 智农工作台
+            </div>
+            <div class="dashboard-grid">
+                <!-- Weather Card -->
+                <div class="bento-card accent-blue weather-card">
+                    <div class="card-title">
+                        <i class="fa-solid fa-cloud-sun"></i> 实时天气
+                    </div>
+                    <div class="weather-main">
+                        <div class="weather-icon">
+                            <i class="fa-solid fa-cloud-sun"></i>
+                        </div>
+                        <div class="weather-temp">28℃</div>
+                        <div class="weather-location">北京</div>
+                    </div>
+                    <div class="weather-details">
+                        <div><i class="fa-solid fa-droplet"></i> 湿度 65%</div>
+                        <div><i class="fa-solid fa-wind"></i> 风速 3级</div>
+                        <div><i class="fa-solid fa-cloud-rain"></i> 降雨 20%</div>
+                    </div>
+                    <div class="weather-advice">
+                        <i class="fa-solid fa-lightbulb"></i>
+                        <span>今日适合田间作业</span>
+                    </div>
+                </div>
+
+                <!-- Agriculture Skills Card -->
+                <div class="bento-card accent-green">
+                    <div class="card-title">农业技能 <span id="dash-skill-count" style="color:var(--accent-green)"></span></div>
+                    <div id="dash-skills-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                        <div class="skill-item">
+                            <i class="fa-solid fa-comments"></i>
+                            <span>智能问答</span>
+                        </div>
+                        <div class="skill-item">
+                            <i class="fa-solid fa-cloud-sun"></i>
+                            <span>天气农事</span>
+                        </div>
+                        <div class="skill-item">
+                            <i class="fa-solid fa-bug"></i>
+                            <span>病虫害诊断</span>
+                        </div>
+                        <div class="skill-item">
+                            <i class="fa-solid fa-bullhorn"></i>
+                            <span>营销助手</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bento-card accent-orange">
+                    <div class="card-title">快捷操作</div>
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                        <button class="quick-action-btn" data-goto="copilot">
+                            <i class="fa-solid fa-comments"></i> 开始农业问答
+                        </button>
+                        <button class="quick-action-btn" data-goto="weather">
+                            <i class="fa-solid fa-cloud-sun"></i> 查看天气农事
+                        </button>
+                        <button class="quick-action-btn" data-goto="kb">
+                            <i class="fa-solid fa-book-open"></i> 管理知识库
+                        </button>
+                        <button class="quick-action-btn" data-goto="marketing">
+                            <i class="fa-solid fa-bullhorn"></i> 生成营销内容
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Today's Advice -->
+                <div class="bento-card accent-purple full-width">
+                    <div class="card-title">
+                        <i class="fa-solid fa-lightbulb"></i> 今日农事建议
+                    </div>
+                    <div class="advice-list">
+                        <div class="advice-item">
+                            <div class="advice-icon"><i class="fa-solid fa-sun"></i></div>
+                            <div class="advice-content">
+                                <div class="advice-title">天气提醒</div>
+                                <div class="advice-text">今日多云，温度适宜，适合进行田间管理和喷药作业</div>
+                            </div>
+                        </div>
+                        <div class="advice-item">
+                            <div class="advice-icon"><i class="fa-solid fa-calendar"></i></div>
+                            <div class="advice-content">
+                                <div class="advice-title">农时节气</div>
+                                <div class="advice-text">当前处于小满节气，注意水稻田间水肥管理</div>
+                            </div>
+                        </div>
+                        <div class="advice-item">
+                            <div class="advice-icon"><i class="fa-solid fa-bug"></i></div>
+                            <div class="advice-content">
+                                <div class="advice-title">病虫害预警</div>
+                                <div class="advice-text">近期高温高湿，注意防治水稻稻瘟病</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== Weather Page ======== -->
+        <div class="page" id="page-weather">
+            <div class="section-title">
+                <i class="fa-solid fa-cloud-sun" style="color:var(--accent-blue)"></i> 天气农事
+            </div>
+            <div class="weather-page-layout">
+                <div class="weather-detail-card">
+                    <div class="weather-header">
+                        <div class="weather-location">
+                            <i class="fa-solid fa-location-dot"></i>
+                            <span>北京</span>
+                        </div>
+                        <div class="weather-update">
+                            <i class="fa-solid fa-clock"></i>
+                            <span>最后更新: 10分钟前</span>
+                        </div>
+                    </div>
+                    <div class="weather-body">
+                        <div class="weather-main-info">
+                            <div class="weather-icon-large">
+                                <i class="fa-solid fa-cloud-sun"></i>
+                            </div>
+                            <div class="weather-temp-large">28℃</div>
+                            <div class="weather-desc">多云</div>
+                        </div>
+                        <div class="weather-metrics">
+                            <div class="weather-metric">
+                                <div class="metric-icon"><i class="fa-solid fa-droplet"></i></div>
+                                <div class="metric-info">
+                                    <div class="metric-label">湿度</div>
+                                    <div class="metric-value">65%</div>
+                                </div>
+                            </div>
+                            <div class="weather-metric">
+                                <div class="metric-icon"><i class="fa-solid fa-wind"></i></div>
+                                <div class="metric-info">
+                                    <div class="metric-label">风速</div>
+                                    <div class="metric-value">3级</div>
+                                </div>
+                            </div>
+                            <div class="weather-metric">
+                                <div class="metric-icon"><i class="fa-solid fa-cloud-rain"></i></div>
+                                <div class="metric-info">
+                                    <div class="metric-label">降雨概率</div>
+                                    <div class="metric-value">20%</div>
+                                </div>
+                            </div>
+                            <div class="weather-metric">
+                                <div class="metric-icon"><i class="fa-solid fa-sun"></i></div>
+                                <div class="metric-info">
+                                    <div class="metric-label">紫外线</div>
+                                    <div class="metric-value">中等</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="weather-advice-section">
+                        <div class="advice-header">
+                            <i class="fa-solid fa-lightbulb"></i>
+                            <span>农业建议</span>
+                        </div>
+                        <div class="advice-content">
+                            <div class="advice-item-good">
+                                <i class="fa-solid fa-check-circle"></i>
+                                <span>今日适合喷药作业</span>
+                            </div>
+                            <div class="advice-item-good">
+                                <i class="fa-solid fa-check-circle"></i>
+                                <span>天气适合田间管理</span>
+                            </div>
+                            <div class="advice-item-warning">
+                                <i class="fa-solid fa-exclamation-triangle"></i>
+                                <span>明日有雨，注意防雨准备</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="weather-forecast-card">
+                    <div class="forecast-header">
+                        <i class="fa-solid fa-calendar"></i>
+                        <span>未来三天预报</span>
+                    </div>
+                    <div class="forecast-list">
+                        <div class="forecast-item">
+                            <div class="forecast-date">明天</div>
+                            <div class="forecast-icon"><i class="fa-solid fa-cloud"></i></div>
+                            <div class="forecast-temp">22~30℃</div>
+                            <div class="forecast-rain">25%</div>
+                        </div>
+                        <div class="forecast-item">
+                            <div class="forecast-date">后天</div>
+                            <div class="forecast-icon"><i class="fa-solid fa-cloud-rain"></i></div>
+                            <div class="forecast-temp">20~28℃</div>
+                            <div class="forecast-rain">60%</div>
+                        </div>
+                        <div class="forecast-item">
+                            <div class="forecast-date">大后天</div>
+                            <div class="forecast-icon"><i class="fa-solid fa-cloud"></i></div>
+                            <div class="forecast-temp">19~27℃</div>
+                            <div class="forecast-rain">40%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== Marketing Page ======== -->
+        <div class="page" id="page-marketing">
+            <div class="section-title">
+                <i class="fa-solid fa-bullhorn" style="color:var(--accent-orange)"></i> 农产品营销助手
+            </div>
+            <div class="marketing-layout">
+                <div class="marketing-form">
+                    <div class="form-group">
+                        <label>产品名称</label>
+                        <input type="text" id="product-name" placeholder="例如：阳澄湖大闸蟹">
+                    </div>
+                    <div class="form-group">
+                        <label>产品特点</label>
+                        <textarea id="product-features" placeholder="每行一个特点，如：&#10;生态养殖&#10;个大肥美&#10;蟹黄饱满"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>目标平台</label>
+                        <select id="target-platform">
+                            <option value="douyin">抖音短视频</option>
+                            <option value="xiaohongshu">小红书图文</option>
+                            <option value="live_stream">直播口播</option>
+                            <option value="wechat">朋友圈文案</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>风格偏好</label>
+                        <select id="content-style">
+                            <option value="professional">专业正式</option>
+                            <option value="funny">轻松幽默</option>
+                            <option value="emotional">情感共鸣</option>
+                            <option value="storytelling">故事叙述</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="generate-marketing">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> 生成营销内容
+                    </button>
+                </div>
+                <div class="marketing-result">
+                    <div class="result-header">
+                        <span>生成结果</span>
+                        <button class="btn btn-secondary" id="copy-result">
+                            <i class="fa-solid fa-copy"></i> 复制
+                        </button>
+                    </div>
+                    <div class="result-body" id="marketing-output">
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="fa-solid fa-bullhorn"></i></div>
+                            <div class="empty-text">填写产品信息后点击生成</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== Pest Diagnosis Page ======== -->
+        <div class="page" id="page-pest">
+            <div class="section-title">
+                <i class="fa-solid fa-bug" style="color:var(--accent-red)"></i> 病虫害诊断
+            </div>
+            <div class="pest-layout">
+                <div class="pest-input-section">
+                    <div class="form-group">
+                        <label>作物类型</label>
+                        <input type="text" id="crop-type" placeholder="例如：水稻、玉米、番茄">
+                    </div>
+                    <div class="form-group">
+                        <label>症状描述</label>
+                        <textarea id="pest-symptoms" rows="4" placeholder="请描述作物出现的异常症状，如：&#10;叶片出现黄色斑点&#10;茎秆有腐烂现象&#10;果实表面有凹陷"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>发病部位</label>
+                        <select id="affected-part">
+                            <option value="leaf">叶片</option>
+                            <option value="stem">茎秆</option>
+                            <option value="root">根部</option>
+                            <option value="fruit">果实</option>
+                            <option value="flower">花朵</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="diagnose-pest">
+                        <i class="fa-solid fa-stethoscope"></i> 开始诊断
+                    </button>
+                </div>
+                <div class="pest-result-section">
+                    <div class="result-header">
+                        <span>诊断结果</span>
+                    </div>
+                    <div class="result-body" id="pest-output">
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="fa-solid fa-bug"></i></div>
+                            <div class="empty-text">描述症状后点击诊断</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== Agriculture Chat ======== -->
+        <div class="page" id="page-copilot">
+            <div class="section-title">
+                <i class="fa-solid fa-comments" style="color:var(--accent-green)"></i> 农业智能问答
+            </div>
+            <div class="copilot-layout">
+                <!-- Chat Panel -->
+                <div class="chat-panel">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="fa-solid fa-seedling"></i></div>
+                            <div class="empty-text">我是您的农业智能助手，请问有什么农业问题？</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-bar">
+                        <input id="chat-input" type="text" placeholder="输入农业问题，如：现在适合种玉米吗？">
+                        <button class="toggle-btn" id="chat-web-toggle" title="启用后会搜索农业相关网络资料">
+                            <i class="fa-solid fa-globe"></i> 联网 <span id="chat-web-state">关</span>
+                        </button>
+                        <button class="toggle-btn amber on" id="chat-mcp-toggle" title="启用后可调用天气等农业工具">
+                            <i class="fa-solid fa-wrench"></i> 工具 <span id="chat-mcp-state">开</span>
+                        </button>
+                        <button class="btn btn-primary" id="chat-send">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Context Panel -->
+                <div class="context-panel">
+                    <div class="panel-header" style="gap:4px;padding:8px 12px">
+                        <div class="context-tab active" data-ctx="detail">知识来源</div>
+                        <div class="context-tab" data-ctx="tools">工具调用</div>
+                        <div class="context-tab" data-ctx="weather">天气信息</div>
+                    </div>
+                    <div class="context-body" id="context-body">
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="fa-solid fa-book-open"></i></div>
+                            <div class="empty-text">发送消息后，知识来源将显示在此</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== Knowledge Base ======== -->
+        <div class="page" id="page-kb">
+            <div class="section-title">
+                <i class="fa-solid fa-book-open" style="color:var(--accent-green)"></i> 农业知识库
+            </div>
+            <div class="kb-layout">
+                <div>
+                    <h3 style="font-size:14px;font-weight:600;color:var(--text-secondary);margin-bottom:12px">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> 上传农业文档
+                    </h3>
+                    <div id="upload-zone" class="upload-zone">
+                        <input type="file" id="upload-input" accept=".md,.markdown,.txt,.doc,.docx,.pdf" class="hidden" style="display:none">
+                        <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up" style="color:var(--accent-green)"></i></div>
+                        <div class="upload-text">点击或拖拽农业文档到此</div>
+                        <div class="upload-hint">支持 .md/.txt/.doc/.pdf 格式，将自动建立农业知识索引</div>
+                    </div>
+                    <div id="upload-result" style="margin-top:12px;font-size:13px"></div>
+                </div>
+                <div>
+                    <h3 style="font-size:14px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+                        <span><i class="fa-solid fa-database"></i> 已索引文档</span>
+                        <button id="docs-refresh" style="font-size:12px;color:var(--accent-green);background:none;border:none;cursor:pointer;font-family:inherit">
+                            <i class="fa-solid fa-arrows-rotate"></i> 刷新
+                        </button>
+                    </h3>
+                    <div id="docs-list">
+                        <div class="kb-category">
+                            <div class="kb-category-title"><i class="fa-solid fa-seedling"></i> 种植技术</div>
+                            <div class="skeleton" style="height:40px;margin-bottom:8px"></div>
+                        </div>
+                        <div class="kb-category">
+                            <div class="kb-category-title"><i class="fa-solid fa-bug"></i> 病虫害防治</div>
+                            <div class="skeleton" style="height:40px;margin-bottom:8px"></div>
+                        </div>
+                        <div class="kb-category">
+                            <div class="kb-category-title"><i class="fa-solid fa-cloud-sun"></i> 农业气象</div>
+                            <div class="skeleton" style="height:40px;margin-bottom:8px"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ======== History ======== -->
+        <div class="page" id="page-history">
+            <div class="history-page-wrapper">
+                <div class="history-page-header">
+                    <div class="history-page-title">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>历史记录</span>
+                    </div>
+                    <div class="history-page-actions">
+                        <select id="history-source-filter" class="history-filter-select">
+                            <option value="">全部来源</option>
+                            <option value="chat">智能问答</option>
+                            <option value="weather">天气查询</option>
+                            <option value="marketing">营销生成</option>
+                            <option value="pest">病虫害诊断</option>
+                        </select>
+                        <button id="history-refresh" class="history-btn-outline" title="刷新">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
+                        <button id="history-clear" class="history-btn-danger">
+                            <i class="fa-solid fa-trash"></i> 清空
+                        </button>
+                    </div>
+                </div>
+                <div class="history-layout" id="history-list">
+                    <div class="skeleton" style="height:64px;margin-bottom:12px;border-radius:12px"></div>
+                    <div class="skeleton" style="height:64px;margin-bottom:12px;border-radius:12px"></div>
+                    <div class="skeleton" style="height:64px;margin-bottom:12px;border-radius:12px"></div>
+                </div>
+                <div id="history-pagination" class="history-pagination" style="display:none"></div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- ====== Global Search Modal ====== -->
+<div id="search-modal">
+    <div class="search-box">
+        <div class="search-input-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="search-input" type="text" placeholder="搜索页面或操作...">
+        </div>
+        <div class="search-results" id="search-results"></div>
+    </div>
+</div>
+
+<script src="/app.js?v=20260519a"></script>
+</body>
+</html>
