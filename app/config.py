@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     )
 
     # ==================== 应用基础 ====================
-    app_name: str = Field(default="MultiAgentAIOps", description="应用名")
+    app_name: str = Field(default="AgroAgentOS", description="应用名")
     app_version: str = Field(default="1.0.0", description="应用版本")
     debug: bool = Field(default=False, description="调试模式")
     host: str = Field(default="0.0.0.0", description="监听地址")
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # ==================== Milvus 向量数据库 ====================
     milvus_host: str = Field(default="localhost", description="Milvus 主机")
     milvus_port: int = Field(default=19530, description="Milvus 端口")
-    milvus_collection: str = Field(default="multi_agent_kb", description="Collection 名")
+    milvus_collection: str = Field(default="agro_agent_kb", description="Collection 名 (农业知识库)")
     milvus_timeout_ms: int = Field(default=10000, description="连接超时 (毫秒)")
 
     # ==================== RAG 基础 ====================
@@ -154,18 +154,11 @@ class Settings(BaseSettings):
         ),
     )
 
-    # ==================== MCP 远程工具 ====================
-    # 本机诊断 MCP (都是真实数据源)
-    mcp_system_transport: str = Field(default="streamable-http", description="本机系统 MCP 传输")
-    mcp_system_url: str = Field(default="http://localhost:8005/mcp", description="本机系统 MCP URL (psutil)")
+    # ==================== MCP 远程工具 (农业场景) ====================
+    mcp_weather_transport: str = Field(default="streamable-http", description="天气 MCP 传输")
+    mcp_weather_url: str = Field(default="http://localhost:8010/mcp", description="天气 MCP URL")
     mcp_websearch_transport: str = Field(default="streamable-http", description="联网搜索 MCP 传输")
     mcp_websearch_url: str = Field(default="http://localhost:8006/mcp", description="联网搜索 MCP URL")
-    mcp_winlog_transport: str = Field(default="streamable-http", description="Windows 事件日志 MCP 传输")
-    mcp_winlog_url: str = Field(default="http://localhost:8008/mcp", description="Windows 事件日志 MCP URL")
-    mcp_network_transport: str = Field(default="streamable-http", description="网络诊断 MCP 传输")
-    mcp_network_url: str = Field(default="http://localhost:8009/mcp", description="网络诊断 MCP URL")
-    mcp_docker_transport: str = Field(default="streamable-http", description="Docker 管理 MCP 传输")
-    mcp_docker_url: str = Field(default="http://localhost:8011/mcp", description="Docker 管理 MCP URL")
 
     # ==================== Agent ====================
     agent_max_steps: int = Field(default=5, description="Plan-Execute 最大步骤 (防死循环)")
@@ -333,36 +326,23 @@ class Settings(BaseSettings):
     log_retention_days: int = Field(default=14, description="日志保留天数")
 
     # ==================== SQLite 轻量级数据库 ====================
-    sqlite_db_path: str = Field(default="app.db", description="SQLite 数据库文件路径")
+    sqlite_db_path: str = Field(default="data/agro_agent.db", description="SQLite 数据库文件路径")
 
     # ==================== 计算属性 ====================
     @property
     def mcp_servers(self) -> Dict[str, Dict[str, Any]]:
-        """组装 MCP 服务器配置.
+        """组装 MCP 服务器配置 (农业场景).
 
         将扁平字段转为 langchain-mcp-adapters 期望的嵌套字典.
-        新增 MCP 服务时, 在此添加映射.
         """
         return {
-            "system": {
-                "transport": self.mcp_system_transport,
-                "url": self.mcp_system_url,
+            "weather": {
+                "transport": self.mcp_weather_transport,
+                "url": self.mcp_weather_url,
             },
             "websearch": {
                 "transport": self.mcp_websearch_transport,
                 "url": self.mcp_websearch_url,
-            },
-            "winlog": {
-                "transport": self.mcp_winlog_transport,
-                "url": self.mcp_winlog_url,
-            },
-            "network": {
-                "transport": self.mcp_network_transport,
-                "url": self.mcp_network_url,
-            },
-            "docker": {
-                "transport": self.mcp_docker_transport,
-                "url": self.mcp_docker_url,
             },
         }
 

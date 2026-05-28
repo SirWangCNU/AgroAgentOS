@@ -1,53 +1,132 @@
-# Multi-Agent AIOps Platform
+# AgroAgentOS 智农协同平台
 
-面向 OnCall / SRE 场景的多智能体智能运维诊断平台。
+面向农业领域的多智能体协同平台，提供农业知识问答、天气农事建议、病虫害诊断、农产品营销内容生成等功能。
 
-项目视频 https://www.bilibili.com/video/BV182RCBGEod/
-
-项目基于 `FastAPI`、`LangGraph`、`RAG`、`Milvus`、`MCP` 和 DeepSeek / DashScope 兼容大模型构建。系统采用 **先选择 Skill，再规划诊断步骤，再调用工具执行，最后复盘生成报告** 的流程，可根据告警或故障描述自动选择合适的诊断策略，调用知识库和实时工具服务，输出结构化诊断报告。
+项目基于 `FastAPI`、`LangGraph`、`RAG`、`Milvus`、`MCP` 和 DeepSeek / DashScope 兼容大模型构建。系统采用 **农业技能路由 + 智能体协同** 的架构，可根据用户问题自动选择合适的农业专家技能，调用天气、知识库等工具，输出专业的农业建议。
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-green)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Agent-orange)
 ![Milvus](https://img.shields.io/badge/Milvus-VectorDB-purple)
-![MCP](https://img.shields.io/badge/MCP-Tools-black)
+![Agriculture](https://img.shields.io/badge/Agriculture-AI-green)
 
 ---
 
-## V2 更新说明
+## 核心功能
 
-以上为项目原版说明。V2 在不改动 Skill-first、Plan-Execute-Replan、RAG、MCP 工具、会话记忆等主体能力的前提下，做了两条主线改动：
+### 1. 农业智能问答
+- 支持各类农作物种植技术咨询
+- 提供施肥、灌溉、田间管理建议
+- 结合知识库和天气信息给出综合建议
 
-1. 新增 **AgentHarness 控制面**，把原本分散在各模块里的 prompt、模型选择、终止条件、降级和统计逻辑集中管理。
-2. 联网搜索从 Tavily 切换到本地 [**open-webSearch**](https://github.com/Aas-ee/open-webSearch) daemon，并接入 Docker Compose 和 `run.ps1`。
+### 2. 天气农事顾问
+- 实时天气查询（支持多城市）
+- 根据天气条件给出农事作业建议
+- 喷药、播种、灌溉、采收时机判断
 
-### 1. AgentHarness 控制面
+### 3. 病虫害诊断专家
+- 识别农作物病虫害症状
+- 提供科学的防治方案
+- 推荐合适的农药和使用方法
 
-新增文件 `app/runtime/agent_harness.py`，作为 Agent 运行时的控制面。原本散落在 `agents/`、`services/rag/`、`skills/` 里的 prompt、模型、运行策略和统计代码统一到 `AgentHarness`，主要管以下几件事：
+### 4. 农产品营销助手
+- 生成抖音/小红书/直播等平台营销内容
+- 支持多种风格（专业/幽默/情感/故事）
+- 模板化输出，即用即取
 
-- **全局 prompt 管理**：Skill Router、Planner、Executor、Replanner、Report、RAG Chat、Query Rewrite、Memory Compact 等所有阶段的 prompt 模板都从 Harness 取，调 prompt 不用再到处翻文件。
-- **模型分层**：每个阶段一个独立模型入口，Router / Planner 可以走快模型、Report / RAG Chat 走强模型，模型通过 `.env` 切换。
-- **Replanner 前置保护**：进 Replanner LLM 之前先判断是否已到最大步数、是否在重复同一步、能否直接快进剩余 plan，满足条件就跳过 LLM 调用。
-- **Reroute 配额**：限制 Skill 切换次数，并要求积累一定步骤后才允许换 Skill，避免 Agent 在多个 Skill 之间反复横跳。
-- **降级 fallback**：知识库或联网搜索失败时返回稳定的降级上下文和前端可见的降级事件，业务代码不再自己处理异常。
-- **统计与预算**：把 token、耗时、工具调用次数等指标收敛成统一的 stats 事件，并支持 token / 时间预算的 warning 与 exceeded 告警。
+### 5. 农业知识库
+- 上传农业文档，自动建立向量索引
+- RAG 检索增强，减少大模型幻觉
+- 支持混合检索（向量 + 关键词）
 
-V2 没有改 Agent 流程拓扑，只是把 Skill Router、Planner、Executor、Replanner、Report、RAG Chat 各阶段的 prompt、模型和策略来源换成 Harness。
+---
 
-### 2. 联网搜索切换到 open-webSearch
+## 技术架构
 
-`app/core/web_search.py` 新增 `open_websearch` provider，调用本地 [open-webSearch](https://github.com/Aas-ee/open-webSearch) daemon 完成联网搜索，不再依赖 Tavily API Key。`.env` 里只需配置：
-
-```env
-WEB_SEARCH_PROVIDER=open_websearch
-OPEN_WEBSEARCH_BASE_URL=http://127.0.0.1:3210
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AgroAgentOS 智农协同平台                   │
+├─────────────┬─────────────┬─────────────┬───────────────────┤
+│  农业问答    │  实时天气    │  知识库检索  │  营销内容生成     │
+│  (对话Agent) │ (天气Agent) │  (RAG Agent)│  (营销Agent)      │
+├─────────────┴─────────────┴─────────────┴───────────────────┤
+│                  多智能体调度器 (SkillRouter)                  │
+├─────────────────────────────────────────────────────────────┤
+│              LangGraph 工作流编排引擎                        │
+├─────────────┬─────────────┬─────────────┬───────────────────┤
+│  天气MCP    │  农业知识库   │  LLM 推理   │  营销模板引擎     │
+│  工具服务    │  (RAG+向量库)│  (多模型)    │                  │
+└─────────────┴─────────────┴─────────────┴───────────────────┘
 ```
 
-老配置 `WEB_SEARCH_PROVIDER=tavily` 会兼容映射到新 provider，不需要手动迁移。
+---
 
-### 3. open-webSearch 启动脚本
+## 快速开始
 
-- `docker-compose.yml` 新增 `open-websearch` 服务，可由 Docker Compose 统一启停并带健康检查。
+### 1. 环境准备
+
+```bash
+# 克隆项目
+git clone https://github.com/YOUR_USERNAME/AgroAgentOS.git
+cd AgroAgentOS
+
+# 创建虚拟环境
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 2. 配置环境变量
+
+```bash
+# 复制配置文件
+cp .env.example .env
+
+# 编辑 .env，填入你的 DashScope API Key
+# DASHSCOPE_API_KEY=your-api-key
+```
+
+### 3. 启动服务
+
+```bash
+# 启动 Milvus 向量数据库
+docker-compose up -d milvus
+
+# 启动应用
+python -m app.main
+```
+
+### 4. 访问应用
+
+- 前端界面：http://localhost:9900
+- API 文档：http://localhost:9900/docs
+
+---
+
+## 农业技能列表
+
+| 技能名称 | 功能描述 | 触发关键词 |
+|---------|---------|-----------|
+| agriculture_qa | 农业智能问答 | 种植、栽培、施肥、灌溉 |
+| weather_advice | 气象农事顾问 | 天气、温度、降雨、风速 |
+| pest_diagnosis | 病虫害诊断 | 病虫害、打药、农药、生虫 |
+| marketing_generator | 农产品营销 | 营销、广告、文案、销售 |
+| knowledge_retrieval | 知识库检索 | 知识库、查资料、检索 |
+| generic_oncall | 通用农业助手 | 兜底技能 |
+
+---
+
+## 数据库配置
+
+### Milvus 向量数据库
+- Collection 名称：`agro_agent_kb`
+- 用于存储农业知识库的向量索引
+
+### SQLite 数据库
+- 数据库文件：`data/agro_agent.db`
+- 存储会话记录、天气查询、营销任务、病虫害诊断等数据
 - `run.ps1` 一键启动时优先走 Docker Compose 拉起 open-webSearch；Docker 不可用时回退到本地 `npm run serve`。
 - `run.ps1 -Stop` 同时停止 Compose 服务和监听端口，避免误杀 Docker 端口代理进程。
 
