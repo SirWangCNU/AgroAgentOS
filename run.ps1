@@ -19,7 +19,8 @@ param(
     [switch]$NoMilvus,
     [switch]$NoRedis,
     [switch]$NoWebSearch,
-    [switch]$Stop
+    [switch]$Stop,
+    [switch]$Logs
 )
 
 $ErrorActionPreference = "Stop"
@@ -330,6 +331,20 @@ function Test-HttpReady {
     }
 }
 
+if ($Logs) {
+    $today = Get-Date -Format "yyyy-MM-dd"
+    $appLog = Join-Path $LogDir "app_$today.log"
+    if (-not (Test-Path $appLog)) {
+        Write-Host "[logs] No log file for today: $appLog" -ForegroundColor Yellow
+        exit 1
+    }
+    Write-Host "[logs] Tailing $appLog (Ctrl+C to stop)..." -ForegroundColor Cyan
+    Write-Host ""
+    Get-Content $appLog -Tail 50
+    Get-Content $appLog -Wait -Tail 0
+    exit 0
+}
+
 if ($Stop) {
     Write-Host "[stop] stopping AgroAgentOS services..." -ForegroundColor Yellow
     Stop-OpenWebSearchDocker
@@ -419,6 +434,18 @@ if (Test-TcpPort -HostName "127.0.0.1" -Port $AppPort) {
         Write-Host "[ready] FastAPI main service is already running on port $AppPort" -ForegroundColor Green
         Write-Host "        Web UI:  http://localhost:$AppPort" -ForegroundColor Green
         Write-Host "        API Doc: http://localhost:$AppPort/docs" -ForegroundColor Green
+        Write-Host "        Logs:   .\run.ps1 -Logs" -ForegroundColor DarkGray
+
+        # 自动 tail 最新应用日志
+        $today = Get-Date -Format "yyyy-MM-dd"
+        $appLog = Join-Path $LogDir "app_$today.log"
+        if (Test-Path $appLog) {
+            Write-Host ""
+            Write-Host "[logs] Tailing $appLog (Ctrl+C to stop)..." -ForegroundColor Cyan
+            Write-Host ""
+            Get-Content $appLog -Tail 30
+            Get-Content $appLog -Wait -Tail 0
+        }
         exit 0
     }
     Write-Host "[warn] port $AppPort is already in use, but health check failed." -ForegroundColor Yellow

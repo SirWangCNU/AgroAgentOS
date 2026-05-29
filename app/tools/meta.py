@@ -7,14 +7,12 @@
   - side_effect: none / external / filesystem / network
   - risk_level: low / medium / high
   - max_result_chars: 工具输出截断阈值 (避免一坨 20KB 日志直接喂 LLM)
-  - search_hint: 给未来的 ToolSearch 二级动态发现用 (cc-haha 同款)
+  - search_hint: 给未来的 ToolSearch 二级动态发现用
 
 设计原则 (fail-closed):
   - 未在 TOOL_META 登记的工具会拿到保守默认: 不可并发 + 非只读 + 视为有副作用
   - 新增工具时必须在 TOOL_META 里登记, 否则会被并行编排和未来 PermissionMode 默认拦截
   - register_tool_meta() 用于 MCP 等运行时动态加载的工具补登记
-
-参考: cc-haha src/Tool.ts:362-470 中的 isConcurrencySafe / isReadOnly / isDestructive 设计
 """
 
 from __future__ import annotations
@@ -36,8 +34,8 @@ class ToolMeta(BaseModel):
         read_only=False, concurrency_safe=False, destructive=False, side_effect=none
 
     这意味着未登记的工具:
-      - 在 §3 的并行编排里只会串行执行 (安全)
-      - 在 §1 的 ASK_DESTRUCTIVE 模式下会被默认 ASK (因为 read_only=False)
+      - 在并行编排里只会串行执行 (安全)
+      - 在 ASK_DESTRUCTIVE 模式下会被默认 ASK (因为 read_only=False)
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=False)
@@ -60,12 +58,7 @@ class ToolMeta(BaseModel):
     )
     is_notification: bool = Field(
         default=False,
-        description=(
-            "是否为外发通知类工具. "
-            "受 settings.guardrails_allow_notification_tools 单独控制. "
-            "注意: side_effect=external 不等同于 is_notification, "
-            "例如 mcp_execute_tool 也是 external 但不是通知."
-        ),
+        description="是否为外发通知类工具.",
     )
     risk_level: RiskLevel = Field(
         default="low",
@@ -73,14 +66,14 @@ class ToolMeta(BaseModel):
     )
     max_result_chars: int = Field(
         default=16000,
-        description="工具结果上限字符数, 超过后由编排层截断或落盘 (cc-haha 是 maxResultSizeChars).",
+        description="工具结果上限字符数, 超过后由编排层截断或落盘.",
     )
     search_hint: Optional[str] = Field(
         default=None,
-        description="供 ToolSearch 二级动态发现使用的关键字 (cc-haha 同款).",
+        description="供 ToolSearch 二级动态发现使用的关键字.",
     )
 
-    # 输入参数感知 (例如 cc-haha Bash 工具按命令决定是否只读). 当前不强求实现, 占位.
+    # 输入参数感知 (例如 Bash 工具按命令决定是否只读). 当前不强求实现, 占位.
     is_read_only_for_input: Optional[Callable[[dict], bool]] = Field(
         default=None,
         description="可选: 根据输入决定是否只读, 优先于 read_only 字段.",
@@ -99,163 +92,53 @@ class ToolMeta(BaseModel):
 
 
 # ============================================================
-# 中央注册表
-# ============================================================
-# 顺序: 本地 → 系统 → 监控/日志 → 联网 → 网络诊断 → 通知/写操作 → Lazy MCP
+# 中央注册表 (农业智农协同平台)
 # ============================================================
 TOOL_META: Dict[str, ToolMeta] = {
-    # ===== 本地工具 =====
+    # ===== 农业知识库 =====
     "search_knowledge_base": ToolMeta(
         read_only=True,
         concurrency_safe=True,
         max_result_chars=8000,
         risk_level="low",
-        search_hint="rag knowledge base sop 知识库 经验",
+        search_hint="rag knowledge base 知识库 农业 种植 养殖",
     ),
+
+    # ===== 时间工具 =====
     "get_current_time": ToolMeta(
         read_only=True,
         concurrency_safe=True,
         max_result_chars=200,
         risk_level="low",
-        search_hint="time clock 时间",
+        search_hint="time clock 时间 日期 农时",
     ),
 
-    # ===== 本机系统 (system_server.py) =====
-    "get_local_system_overview": ToolMeta(
+    # ===== 天气工具 =====
+    "get_weather": ToolMeta(
         read_only=True,
         concurrency_safe=True,
-        max_result_chars=4000,
+        max_result_chars=3000,
         risk_level="low",
-        search_hint="local system overview cpu memory disk 本机 概览",
-    ),
-    "get_local_cpu_memory": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=2000,
-        risk_level="low",
-        search_hint="local cpu memory 本机 cpu 内存",
-    ),
-    "get_local_disk_usage": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=2000,
-        risk_level="low",
-        search_hint="local disk usage 本机 磁盘",
-    ),
-    "list_top_processes": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=4000,
-        risk_level="low",
-        search_hint="top processes 进程",
+        search_hint="weather 天气 气温 湿度 降雨 农事",
     ),
 
-    # ===== Windows 事件日志 (winlog_server.py) =====
-    "query_windows_event": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=20000,
-        risk_level="low",
-        search_hint="windows event log 蓝屏 崩溃",
-    ),
-
-    # ===== 联网搜索 (websearch_server.py) =====
+    # ===== 联网搜索 =====
     "web_search": ToolMeta(
         read_only=True,
-        # 注意: 不并发. 外部搜索/本地 daemon 都应避免被 LLM 批量打爆.
-        concurrency_safe=False,
+        concurrency_safe=False,  # 外部搜索应避免被 LLM 批量打爆
         side_effect="network",
         max_result_chars=12000,
         risk_level="medium",
-        search_hint="web search internet google bing 联网 搜索",
+        search_hint="web search internet 联网 搜索 农业资料",
     ),
-
-    # ===== 网络诊断 (network_server.py) =====
-    "ping_host": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        side_effect="network",
-        max_result_chars=2500,
-        risk_level="low",
-        search_hint="ping connectivity 连通性 丢包",
-    ),
-    "http_check": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        side_effect="network",
-        max_result_chars=4000,
-        risk_level="low",
-        search_hint="http check 状态码 url 健康",
-    ),
-    "dns_lookup": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        side_effect="network",
-        max_result_chars=1500,
-        risk_level="low",
-        search_hint="dns lookup 域名 解析",
-    ),
-    "check_port": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        side_effect="network",
-        max_result_chars=1000,
-        risk_level="low",
-        search_hint="port tcp 端口 防火墙",
-    ),
-
-    # ===== Docker (docker_server.py) =====
-    # 只读 docker_ps / docker_stats / docker_logs / docker_inspect 都是 low.
-    # docker_restart 是写操作, high.
-    "docker_ps": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=6000,
-        risk_level="low",
-        search_hint="docker ps containers 容器 列表",
-    ),
-    "docker_stats": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=2000,
-        risk_level="low",
-        search_hint="docker stats 资源 占用",
-    ),
-    "docker_logs": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=20000,
-        risk_level="low",
-        search_hint="docker logs 容器 日志",
-    ),
-    "docker_inspect": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        max_result_chars=8000,
-        risk_level="low",
-        search_hint="docker inspect 容器 配置",
-    ),
-    "docker_restart": ToolMeta(
-        read_only=False,
-        concurrency_safe=False,
-        destructive=True,
-        side_effect="filesystem",
-        risk_level="high",
-        max_result_chars=1000,
-        search_hint="docker restart 重启 容器",
-    ),
-
-    # ===== 通知 / 外发 =====
 
     # ===== Lazy MCP 元工具 =====
-    # mcp_search_tools 是只读的工具发现入口, 可并发.
-    # mcp_execute_tool 是动态执行入口, 由它内部再做安全决策, 这里保守不并发.
     "mcp_search_tools": ToolMeta(
         read_only=True,
         concurrency_safe=True,
         max_result_chars=4000,
         risk_level="low",
-        search_hint="mcp search lazy tools 搜索 mcp",
+        search_hint="mcp search tools 搜索工具",
     ),
     "mcp_execute_tool": ToolMeta(
         read_only=False,
@@ -263,34 +146,17 @@ TOOL_META: Dict[str, ToolMeta] = {
         side_effect="external",
         risk_level="medium",
         max_result_chars=20000,
-        search_hint="mcp execute call 调用 mcp",
+        search_hint="mcp execute call 调用工具",
     ),
 
-    # ===== §5 二级 Agent (Subagent) delegate 工具 =====
-    # 主 Executor 通过 delegate_to_<agent_type> 把脏活分给小弟,
-    # 内部调 LLM + 工具循环, 主对话只看到一段精炼总结.
-    # 多个 delegate_to_evidence_collector / kb_researcher 同时进可并行 (各自子上下文独立).
-    "delegate_to_evidence_collector": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        risk_level="low",
-        max_result_chars=8000,
-        search_hint="evidence collect metrics logs processes 证据 指标 日志",
-    ),
+    # ===== 二级 Agent (Subagent) delegate 工具 =====
     "delegate_to_kb_researcher": ToolMeta(
         read_only=True,
         concurrency_safe=True,
         side_effect="network",  # 内部可能联网
         risk_level="medium",
         max_result_chars=6000,
-        search_hint="knowledge research sop kb web 知识 搜索",
-    ),
-    "delegate_to_report_writer": ToolMeta(
-        read_only=True,
-        concurrency_safe=False,  # 一般一份报告就够, 不需要并发
-        risk_level="low",
-        max_result_chars=12000,
-        search_hint="report writer rca markdown 报告 写作",
+        search_hint="knowledge research 知识检索 农业知识",
     ),
 }
 
