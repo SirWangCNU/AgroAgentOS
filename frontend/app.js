@@ -643,9 +643,13 @@ function renderContextPanel() {
     const d = chatState.currentDetails;
 
     if (tab === "detail") {
+        // 渲染知识引用
+        const citationsHtml = d.citations && d.citations.length ? renderCitations(d.citations) : '';
+
         const retrieveHtml = d.retrieve.length ? d.retrieve.map((h, i) => {
             const score = h.score != null ? `<span style="color:var(--accent-green)">score ${h.score}</span>` : "";
-            return `<div class="context-item"><div class="ci-label">${i + 1}. ${escapeHtml(h.source || "未知")} ${score}</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escapeHtml((h.preview || "").slice(0, 120))}</div></div>`;
+            const category = h.category ? `<span class="citation-category ${h.category}">${escapeHtml(h.category_name || h.category)}</span>` : "";
+            return `<div class="context-item"><div class="ci-label">${i + 1}. ${escapeHtml(h.source || "未知")} ${score} ${category}</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escapeHtml((h.preview || "").slice(0, 120))}</div></div>`;
         }).join("") : '<div style="color:var(--text-muted);font-size:12px">暂无检索结果</div>';
 
         const webHtml = d.web.length ? d.web.map((r, i) => {
@@ -654,6 +658,7 @@ function renderContextPanel() {
         }).join("") : '<div style="color:var(--text-muted);font-size:12px">暂无联网结果</div>';
 
         body.innerHTML = `
+            ${citationsHtml}
             <div class="context-section"><div class="context-section-title">知识库检索</div>${retrieveHtml}</div>
             <div class="context-section"><div class="context-section-title">联网搜索</div>${webHtml}</div>
         `;
@@ -682,6 +687,56 @@ function renderContextPanel() {
             <div class="context-item"><div class="ci-label">回答字数</div><div class="ci-value">${s.answer_chars ?? 0}</div></div>
         `;
     }
+}
+
+// 渲染知识引用组件
+function renderCitations(citations) {
+    if (!citations || citations.length === 0) return '';
+
+    const categoryNames = {
+        'planting': '种植技术',
+        'pest_control': '病虫害防治',
+        'soil': '土壤管理',
+        'weather': '气象知识'
+    };
+
+    const citationItems = citations.map((c, i) => {
+        const categoryClass = c.category || 'unknown';
+        const categoryName = c.category_name || categoryNames[c.category] || '未知';
+        const scorePercent = c.relevance_score ? Math.round(c.relevance_score * 100) : 0;
+
+        return `
+            <div class="citation-item">
+                <div class="citation-item-header">
+                    <div class="citation-source">
+                        <i class="fa-solid fa-file-lines"></i>
+                        ${escapeHtml(c.source || '未知来源')}
+                    </div>
+                    <span class="citation-category ${categoryClass}">${escapeHtml(categoryName)}</span>
+                </div>
+                ${c.chapter ? `<div class="citation-chapter">${escapeHtml(c.chapter)}</div>` : ''}
+                <div class="citation-content">${escapeHtml((c.content || '').slice(0, 150))}</div>
+                <div class="citation-footer">
+                    <div class="citation-score">
+                        <i class="fa-solid fa-chart-line"></i>
+                        相关度: ${scorePercent}%
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="knowledge-citation">
+            <div class="citation-header">
+                <i class="fa-solid fa-book-open"></i>
+                <span>知识来源</span>
+            </div>
+            <div class="citation-body">
+                ${citationItems}
+            </div>
+        </div>
+    `;
 }
 
 // Web/MCP toggles
@@ -936,6 +991,10 @@ async function sendChat() {
                 assistantBubble.innerHTML = renderMarkdown(buf);
                 const container = $("#chat-messages");
                 container.scrollTop = container.scrollHeight;
+            } else if (ev.type === "citations") {
+                // 处理知识引用事件
+                chatState.currentDetails.citations = ev.citations || [];
+                renderContextPanel();
             } else if (ev.type === "error") {
                 finalizeChatProgress(progressBox, true);
                 assistantBubble.style.display = "";

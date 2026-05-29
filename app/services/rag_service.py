@@ -439,6 +439,21 @@ async def stream_chat(
     except Exception as exc:
         logger.warning(f"[rag] 历史记录写入失败: {type(exc).__name__}: {exc}")
 
+    # ---------- 输出 citations (知识引用) ----------
+    if hits_meta:
+        citations = []
+        for hit in hits_meta:
+            citation = {
+                "source": hit.get("source", "未知来源"),
+                "chapter": hit.get("chapter", ""),
+                "category": hit.get("category", "unknown"),
+                "category_name": hit.get("category_name", "未知"),
+                "content": hit.get("preview", "")[:200],
+                "relevance_score": hit.get("score", 0),
+            }
+            citations.append(citation)
+        yield {"type": "citations", "citations": citations}
+
     llm_ms = int((time.perf_counter() - llm_t0) * 1000)
     total_ms = int((time.perf_counter() - total_t0) * 1000)
     usage_stats = HarnessUsageStats(

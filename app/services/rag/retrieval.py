@@ -7,6 +7,14 @@ from app.core.vector_store import advanced_search
 # 单个片段截断上限. 800 字足以承载一个 SOP 章节要点; 超长部分让 LLM 从其它片段补.
 CHUNK_CHAR_LIMIT = 800
 
+# 农业知识分类
+AGRICULTURE_CATEGORIES = {
+    "planting": "种植技术",
+    "pest_control": "病虫害防治",
+    "soil": "土壤管理",
+    "weather": "气象知识",
+}
+
 
 async def build_context(
     question: str, top_k: int
@@ -15,7 +23,7 @@ async def build_context(
 
     Returns:
         (context_text, hit_count, sources, hits_meta)
-        hits_meta: [{"source", "chapter", "preview", "score"}, ...]  供前端展开显示
+        hits_meta: [{"source", "chapter", "preview", "score", "category", "category_name"}, ...]  供前端展开显示
     """
     docs = await advanced_search(question, k=top_k)
     if not docs:
@@ -29,9 +37,14 @@ async def build_context(
         source = meta.get("source") or "未知"
         sources.append(str(source))
         chapter = meta.get("chapter") or ""
+        category = meta.get("category", "unknown")
+        category_name = AGRICULTURE_CATEGORIES.get(category, "未知")
+
         header = f"## 来源 {i} | {source}"
         if chapter:
             header += f" | 章节: {chapter}"
+        header += f" | 分类: {category_name}"
+
         raw_text = doc.page_content.strip()
         truncated = raw_text[:CHUNK_CHAR_LIMIT]
         if len(raw_text) > CHUNK_CHAR_LIMIT:
@@ -50,6 +63,8 @@ async def build_context(
                 "chapter": str(chapter) if chapter else "",
                 "preview": preview[:240] + ("..." if len(preview) > 240 else ""),
                 "score": score_val,
+                "category": category,
+                "category_name": category_name,
             }
         )
 
