@@ -21,12 +21,12 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.middleware import setup_middlewares
-from app.api.v1 import aiops, chat, diagnosis, documents, health, history, observability, skills, weather, webhook
+from app.api.v1 import aiops, auth, chat, diagnosis, documents, health, history, observability, skills, weather, webhook
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
 from app.core.milvus import milvus_manager
@@ -34,6 +34,7 @@ from app.core.sqlite import sqlite_manager
 from app.exceptions import AppException
 from app.logging_config import setup_logging
 from app.schemas.common import ApiResponse
+from app.services.auth_service import ensure_admin_exists
 
 
 # ============================================================
@@ -61,7 +62,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 3. 连接 SQLite (历史记录存储)
     sqlite_manager.connect()
 
-    # 4. 加载 MCP 工具 (可选依赖, 失败仅 warning)
+    # 4. 确保管理员账号存在
+    ensure_admin_exists()
+
+    # 5. 加载 MCP 工具 (可选依赖, 失败仅 warning)
     await mcp_client_manager.connect(fail_silently=True)
 
     logger.info("应用就绪, 等待请求...")
@@ -156,18 +160,37 @@ app.include_router(history.router, prefix=API_PREFIX)
 app.include_router(observability.router, prefix=API_PREFIX)
 app.include_router(diagnosis.router, prefix=API_PREFIX)
 app.include_router(weather.router, prefix=API_PREFIX)
+app.include_router(auth.router, prefix=API_PREFIX)
 
 
 # ============================================================
 # 静态文件 (前端)
 # ============================================================
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+
+# 前端文件路由表
+FRONTEND_FILES = {
+    "/": "index.html",
+    "/login.html": "login.html",
+    "/index.html": "index.html",
+    "/styles.css": "styles.css",
+    "/app.js": "app.js",
+    "/auth.js": "auth.js",
+}
+
 if FRONTEND_DIR.exists():
-    app.mount(
-        "/",
-        StaticFiles(directory=str(FRONTEND_DIR), html=True),
-        name="frontend",
-    )
+    # 为前端文件创建显式 GET 路由，避免 StaticFiles 拦截 POST 请求
+    for route_path, file_name in FRONTEND_FILES.items():
+        # 使用默认参数捕获循环变量
+        def _make_route(path: str, fname: str):
+            @app.get(path, include_in_schema=False)
+            async def serve_file() -> FileResponse:
+                return FileResponse(str(FRONTEND_DIR / fname))
+
+        _make_route(route_path, file_name)
+
+    # 挂载 /static 目录用于 CSS/JS 中引用的图片等资源
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 else:
     logger.warning(f"前端目录不存在: {FRONTEND_DIR} (将在阶段 5 创建)")
 

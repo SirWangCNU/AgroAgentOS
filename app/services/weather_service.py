@@ -207,18 +207,39 @@ _cache = _WeatherCache(ttl_seconds=1800)
 # ============================================================
 
 class QWeatherClient:
-    """和风天气 API 客户端 (免费版)."""
+    """和风天气 API 客户端 (支持免费版和付费版自定义域名)."""
 
-    BASE_URL = "https://devapi.qweather.com/v7"
-    GEO_URL = "https://geoapi.qweather.com/v2"
+    DEFAULT_BASE_URL = "https://devapi.qweather.com/v7"
+    FREE_GEO_URL = "https://geoapi.qweather.com/v2"
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, base_url: str = ""):
         self._api_key = api_key
         self._client: Optional[httpx.AsyncClient] = None
+        self._is_paid = bool(base_url)
+
+        # 支持付费版自定义域名
+        if base_url:
+            if base_url.startswith("http"):
+                domain = base_url.rstrip("/")
+            else:
+                domain = f"https://{base_url}"
+            # 付费版天气 API 路径包含 /v7
+            self.BASE_URL = f"{domain}/v7"
+            # 付费版 GEO API 路径不同
+            self.GEO_URL = f"{domain}/geo/v2"
+            logger.info(f"[QWeather] 使用付费版域名: {domain}")
+        else:
+            self.BASE_URL = self.DEFAULT_BASE_URL
+            self.GEO_URL = self.FREE_GEO_URL
+            logger.info("[QWeather] 使用默认免费版域名")
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=10.0)
+            # 禁用自动解压，因为付费版服务器返回的 content-encoding 头不准确
+            self._client = httpx.AsyncClient(
+                timeout=10.0,
+                headers={"Accept-Encoding": "identity"},
+            )
         return self._client
 
     async def close(self) -> None:
@@ -233,7 +254,8 @@ class QWeatherClient:
                 f"{self.GEO_URL}/city/lookup",
                 params={"location": city, "key": self._api_key, "lang": "zh"},
             )
-            data = resp.json()
+            import json
+            data = json.loads(resp.content.decode("utf-8"))
             if data.get("code") == "200" and data.get("location"):
                 return data["location"][0]["id"]
         except Exception as e:
@@ -248,7 +270,8 @@ class QWeatherClient:
                 f"{self.BASE_URL}/weather/now",
                 params={"location": location_id, "key": self._api_key, "lang": "zh"},
             )
-            data = resp.json()
+            import json
+            data = json.loads(resp.content.decode("utf-8"))
             if data.get("code") == "200":
                 return data.get("now")
         except Exception as e:
@@ -263,7 +286,8 @@ class QWeatherClient:
                 f"{self.BASE_URL}/weather/3d",
                 params={"location": location_id, "key": self._api_key, "lang": "zh"},
             )
-            data = resp.json()
+            import json
+            data = json.loads(resp.content.decode("utf-8"))
             if data.get("code") == "200":
                 return data.get("daily", [])[:days]
         except Exception as e:
@@ -278,13 +302,13 @@ class QWeatherClient:
 class WeatherService:
     """天气服务 - 统一入口."""
 
-    def __init__(self, api_key: str = "", provider: str = "auto"):
+    def __init__(self, api_key: str = "", base_url: str = "", provider: str = "auto"):
         self._api_key = api_key
         self._provider = provider
         self._qweather: Optional[QWeatherClient] = None
 
         if api_key and provider in ("auto", "qweather"):
-            self._qweather = QWeatherClient(api_key)
+            self._qweather = QWeatherClient(api_key, base_url)
             logger.info("[WeatherService] 使用和风天气 API")
         else:
             logger.info("[WeatherService] 未配置天气 API Key, 使用 Mock 数据")
@@ -344,6 +368,16 @@ class WeatherService:
             update_time=now_data.get("obsTime", ""),
         )
 
+        def parse_wind_scale(scale_str: str) -> int:
+            """解析风力等级，处理 '1-3' 这样的范围格式."""
+            try:
+                if "-" in str(scale_str):
+                    # 取范围的最大值
+                    return int(str(scale_str).split("-")[-1])
+                return int(scale_str)
+            except (ValueError, TypeError):
+                return 2
+
         forecast = []
         for day in forecast_data:
             forecast.append(ForecastDay(
@@ -353,8 +387,8 @@ class WeatherService:
                 condition=day.get("textDay", "多云"),
                 condition_day=day.get("textDay", ""),
                 condition_night=day.get("textNight", ""),
-                rain_probability=int(day.get("precip", 0)),
-                wind_level=int(day.get("windScaleDay", 2)),
+                rain_probability=int(float(day.get("precip", 0))),
+                wind_level=parse_wind_scale(day.get("windScaleDay", "2")),
             ))
 
         advice = generate_agriculture_advice(current, forecast)
@@ -373,10 +407,11 @@ def get_weather_service() -> WeatherService:
     global _weather_service
     if _weather_service is None:
         from app.config import settings
-        # 从环境变量读取天气 API Key (可选)
+        # 从 pydantic-settings 配置读取，如果没有则从环境变量读取
         import os
-        api_key = os.environ.get("QWEATHER_API_KEY", "")
-        _weather_service = WeatherService(api_key=api_key)
+        api_key = getattr(settings, 'qweather_api_key', None) or os.environ.get("QWEATHER_API_KEY", "")
+        base_url = getattr(settings, 'qweather_base_url', None) or os.environ.get("QWEATHER_BASE_URL", "")
+        _weather_service = WeatherService(api_key=api_key, base_url=base_url)
     return _weather_service
 
 

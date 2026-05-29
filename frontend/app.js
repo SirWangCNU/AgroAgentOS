@@ -4,6 +4,9 @@
 
 const API = "/api/v1";
 
+// 使用带认证的 fetch（如果 auth.js 已加载）
+const safeFetch = typeof authFetch === 'function' ? authFetch : fetch;
+
 // ---- Utility Functions ----
 function escapeHtml(s) {
     if (s == null) return "";
@@ -106,12 +109,19 @@ const router = {
 // Sidebar
 // ============================================================
 const sidebar = {
-    expanded: false,
+    expanded: true,
     init() {
         $$(".nav-item").forEach(item => {
             item.addEventListener("click", () => router.navigate(item.dataset.page));
         });
         $("#sidebar-toggle").addEventListener("click", () => this.toggle());
+        // 应用初始展开状态
+        if (this.expanded) {
+            $("#sidebar").classList.add("expanded");
+            $("#main-area").classList.add("shifted");
+            const icon = $("#sidebar-toggle i");
+            if (icon) icon.className = "fa-solid fa-angles-left";
+        }
     },
     toggle() {
         this.expanded = !this.expanded;
@@ -126,7 +136,7 @@ const sidebar = {
 // Global Search (Ctrl+K)
 // ============================================================
 const searchItems = [
-    { icon: "fa-grip", label: "工作台", hint: "Dashboard", page: "dashboard" },
+    { icon: "fa-grip", label: "总览", hint: "Dashboard", page: "dashboard" },
     { icon: "fa-comments", label: "智能问答", hint: "农业问答", page: "copilot" },
     { icon: "fa-cloud-sun", label: "天气农事", hint: "Weather", page: "weather" },
     { icon: "fa-book-open", label: "农业知识库", hint: "KB", page: "kb" },
@@ -199,7 +209,7 @@ let healthState = { ready: false, milvusOk: false, mcpOk: false, mcpTools: 0 };
 
 async function checkHealth() {
     try {
-        const r = await fetch(`${API}/health/ready`);
+        const r = await safeFetch(`${API}/health/ready`);
         const data = await r.json();
         const ready = data?.data?.status === "ready";
         const milvusOk = data?.data?.dependencies?.milvus?.status === "ok";
@@ -225,7 +235,7 @@ let skillsCache = [];
 
 async function loadSkills() {
     try {
-        const r = await fetch(`${API}/skills`);
+        const r = await safeFetch(`${API}/skills`);
         const data = await r.json();
         if (data?.code !== "SUCCESS") throw new Error(data?.message || "加载失败");
         skillsCache = data?.data?.skills || [];
@@ -324,7 +334,7 @@ async function loadDashboardAlerts() {
     const badge = $("#alert-badge");
     const countEl = $("#alert-count");
     try {
-        const r = await fetch(`${API}/webhook/history?limit=5`);
+        const r = await safeFetch(`${API}/webhook/history?limit=5`);
         const data = await r.json();
         const items = data?.items || [];
         const total = data?.count || items.length;
@@ -438,7 +448,7 @@ async function startAiops() {
 
     aiopsAbortController = new AbortController();
     try {
-        const resp = await fetch(`${API}/aiops/diagnose`, {
+        const resp = await safeFetch(`${API}/aiops/diagnose`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ session_id: `web-${Date.now()}`, query }),
@@ -888,7 +898,7 @@ async function sendChat() {
     $("#chat-send").disabled = true;
 
     try {
-        const resp = await fetch(`${API}/chat/stream`, {
+        const resp = await safeFetch(`${API}/chat/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -971,7 +981,7 @@ async function uploadFile(file) {
     const formData = new FormData();
     formData.append("file", file);
     try {
-        const r = await fetch(`${API}/documents/upload`, {
+        const r = await safeFetch(`${API}/documents/upload`, {
             method: "POST",
             headers: { "X-KB-Admin-Token": getKbAdminToken() },
             body: formData,
@@ -997,7 +1007,7 @@ async function loadDocs() {
     const listEl = $("#docs-list");
     listEl.innerHTML = '<div class="skeleton" style="height:40px;margin-bottom:8px"></div><div class="skeleton" style="height:40px;margin-bottom:8px"></div>';
     try {
-        const r = await fetch(`${API}/documents`);
+        const r = await safeFetch(`${API}/documents`);
         const data = await r.json();
         const docs = data?.data?.documents || [];
         if (!docs.length) {
@@ -1026,7 +1036,7 @@ async function loadDocs() {
 
 async function deleteDoc(source) {
     try {
-        const r = await fetch(`${API}/documents/${encodeURIComponent(source)}`, {
+        const r = await safeFetch(`${API}/documents/${encodeURIComponent(source)}`, {
             method: "DELETE",
             headers: { "X-KB-Admin-Token": getKbAdminToken() },
         });
@@ -1074,7 +1084,7 @@ $("#history-refresh")?.addEventListener("click", () => {
 $("#history-clear")?.addEventListener("click", async () => {
     if (!confirm("确认清空所有诊断历史? 此操作不可恢复。")) return;
     try {
-        await fetch(`${API}/history`, { method: "DELETE" });
+        await safeFetch(`${API}/history`, { method: "DELETE" });
         historyLoaded = false;
         loadHistory();
     } catch (e) {
@@ -1092,7 +1102,7 @@ async function loadHistory() {
     try {
         const params = new URLSearchParams({ page: historyPage, page_size: 20 });
         if (historySource) params.set("source", historySource);
-        const r = await fetch(`${API}/history?${params}`);
+        const r = await safeFetch(`${API}/history?${params}`);
         const resp = await r.json();
         if (resp?.code !== "SUCCESS") throw new Error(resp?.message || "加载失败");
         const data = resp.data || {};
@@ -1159,7 +1169,7 @@ async function loadHistory() {
                 e.stopPropagation();
                 if (!confirm("确认删除这条记录?")) return;
                 try {
-                    const dr = await fetch(`${API}/history/${rec.id}`, { method: "DELETE" });
+                    const dr = await safeFetch(`${API}/history/${rec.id}`, { method: "DELETE" });
                     const dd = await dr.json();
                     if (dd?.code === "SUCCESS") {
                         card.remove();
@@ -1179,7 +1189,7 @@ async function loadHistory() {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 上传中...';
                 try {
-                    const r = await fetch(`${API}/history/${rec.id}/upload-kb`, { method: "POST" });
+                    const r = await safeFetch(`${API}/history/${rec.id}/upload-kb`, { method: "POST" });
                     const d = await r.json();
                     if (d?.code === "SUCCESS") {
                         btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> 已上传';
@@ -1254,7 +1264,7 @@ async function loadAlerts() {
 
     try {
         // Load stats
-        const statsResp = await fetch(`${API}/alerts/stats`);
+        const statsResp = await safeFetch(`${API}/alerts/stats`);
         const statsData = await statsResp.json();
         if (statsData?.code === "SUCCESS") {
             const stats = statsData.data || {};
@@ -1269,7 +1279,7 @@ async function loadAlerts() {
         if (alertsSeverity) params.set("severity", alertsSeverity);
         if (alertsStatus) params.set("status", alertsStatus);
 
-        const r = await fetch(`${API}/alerts?${params}`);
+        const r = await safeFetch(`${API}/alerts?${params}`);
         const data = await r.json();
         if (data?.code !== "SUCCESS") throw new Error(data?.message || "加载失败");
 
@@ -1336,7 +1346,7 @@ async function loadAlerts() {
                 e.stopPropagation();
                 const id = e.currentTarget.dataset.ack;
                 try {
-                    await fetch(`${API}/alerts/${id}/acknowledge`, { method: "POST" });
+                    await safeFetch(`${API}/alerts/${id}/acknowledge`, { method: "POST" });
                     alertsLoaded = false;
                     loadAlerts();
                 } catch (err) {
@@ -1348,7 +1358,7 @@ async function loadAlerts() {
                 e.stopPropagation();
                 const id = e.currentTarget.dataset.resolve;
                 try {
-                    await fetch(`${API}/alerts/${id}/resolve`, { method: "POST" });
+                    await safeFetch(`${API}/alerts/${id}/resolve`, { method: "POST" });
                     alertsLoaded = false;
                     loadAlerts();
                 } catch (err) {
@@ -1376,7 +1386,7 @@ async function loadAlerts() {
 $("#alerts-clear")?.addEventListener("click", async () => {
     if (!confirm("确认清空所有告警?")) return;
     try {
-        await fetch(`${API}/alerts`, { method: "DELETE" });
+        await safeFetch(`${API}/alerts`, { method: "DELETE" });
         alertsLoaded = false;
         loadAlerts();
     } catch (e) {
@@ -1394,7 +1404,7 @@ async function loadObservability() {
 
     try {
         // Load stats
-        const statsResp = await fetch(`${API}/observability/stats`);
+        const statsResp = await safeFetch(`${API}/observability/stats`);
         const statsData = await statsResp.json();
         if (statsData?.code === "SUCCESS") {
             const stats = statsData.data || {};
@@ -1411,7 +1421,7 @@ async function loadObservability() {
         }
 
         // Load runs
-        const runsResp = await fetch(`${API}/observability/runs?page=1&page_size=20`);
+        const runsResp = await safeFetch(`${API}/observability/runs?page=1&page_size=20`);
         const runsData = await runsResp.json();
         if (runsData?.code === "SUCCESS") {
             renderRunsList(runsData.data?.runs || []);
@@ -1534,7 +1544,7 @@ function getWeatherIcon(condition) {
 
 async function fetchWeather(location) {
     try {
-        const r = await fetch(`${API}/weather?location=${encodeURIComponent(location)}`);
+        const r = await safeFetch(`${API}/weather?location=${encodeURIComponent(location)}`);
         const data = await r.json();
         if (data?.code === "SUCCESS") return data.data;
     } catch (e) {

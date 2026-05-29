@@ -328,6 +328,16 @@ class Settings(BaseSettings):
     # ==================== SQLite 轻量级数据库 ====================
     sqlite_db_path: str = Field(default="data/agro_agent.db", description="SQLite 数据库文件路径")
 
+    # ==================== 和风天气 API ====================
+    qweather_api_key: str = Field(default="", description="和风天气 API Key (可选)")
+    qweather_base_url: str = Field(default="", description="和风天气付费版自定义域名 (可选)")
+
+    # ==================== JWT 认证 ====================
+    jwt_secret_key: str = Field(default="", description="JWT 签名密钥 (至少32字符)")
+    jwt_algorithm: str = Field(default="HS256", description="JWT 算法")
+    jwt_expire_minutes: int = Field(default=1440, description="JWT 过期时间 (分钟, 默认24小时)")
+    admin_default_password: str = Field(default="admin123", description="管理员默认密码 (仅首次创建时使用)")
+
     # ==================== 计算属性 ====================
     @property
     def mcp_servers(self) -> Dict[str, Dict[str, Any]]:

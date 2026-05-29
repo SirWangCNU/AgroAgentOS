@@ -74,6 +74,38 @@ class UnsupportedFileTypeError(BadRequestError):
     message = "不支持的文件类型, 仅支持 .md / .txt"
 
 
+class AuthenticationError(AppException):
+    """认证失败."""
+
+    status_code = 401
+    code = "UNAUTHORIZED"
+    message = "未认证或 token 无效"
+
+
+class ForbiddenError(AppException):
+    """权限不足."""
+
+    status_code = 403
+    code = "FORBIDDEN"
+    message = "权限不足"
+
+
+class UsernameAlreadyExistsError(AppException):
+    """用户名已存在."""
+
+    status_code = 409
+    code = "USERNAME_EXISTS"
+    message = "用户名已存在"
+
+
+class EmailAlreadyExistsError(AppException):
+    """邮箱已存在."""
+
+    status_code = 409
+    code = "EMAIL_EXISTS"
+    message = "邮箱已存在"
+
+
 # ==================== 5xx 服务端错误 ====================
 
 

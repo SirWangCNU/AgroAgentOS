@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="/auth.js"></script>
 </head>
 <body>
 
@@ -21,7 +22,7 @@
     <nav>
         <a class="nav-item active" data-page="dashboard">
             <i class="fa-solid fa-grip"></i>
-            <span class="nav-label">工作台</span>
+            <span class="nav-label">总览</span>
         </a>
         <a class="nav-item" data-page="copilot">
             <i class="fa-solid fa-comments"></i>
@@ -47,6 +48,10 @@
             <i class="fa-solid fa-clock-rotate-left"></i>
             <span class="nav-label">历史记录</span>
         </a>
+        <a class="nav-item" data-page="users" id="admin-menu-item" style="display:none;">
+            <i class="fa-solid fa-users-gear"></i>
+            <span class="nav-label">用户管理</span>
+        </a>
     </nav>
     <div class="sidebar-toggle" id="sidebar-toggle">
         <i class="fa-solid fa-angles-right"></i>
@@ -71,6 +76,25 @@
                 <i class="fa-solid fa-cloud-sun"></i>
                 <span id="current-weather">北京 28℃ 多云</span>
             </div>
+            <div id="user-menu" class="user-menu">
+                <div class="user-avatar-wrapper" onclick="toggleUserDropdown()">
+                    <div class="avatar">A</div>
+                    <span class="username">用户</span>
+                    <span class="role-badge user">用户</span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="user-dropdown" id="user-dropdown">
+                    <div class="dropdown-item" onclick="showChangePasswordModal()">
+                        <i class="fa-solid fa-key"></i>
+                        <span>修改密码</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item logout" onclick="logout()">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span>退出登录</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -80,7 +104,7 @@
         <!-- ======== Dashboard ======== -->
         <div class="page active" id="page-dashboard">
             <div class="section-title">
-                <i class="fa-solid fa-seedling" style="color:var(--accent-green)"></i> 智农工作台
+                <i class="fa-solid fa-seedling" style="color:var(--accent-green)"></i> 智农总览
             </div>
             <div class="dashboard-grid">
                 <!-- Weather Card -->
@@ -518,6 +542,131 @@
     </div>
 </div>
 
+<!-- ====== Change Password Modal ====== -->
+<div id="change-password-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-key"></i> 修改密码</h3>
+            <button class="modal-close" onclick="closeChangePasswordModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="pwd-error" class="modal-error" style="display:none;"></div>
+            <div id="pwd-success" class="modal-success" style="display:none;"></div>
+            <div class="form-group">
+                <label>旧密码</label>
+                <input type="password" id="old-password" placeholder="请输入旧密码">
+            </div>
+            <div class="form-group">
+                <label>新密码</label>
+                <input type="password" id="new-password" placeholder="至少6个字符">
+            </div>
+            <div class="form-group">
+                <label>确认新密码</label>
+                <input type="password" id="confirm-new-password" placeholder="请再次输入新密码">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeChangePasswordModal()">取消</button>
+            <button class="btn-confirm" id="change-pwd-btn" onclick="handleChangePassword()">确认修改</button>
+        </div>
+    </div>
+</div>
+
 <script src="/app.js?v=20260519a"></script>
+<script>
+    // 用户菜单下拉切换
+    function toggleUserDropdown() {
+        const dropdown = document.getElementById('user-dropdown');
+        dropdown.classList.toggle('show');
+    }
+
+    // 点击外部关闭下拉菜单
+    document.addEventListener('click', function(e) {
+        const userMenu = document.getElementById('user-menu');
+        const dropdown = document.getElementById('user-dropdown');
+        if (userMenu && !userMenu.contains(e.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+
+    // 显示修改密码模态框
+    function showChangePasswordModal() {
+        document.getElementById('change-password-modal').style.display = 'flex';
+        document.getElementById('old-password').value = '';
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-new-password').value = '';
+        document.getElementById('pwd-error').style.display = 'none';
+        document.getElementById('pwd-success').style.display = 'none';
+        document.getElementById('user-dropdown').classList.remove('show');
+    }
+
+    // 关闭修改密码模态框
+    function closeChangePasswordModal() {
+        document.getElementById('change-password-modal').style.display = 'none';
+    }
+
+    // 处理修改密码
+    async function handleChangePassword() {
+        const oldPassword = document.getElementById('old-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-new-password').value;
+
+        const errorEl = document.getElementById('pwd-error');
+        const successEl = document.getElementById('pwd-success');
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+
+        if (!oldPassword || !newPassword || !confirmPassword) {
+            errorEl.textContent = '请填写所有字段';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            errorEl.textContent = '两次输入的新密码不一致';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            errorEl.textContent = '新密码至少6个字符';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        const btn = document.getElementById('change-pwd-btn');
+        btn.disabled = true;
+        btn.textContent = '处理中...';
+
+        try {
+            const response = await authFetch('/api/v1/auth/password', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    old_password: oldPassword,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.code === 'SUCCESS') {
+                successEl.textContent = '密码修改成功';
+                successEl.style.display = 'block';
+                setTimeout(closeChangePasswordModal, 1500);
+            } else {
+                errorEl.textContent = data.message || '修改失败';
+                errorEl.style.display = 'block';
+            }
+        } catch (error) {
+            errorEl.textContent = '网络错误，请稍后重试';
+            errorEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '确认修改';
+        }
+    }
+</script>
 </body>
 </html>
