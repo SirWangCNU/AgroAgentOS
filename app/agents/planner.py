@@ -7,6 +7,8 @@
   - **基于 Skill 的 Playbook 拆**: 从 state.selected_skill 取出 Skill, 把 playbook
     作为种子注入 user prompt, 让 LLM 在 Playbook 基础上生成具体步骤
   - 兜底: 如果 LLM 返回空步骤, 给一个 fallback 计划 (避免下游 executor 卡死)
+  - **协同技能支持** (Phase 3): 当存在 collaboration_skills 时, 加载多个技能的 playbook
+    生成跨领域的协同计划
 """
 
 from loguru import logger
@@ -28,12 +30,30 @@ async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
     """Planner 节点: 输入 state.input + state.selected_skill, 输出 state.plan."""
     user_input = state["input"]
     skill_name = state.get("selected_skill", "")
+    collaboration_skills = state.get("collaboration_skills", [])
 
     # 取选定 Skill, 找不到时回退到 generic_oncall (registry 保证 fallback 存在)
     registry = get_skill_registry()
     skill = registry.get_or_generic(skill_name)
 
     is_reroute = state.get("pending_reroute", False)
+
+    # 构建协同技能上下文
+    collaboration_context = ""
+    if collaboration_skills:
+        collab_playbooks = []
+        for collab_name in collaboration_skills:
+            collab_skill = registry.get(collab_name)
+            if collab_skill:
+                collab_playbooks.append(
+                    f"## {collab_skill.display_name}\n{collab_skill.playbook[:500]}"
+                )
+        if collab_playbooks:
+            collaboration_context = "\n\n".join(collab_playbooks)
+        logger.info(
+            f"[Planner] 协同模式: 主技能={skill.name}, 协同技能={collaboration_skills}"
+        )
+
     if is_reroute:
         logger.info(
             f"[Planner] reroute 后重新规划 (skill={skill.name}): {user_input[:100]}..."
@@ -47,10 +67,19 @@ async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
     planner_model = harness.planner_model()
     llm = get_chat_llm(model=planner_model, temperature=0, timeout=30, max_retries=1)
 
+    # 构建协同 playbook
+    combined_playbook = skill.playbook
+    if collaboration_context:
+        combined_playbook = (
+            f"{skill.playbook}\n\n"
+            f"# 协同技能知识 (用于辅助回答)\n\n"
+            f"{collaboration_context}"
+        )
+
     messages = harness.build_planner_messages(
         user_input=user_input,
         skill_display_name=skill.display_name,
-        skill_playbook=skill.playbook,
+        skill_playbook=combined_playbook,
     )
 
     try:
@@ -85,7 +114,7 @@ async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
     for i, step in enumerate(plan.steps, 1):
         logger.info(f"  Step {i}: {step}")
 
-    return {
+    result = {
         "plan": plan.steps,
         "iteration": 0,
         "pending_reroute": False,  # 清标记, 避免下轮误路由
@@ -93,8 +122,14 @@ async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
             make_transition(
                 "planner",
                 PLANNER_OK,
-                f"skill={skill.name} steps={len(plan.steps)}"
+                f"skill={skill.name} steps={len(plan.steps)} collaboration={len(collaboration_skills)}"
                 + (" (reroute)" if is_reroute else ""),
             ),
         ],
     }
+
+    # 如果有协同上下文，保存到状态中供 executor 使用
+    if collaboration_context:
+        result["collaboration_context"] = collaboration_context
+
+    return result

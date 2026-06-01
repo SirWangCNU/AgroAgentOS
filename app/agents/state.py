@@ -65,6 +65,10 @@ class PlanExecuteState(TypedDict, total=False):
     reroute_count: int                                     # 已触发的 reroute 次数
     tried_skills: Annotated[List[TriedSkill], operator.add]  # 已试过的 skill + 被拒原因
     pending_reroute: bool                                  # 临时标记: replanner 本轮决定 reroute, 带回 Planner
+    # ===== 多Agent协同 (Phase 3) =====
+    # 当用户问题需要多个领域知识时，Router 可以选择多个协同技能
+    collaboration_skills: List[str]                        # 协同技能列表 (除主技能外的辅助技能)
+    collaboration_context: str                             # 协同技能的检索结果汇总
 
 
 # ============================================================

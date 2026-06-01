@@ -2595,3 +2595,1149 @@ body {
 .chat-bubble .citation-content {
   -webkit-line-clamp: 2;
 }
+
+/* ============================================================
+   Farm & Field Management
+   ============================================================ */
+
+.farms-grid, .fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.farm-card, .field-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.farm-card:hover, .field-card:hover {
+  border-color: var(--accent-green);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.farm-card.add-card, .field-card.add-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  border-style: dashed;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.farm-card.add-card:hover, .field-card.add-card:hover {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.farm-card.add-card i, .field-card.add-card i {
+  font-size: 24px;
+}
+
+.farm-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.farm-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+}
+
+.farm-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.farm-location {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.farm-card-body {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+
+.farm-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.farm-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.farm-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.farm-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.btn-icon:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.btn-icon.danger:hover {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+/* Field Card */
+.field-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.field-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+}
+
+.field-info h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.field-crop {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-right: 8px;
+}
+
+.field-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.field-status.status-idle { background: #f3f4f6; color: #6b7280; }
+.field-status.status-planting { background: #ecfdf5; color: #059669; }
+.field-status.status-fallow { background: #fef3c7; color: #d97706; }
+
+.field-card-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.field-detail {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.field-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* Detail Header */
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.detail-title h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.detail-title p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Modal */
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.show {
+  display: flex;
+}
+
+.modal-content {
+  background: var(--card-bg);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.btn-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-close:hover {
+  background: var(--hover-bg);
+}
+
+/* Form */
+.form-group {
+  margin: 12px 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.form-group .required {
+  color: #ef4444;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--accent-green);
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  margin: 12px 20px;
+}
+
+.form-row .form-group {
+  margin: 0;
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.btn-primary {
+  background: var(--accent-green);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #059669;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Empty & Loading States */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+}
+
+.empty-state i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.empty-state p {
+  margin: 0 0 16px;
+  font-size: 15px;
+}
+
+.empty-state.small {
+  padding: 32px 16px;
+}
+
+.empty-state.small i {
+  font-size: 32px;
+}
+
+.loading-hint {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+}
+
+.empty-hint {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Trajectory Styles - 轨迹管理
+   ============================================================ */
+
+/* Modal 大尺寸 */
+.modal-lg {
+  max-width: 700px;
+}
+
+/* 轨迹上传区域 */
+.trajectory-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  transition: all 0.2s;
+  background: var(--bg-secondary);
+  margin-bottom: 20px;
+}
+
+.trajectory-upload-zone:hover,
+.trajectory-upload-zone.dragover {
+  border-color: var(--accent-green);
+  background: rgba(22, 163, 74, 0.05);
+}
+
+.trajectory-upload-zone .upload-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.trajectory-upload-zone .upload-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.trajectory-upload-zone .upload-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.coord-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.coord-select label {
+  color: var(--text-secondary);
+}
+
+.coord-select select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+}
+
+.upload-status {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.upload-status.success {
+  color: var(--accent-green);
+}
+
+.upload-status.error {
+  color: var(--accent-red);
+}
+
+/* 轨迹列表区域 */
+.trajectories-section {
+  margin-top: 16px;
+}
+
+.trajectories-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 轨迹卡片 */
+.trajectory-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+  transition: all 0.2s;
+}
+
+.trajectory-card:hover {
+  border-color: var(--accent-green);
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.1);
+}
+
+.trajectory-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.trajectory-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--accent-green), #059669);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+}
+
+.trajectory-info h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.trajectory-machine {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.trajectory-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.trajectory-stats .stat-item {
+  text-align: center;
+  padding: 6px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.trajectory-stats .stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.trajectory-stats .stat-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.trajectory-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 统计模态框 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.stats-section {
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.stats-section h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.stats-row:last-child {
+  border-bottom: none;
+}
+
+.stats-row span:first-child {
+  color: var(--text-muted);
+}
+
+.stats-row span:last-child {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.text-success {
+  color: var(--accent-green) !important;
+}
+
+.text-warning {
+  color: var(--accent-orange) !important;
+}
+
+/* 深度分布图表 */
+.depth-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 100px;
+  padding-top: 10px;
+}
+
+.depth-bar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.depth-bar {
+  width: 100%;
+  background: linear-gradient(to top, var(--accent-green), #22c55e);
+  border-radius: 4px 4px 0 0;
+  min-height: 4px;
+  transition: height 0.3s;
+}
+
+.depth-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.depth-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.text-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* 轨迹图标按钮样式 */
+.btn-icon[title="轨迹管理"] {
+  color: var(--accent-green);
+}
+
+.btn-icon[title="轨迹管理"]:hover {
+  background: rgba(22, 163, 74, 0.1);
+}
+
+/* ============================================================
+   List Styles - 简洁列表样式
+   ============================================================ */
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.list-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.list-body {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.list-row:last-child {
+  border-bottom: none;
+}
+
+.list-row:hover {
+  background: var(--bg-hover);
+}
+
+.list-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.list-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.list-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-stats {
+  display: flex;
+  gap: 16px;
+  margin: 0 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.list-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent-blue);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.btn-link:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.btn-link.danger {
+  color: var(--accent-red);
+}
+
+.btn-link.danger:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.status-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.status-idle {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-planting {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-fallow {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+/* ============================================================
+   Farm Management - 农场管理简洁布局
+   ============================================================ */
+
+/* 顶部工具栏 */
+.farm-toolbar {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.toolbar-selects {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-group label {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.select-group select {
+  min-width: 140px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.select-group select:focus {
+  outline: none;
+  border-color: var(--accent-green);
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* 地图区域 */
+.farm-map-wrapper {
+  position: relative;
+  height: calc(100vh - 180px);
+  min-height: 400px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.farm-map {
+  width: 100%;
+  height: 100%;
+}
+
+/* 地图工具栏 */
+.map-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  display: flex;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  overflow: hidden;
+}
+
+.map-tool-btn {
+  padding: 6px 12px;
+  border: none;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.map-tool-btn:hover {
+  background: var(--bg-hover);
+}
+
+.map-tool-btn.active {
+  background: var(--accent-green);
+  color: white;
+}
+
+.map-tool-divider {
+  width: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* 地块标记 */
+.field-marker-icon {
+  background: none !important;
+  border: none !important;
+}
+
+.field-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  border: 2px solid white;
+  transition: transform 0.2s;
+}
+
+.field-marker:hover {
+  transform: scale(1.2);
+}
+
+/* 地块弹窗 */
+.field-popup h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.field-popup .popup-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.field-popup .popup-info i {
+  margin-right: 4px;
+}
+
+.field-popup .status-idle { color: var(--text-muted); }
+.field-popup .status-planting { color: var(--accent-green); }
+.field-popup .status-fallow { color: var(--accent-orange); }
+
+.popup-btn {
+  padding: 4px 10px;
+  background: var(--accent-green);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.popup-btn:hover {
+  background: #15803d;
+}
+
+/* 轨迹点标记 */
+.trajectory-point-icon {
+  background: none !important;
+  border: none !important;
+}
+
+.point-start,
+.point-end {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.point-start {
+  background: var(--accent-green);
+}
+
+.point-end {
+  background: var(--accent-red);
+}
+
+/* 移动标记 */
+.moving-marker-icon {
+  background: none !important;
+  border: none !important;
+}
+
+.moving-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.5);
+  border: 2px solid white;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(217, 119, 6, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+}
+
+/* 临时标记 */
+.temp-marker-icon {
+  background: none !important;
+  border: none !important;
+}
+
+.temp-marker {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-red);
+  font-size: 24px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+/* 回放控制 */
+.playback-controls {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: white;
+  border-radius: 10px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+}
+
+.playback-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--accent-green);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.playback-btn:hover {
+  background: #15803d;
+}
+
+.playback-progress {
+  width: 200px;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.playback-progress-bar {
+  height: 100%;
+  background: var(--accent-green);
+  width: 0%;
+  transition: width 0.1s;
+}
+
+.playback-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 60px;
+}
+
+.playback-speed {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+/* 响应式布局 */
+@media (max-width: 1024px) {
+  .farm-detail-layout {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .farm-map-container {
+    height: 300px;
+    min-height: 300px;
+  }
+
+  .farm-fields-panel {
+    max-height: 400px;
+  }
+}

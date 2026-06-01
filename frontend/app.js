@@ -102,6 +102,7 @@ const router = {
         if (page === "kb" && !kbLoaded) loadDocs();
         if (page === "history" && !historyLoaded) loadHistory();
         if (page === "weather") loadWeatherPage();
+        if (page === "farms") initFarmsPage();
     }
 };
 
@@ -137,9 +138,10 @@ const sidebar = {
 // ============================================================
 const searchItems = [
     { icon: "fa-grip", label: "总览", hint: "Dashboard", page: "dashboard" },
-    { icon: "fa-comments", label: "智能问答", hint: "农业问答", page: "copilot" },
-    { icon: "fa-cloud-sun", label: "天气农事", hint: "Weather", page: "weather" },
-    { icon: "fa-book-open", label: "农业知识库", hint: "KB", page: "kb" },
+    { icon: "fa-comments", label: "智能问答", hint: "Chat", page: "copilot" },
+    { icon: "fa-cloud-sun", label: "天气", hint: "Weather", page: "weather" },
+    { icon: "fa-tractor", label: "农场管理", hint: "Farm", page: "farms" },
+    { icon: "fa-book-open", label: "知识库", hint: "KB", page: "kb" },
     { icon: "fa-bullhorn", label: "营销助手", hint: "Marketing", page: "marketing" },
     { icon: "fa-bug", label: "病虫害诊断", hint: "Pest", page: "pest" },
     { icon: "fa-clock-rotate-left", label: "历史记录", hint: "History", page: "history" },
@@ -252,7 +254,7 @@ function renderDashboardSkills() {
     if (!grid) return;
     count.textContent = skillsCache.length ? `(${skillsCache.length})` : "";
     if (!skillsCache.length) {
-        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-text">暂无注册技能</div></div>';
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-text">暂无技能</div></div>';
         return;
     }
     grid.innerHTML = skillsCache.map(s => {
@@ -398,12 +400,12 @@ const aiopsMonitor = {
         this.toolCount = 0; this.toolFail = 0; this.tokenCount = 0;
         this.realInputTokens = 0; this.realOutputTokens = 0; this.realTotalTokens = 0;
         this.cacheHitTokens = 0; this.cacheMissTokens = 0; this.hasRealUsage = false;
-        setText("mon-step", "--"); setText("mon-step-label", "Skill Router 工作中...");
+        setText("mon-step", "--"); setText("mon-step-label", "路由中...");
         setText("mon-elapsed", "0.0s"); setText("mon-tools", "0"); setText("mon-tools-fail", "失败 0");
         setText("mon-tokens", "0"); setText("mon-tokens-detail", "输入 0 · 输出 0");
         setText("mon-tokens-badge", "~估算"); setText("mon-stream-hint", "等待中");
-        $("#mon-stream").innerHTML = '<span style="color:var(--text-muted);font-style:italic">诊断开始后, 模型生成的文本会实时显示在此...</span>';
-        $("#mon-tool-feed").innerHTML = '<span style="color:var(--text-muted);font-size:12px;font-style:italic">暂无工具调用</span>';
+        $("#mon-stream").innerHTML = '';
+        $("#mon-tool-feed").innerHTML = '';
         if (this.timer) clearInterval(this.timer);
         this.timer = setInterval(() => {
             setText("mon-elapsed", ((Date.now() - this.startTs) / 1000).toFixed(1) + "s");
@@ -1070,7 +1072,7 @@ async function loadDocs() {
         const data = await r.json();
         const docs = data?.data?.documents || [];
         if (!docs.length) {
-            listEl.innerHTML = '<div class="empty-state"><div class="empty-text">暂无文档, 请先上传</div></div>';
+            listEl.innerHTML = '<div class="empty-state"><div class="empty-text">暂无文档</div></div>';
             return;
         }
         listEl.innerHTML = "";
@@ -1113,9 +1115,9 @@ async function deleteDoc(source) {
 function getKbAdminToken() {
     let token = sessionStorage.getItem(KB_ADMIN_TOKEN_KEY) || "";
     if (!token) {
-        token = prompt("请输入知识库管理员 Token") || "";
+        token = prompt("知识库管理员 Token") || "";
         token = token.trim();
-        if (!token) throw new Error("未输入管理员 Token");
+        if (!token) throw new Error("未输入 Token");
         sessionStorage.setItem(KB_ADMIN_TOKEN_KEY, token);
     }
     return token;
@@ -1170,7 +1172,7 @@ async function loadHistory() {
         const totalPages = Math.ceil(total / 20);
 
         if (!items.length) {
-            listEl.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:40px;margin-bottom:12px"><i class="fa-solid fa-clock-rotate-left"></i></div><div style="font-size:15px;color:#6b7280;font-weight:500">暂无诊断历史记录</div><div style="font-size:13px;color:#9ca3af;margin-top:4px">进行 AI Copilot 对话或智能诊断后, 记录将自动保存在这里</div></div>';
+            listEl.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:15px;color:#6b7280;font-weight:500">暂无历史记录</div></div>';
             return;
         }
 
@@ -1346,7 +1348,7 @@ async function loadAlerts() {
         const total = data.data?.total || 0;
 
         if (!items.length) {
-            listEl.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-bell-slash"></i></div><div class="empty-text">暂无告警记录</div></div>';
+            listEl.innerHTML = '<div class="empty-state"><div class="empty-text">暂无告警</div></div>';
             return;
         }
 
@@ -1371,28 +1373,28 @@ async function loadAlerts() {
                 <div class="alert-card-body">
                     <div class="alert-detail-grid">
                         <div class="alert-detail-item">
-                            <span class="detail-label">Severity</span>
+                            <span class="detail-label">级别</span>
                             <span class="detail-value">${escapeHtml(severity)}</span>
                         </div>
                         <div class="alert-detail-item">
-                            <span class="detail-label">Service</span>
+                            <span class="detail-label">服务</span>
                             <span class="detail-value">${escapeHtml(a.service || "-")}</span>
                         </div>
                         <div class="alert-detail-item">
-                            <span class="detail-label">Instance</span>
+                            <span class="detail-label">实例</span>
                             <span class="detail-value">${escapeHtml(a.instance || "-")}</span>
                         </div>
                         <div class="alert-detail-item">
-                            <span class="detail-label">Source</span>
+                            <span class="detail-label">来源</span>
                             <span class="detail-value">${escapeHtml(a.source || "-")}</span>
                         </div>
                     </div>
-                    ${a.summary ? `<div class="alert-summary"><strong>Summary:</strong> ${escapeHtml(a.summary)}</div>` : ""}
-                    ${a.description ? `<div class="alert-description"><strong>Description:</strong> ${escapeHtml(a.description)}</div>` : ""}
+                    ${a.summary ? `<div class="alert-summary">${escapeHtml(a.summary)}</div>` : ""}
+                    ${a.description ? `<div class="alert-description">${escapeHtml(a.description)}</div>` : ""}
                     <div class="alert-actions">
-                        ${status === "firing" ? `<button class="btn btn-sm" data-ack="${a.id}"><i class="fa-solid fa-check"></i> Acknowledge</button>` : ""}
-                        ${status !== "resolved" ? `<button class="btn btn-sm btn-success" data-resolve="${a.id}"><i class="fa-solid fa-circle-check"></i> Resolve</button>` : ""}
-                        <button class="btn btn-sm btn-primary" data-diagnose="${a.id}"><i class="fa-solid fa-stethoscope"></i> Diagnose</button>
+                        ${status === "firing" ? `<button class="btn btn-sm" data-ack="${a.id}"><i class="fa-solid fa-check"></i> 确认</button>` : ""}
+                        ${status !== "resolved" ? `<button class="btn btn-sm btn-success" data-resolve="${a.id}"><i class="fa-solid fa-circle-check"></i> 解决</button>` : ""}
+                        <button class="btn btn-sm btn-primary" data-diagnose="${a.id}"><i class="fa-solid fa-stethoscope"></i> 诊断</button>
                     </div>
                 </div>`;
 
@@ -1636,7 +1638,7 @@ function updateDashboardWeather(data) {
     if (details[0]) details[0].innerHTML = `<i class="fa-solid fa-droplet"></i> 湿度 ${c.humidity}%`;
     if (details[1]) details[1].innerHTML = `<i class="fa-solid fa-wind"></i> 风速 ${c.wind_level}级`;
     if (details[2]) details[2].innerHTML = `<i class="fa-solid fa-cloud-rain"></i> 降雨 ${c.rain_probability}%`;
-    if (advice) advice.textContent = data.agriculture_advice.split("；")[0] || "天气条件正常";
+    if (advice) advice.textContent = data.agriculture_advice.split("；")[0] || "";
 }
 
 function updateWeatherPage(data) {
@@ -1693,7 +1695,7 @@ function updateWeatherPage(data) {
 
     // Update last update time
     const updateTime = $(".weather-update span");
-    if (updateTime) updateTime.textContent = `数据来源: ${data.source}`;
+    if (updateTime) updateTime.textContent = data.source || "";
 }
 
 async function loadWeatherPage() {

@@ -26,10 +26,11 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.middleware import setup_middlewares
-from app.api.v1 import aiops, auth, chat, diagnosis, documents, health, history, observability, skills, weather, webhook
+from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, observability, skills, trajectories, weather, webhook
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
 from app.core.milvus import milvus_manager
+from app.core.redis import redis_manager
 from app.core.sqlite import sqlite_manager
 from app.exceptions import AppException
 from app.logging_config import setup_logging
@@ -62,10 +63,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 3. 连接 SQLite (历史记录存储)
     sqlite_manager.connect()
 
-    # 4. 确保管理员账号存在
+    # 4. 连接 Redis (缓存，可选依赖)
+    redis_manager.connect()
+
+    # 5. 确保管理员账号存在
     ensure_admin_exists()
 
-    # 5. 加载 MCP 工具 (可选依赖, 失败仅 warning)
+    # 6. 加载 MCP 工具 (可选依赖, 失败仅 warning)
     await mcp_client_manager.connect(fail_silently=True)
 
     logger.info("应用就绪, 等待请求...")
@@ -73,6 +77,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ==================== 关闭 ====================
     logger.info("应用正在关闭...")
     await mcp_client_manager.close()
+    redis_manager.disconnect()
     milvus_manager.disconnect()
     sqlite_manager.disconnect()
     logger.info("应用已关闭")
@@ -161,6 +166,8 @@ app.include_router(observability.router, prefix=API_PREFIX)
 app.include_router(diagnosis.router, prefix=API_PREFIX)
 app.include_router(weather.router, prefix=API_PREFIX)
 app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(farms.router, prefix=API_PREFIX)
+app.include_router(trajectories.router, prefix=API_PREFIX)
 
 
 # ============================================================
@@ -176,6 +183,8 @@ FRONTEND_FILES = {
     "/styles.css": "styles.css",
     "/app.js": "app.js",
     "/auth.js": "auth.js",
+    "/farm.js": "farm.js",
+    "/farm-map.js": "farm-map.js",
 }
 
 if FRONTEND_DIR.exists():

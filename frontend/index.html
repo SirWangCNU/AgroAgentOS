@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Leaflet 地图库 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/auth.js"></script>
 </head>
 <body>
@@ -31,6 +34,10 @@
         <a class="nav-item" data-page="weather">
             <i class="fa-solid fa-cloud-sun"></i>
             <span class="nav-label">天气农事</span>
+        </a>
+        <a class="nav-item" data-page="farms">
+            <i class="fa-solid fa-tractor"></i>
+            <span class="nav-label">农场管理</span>
         </a>
         <a class="nav-item" data-page="kb">
             <i class="fa-solid fa-book-open"></i>
@@ -64,7 +71,7 @@
     <header id="status-bar">
         <div class="search-trigger" id="search-trigger">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <span>搜索农业知识或功能...</span>
+            <span>搜索...</span>
             <kbd>Ctrl+K</kbd>
         </div>
         <div class="status-right">
@@ -104,7 +111,7 @@
         <!-- ======== Dashboard ======== -->
         <div class="page active" id="page-dashboard">
             <div class="section-title">
-                <i class="fa-solid fa-seedling" style="color:var(--accent-green)"></i> 智农总览
+                <i class="fa-solid fa-seedling" style="color:var(--accent-green)"></i> 总览
             </div>
             <div class="dashboard-grid">
                 <!-- Weather Card -->
@@ -120,19 +127,15 @@
                         <div class="weather-location">北京</div>
                     </div>
                     <div class="weather-details">
-                        <div><i class="fa-solid fa-droplet"></i> 湿度 65%</div>
-                        <div><i class="fa-solid fa-wind"></i> 风速 3级</div>
-                        <div><i class="fa-solid fa-cloud-rain"></i> 降雨 20%</div>
-                    </div>
-                    <div class="weather-advice">
-                        <i class="fa-solid fa-lightbulb"></i>
-                        <span>今日适合田间作业</span>
+                        <div>湿度 65%</div>
+                        <div>风速 3级</div>
+                        <div>降雨 20%</div>
                     </div>
                 </div>
 
                 <!-- Agriculture Skills Card -->
                 <div class="bento-card accent-green">
-                    <div class="card-title">农业技能 <span id="dash-skill-count" style="color:var(--accent-green)"></span></div>
+                    <div class="card-title">技能 <span id="dash-skill-count" style="color:var(--accent-green)"></span></div>
                     <div id="dash-skills-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                         <div class="skill-item">
                             <i class="fa-solid fa-comments"></i>
@@ -158,47 +161,27 @@
                     <div class="card-title">快捷操作</div>
                     <div style="display:flex;flex-direction:column;gap:8px">
                         <button class="quick-action-btn" data-goto="copilot">
-                            <i class="fa-solid fa-comments"></i> 开始农业问答
+                            <i class="fa-solid fa-comments"></i> 智能问答
                         </button>
                         <button class="quick-action-btn" data-goto="weather">
-                            <i class="fa-solid fa-cloud-sun"></i> 查看天气农事
+                            <i class="fa-solid fa-cloud-sun"></i> 天气查询
                         </button>
                         <button class="quick-action-btn" data-goto="kb">
-                            <i class="fa-solid fa-book-open"></i> 管理知识库
+                            <i class="fa-solid fa-book-open"></i> 知识库
                         </button>
                         <button class="quick-action-btn" data-goto="marketing">
-                            <i class="fa-solid fa-bullhorn"></i> 生成营销内容
+                            <i class="fa-solid fa-bullhorn"></i> 营销助手
                         </button>
                     </div>
                 </div>
 
                 <!-- Today's Advice -->
                 <div class="bento-card accent-purple full-width">
-                    <div class="card-title">
-                        <i class="fa-solid fa-lightbulb"></i> 今日农事建议
-                    </div>
-                    <div class="advice-list">
-                        <div class="advice-item">
-                            <div class="advice-icon"><i class="fa-solid fa-sun"></i></div>
-                            <div class="advice-content">
-                                <div class="advice-title">天气提醒</div>
-                                <div class="advice-text">今日多云，温度适宜，适合进行田间管理和喷药作业</div>
-                            </div>
-                        </div>
-                        <div class="advice-item">
-                            <div class="advice-icon"><i class="fa-solid fa-calendar"></i></div>
-                            <div class="advice-content">
-                                <div class="advice-title">农时节气</div>
-                                <div class="advice-text">当前处于小满节气，注意水稻田间水肥管理</div>
-                            </div>
-                        </div>
-                        <div class="advice-item">
-                            <div class="advice-icon"><i class="fa-solid fa-bug"></i></div>
-                            <div class="advice-content">
-                                <div class="advice-title">病虫害预警</div>
-                                <div class="advice-text">近期高温高湿，注意防治水稻稻瘟病</div>
-                            </div>
-                        </div>
+                    <div class="card-title">农事提醒</div>
+                    <div style="display:flex;gap:24px;color:var(--text-secondary);font-size:13px">
+                        <span>多云，适合田间管理</span>
+                        <span>小满节气，注意水稻水肥管理</span>
+                        <span>高温高湿，注意稻瘟病防治</span>
                     </div>
                 </div>
             </div>
@@ -207,7 +190,7 @@
         <!-- ======== Weather Page ======== -->
         <div class="page" id="page-weather">
             <div class="section-title">
-                <i class="fa-solid fa-cloud-sun" style="color:var(--accent-blue)"></i> 天气农事
+                <i class="fa-solid fa-cloud-sun" style="color:var(--accent-blue)"></i> 天气
             </div>
             <div class="weather-page-layout">
                 <div class="weather-detail-card">
@@ -215,10 +198,6 @@
                         <div class="weather-location">
                             <i class="fa-solid fa-location-dot"></i>
                             <span>北京</span>
-                        </div>
-                        <div class="weather-update">
-                            <i class="fa-solid fa-clock"></i>
-                            <span>最后更新: 10分钟前</span>
                         </div>
                     </div>
                     <div class="weather-body">
@@ -262,22 +241,12 @@
                     </div>
                     <div class="weather-advice-section">
                         <div class="advice-header">
-                            <i class="fa-solid fa-lightbulb"></i>
-                            <span>农业建议</span>
+                            <span>农事建议</span>
                         </div>
                         <div class="advice-content">
-                            <div class="advice-item-good">
-                                <i class="fa-solid fa-check-circle"></i>
-                                <span>今日适合喷药作业</span>
-                            </div>
-                            <div class="advice-item-good">
-                                <i class="fa-solid fa-check-circle"></i>
-                                <span>天气适合田间管理</span>
-                            </div>
-                            <div class="advice-item-warning">
-                                <i class="fa-solid fa-exclamation-triangle"></i>
-                                <span>明日有雨，注意防雨准备</span>
-                            </div>
+                            <div class="advice-item-good">适合喷药作业</div>
+                            <div class="advice-item-good">适合田间管理</div>
+                            <div class="advice-item-warning">明日有雨，注意防雨</div>
                         </div>
                     </div>
                 </div>
@@ -313,17 +282,17 @@
         <!-- ======== Marketing Page ======== -->
         <div class="page" id="page-marketing">
             <div class="section-title">
-                <i class="fa-solid fa-bullhorn" style="color:var(--accent-orange)"></i> 农产品营销助手
+                <i class="fa-solid fa-bullhorn" style="color:var(--accent-orange)"></i> 营销助手
             </div>
             <div class="marketing-layout">
                 <div class="marketing-form">
                     <div class="form-group">
                         <label>产品名称</label>
-                        <input type="text" id="product-name" placeholder="例如：阳澄湖大闸蟹">
+                        <input type="text" id="product-name" placeholder="产品名称">
                     </div>
                     <div class="form-group">
                         <label>产品特点</label>
-                        <textarea id="product-features" placeholder="每行一个特点，如：&#10;生态养殖&#10;个大肥美&#10;蟹黄饱满"></textarea>
+                        <textarea id="product-features" placeholder="每行一个特点"></textarea>
                     </div>
                     <div class="form-group">
                         <label>目标平台</label>
@@ -356,8 +325,7 @@
                     </div>
                     <div class="result-body" id="marketing-output">
                         <div class="empty-state">
-                            <div class="empty-icon"><i class="fa-solid fa-bullhorn"></i></div>
-                            <div class="empty-text">填写产品信息后点击生成</div>
+                            <div class="empty-text">填写信息后生成</div>
                         </div>
                     </div>
                 </div>
@@ -373,11 +341,11 @@
                 <div class="pest-input-section">
                     <div class="form-group">
                         <label>作物类型</label>
-                        <input type="text" id="crop-type" placeholder="例如：水稻、玉米、番茄">
+                        <input type="text" id="crop-type" placeholder="如：水稻、玉米">
                     </div>
                     <div class="form-group">
                         <label>症状描述</label>
-                        <textarea id="pest-symptoms" rows="4" placeholder="请描述作物出现的异常症状，如：&#10;叶片出现黄色斑点&#10;茎秆有腐烂现象&#10;果实表面有凹陷"></textarea>
+                        <textarea id="pest-symptoms" rows="4" placeholder="描述症状"></textarea>
                     </div>
                     <div class="form-group">
                         <label>发病部位</label>
@@ -399,8 +367,7 @@
                     </div>
                     <div class="result-body" id="pest-output">
                         <div class="empty-state">
-                            <div class="empty-icon"><i class="fa-solid fa-bug"></i></div>
-                            <div class="empty-text">描述症状后点击诊断</div>
+                            <div class="empty-text">填写症状后诊断</div>
                         </div>
                     </div>
                 </div>
@@ -410,23 +377,22 @@
         <!-- ======== Agriculture Chat ======== -->
         <div class="page" id="page-copilot">
             <div class="section-title">
-                <i class="fa-solid fa-comments" style="color:var(--accent-green)"></i> 农业智能问答
+                <i class="fa-solid fa-comments" style="color:var(--accent-green)"></i> 智能问答
             </div>
             <div class="copilot-layout">
                 <!-- Chat Panel -->
                 <div class="chat-panel">
                     <div class="chat-messages" id="chat-messages">
                         <div class="empty-state">
-                            <div class="empty-icon"><i class="fa-solid fa-seedling"></i></div>
-                            <div class="empty-text">我是您的农业智能助手，请问有什么农业问题？</div>
+                            <div class="empty-text">输入问题开始对话</div>
                         </div>
                     </div>
                     <div class="chat-input-bar">
-                        <input id="chat-input" type="text" placeholder="输入农业问题，如：现在适合种玉米吗？">
-                        <button class="toggle-btn" id="chat-web-toggle" title="启用后会搜索农业相关网络资料">
+                        <input id="chat-input" type="text" placeholder="输入问题...">
+                        <button class="toggle-btn" id="chat-web-toggle" title="联网搜索">
                             <i class="fa-solid fa-globe"></i> 联网 <span id="chat-web-state">关</span>
                         </button>
-                        <button class="toggle-btn amber on" id="chat-mcp-toggle" title="启用后可调用天气等农业工具">
+                        <button class="toggle-btn amber on" id="chat-mcp-toggle" title="调用工具">
                             <i class="fa-solid fa-wrench"></i> 工具 <span id="chat-mcp-state">开</span>
                         </button>
                         <button class="btn btn-primary" id="chat-send">
@@ -443,8 +409,7 @@
                     </div>
                     <div class="context-body" id="context-body">
                         <div class="empty-state">
-                            <div class="empty-icon"><i class="fa-solid fa-book-open"></i></div>
-                            <div class="empty-text">发送消息后，知识来源将显示在此</div>
+                            <div class="empty-text">发送消息后显示</div>
                         </div>
                     </div>
                 </div>
@@ -454,18 +419,18 @@
         <!-- ======== Knowledge Base ======== -->
         <div class="page" id="page-kb">
             <div class="section-title">
-                <i class="fa-solid fa-book-open" style="color:var(--accent-green)"></i> 农业知识库
+                <i class="fa-solid fa-book-open" style="color:var(--accent-green)"></i> 知识库
             </div>
             <div class="kb-layout">
                 <div>
                     <h3 style="font-size:14px;font-weight:600;color:var(--text-secondary);margin-bottom:12px">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> 上传农业文档
+                        <i class="fa-solid fa-cloud-arrow-up"></i> 上传文档
                     </h3>
                     <div id="upload-zone" class="upload-zone">
                         <input type="file" id="upload-input" accept=".md,.markdown,.txt,.doc,.docx,.pdf" class="hidden" style="display:none">
                         <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up" style="color:var(--accent-green)"></i></div>
-                        <div class="upload-text">点击或拖拽农业文档到此</div>
-                        <div class="upload-hint">支持 .md/.txt/.doc/.pdf 格式，将自动建立农业知识索引</div>
+                        <div class="upload-text">点击或拖拽上传</div>
+                        <div class="upload-hint">支持 .md .txt .doc .pdf</div>
                     </div>
                     <div id="upload-result" style="margin-top:12px;font-size:13px"></div>
                 </div>
@@ -528,7 +493,196 @@
             </div>
         </div>
 
+        <!-- ======== Farm Management ======== -->
+        <div class="page" id="page-farms">
+            <!-- 顶部选择栏 -->
+            <div class="farm-toolbar">
+                <div class="toolbar-selects">
+                    <div class="select-group">
+                        <label>农场</label>
+                        <select id="farm-select" onchange="onFarmChange(this.value)">
+                            <option value="">选择农场</option>
+                        </select>
+                    </div>
+                    <div class="select-group">
+                        <label>地块</label>
+                        <select id="field-select" onchange="onFieldChange(this.value)">
+                            <option value="">选择地块</option>
+                        </select>
+                    </div>
+                    <div class="select-group">
+                        <label>轨迹</label>
+                        <select id="trajectory-select" onchange="onTrajectoryChange(this.value)">
+                            <option value="">选择轨迹</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-sm" onclick="showFarmModal()">新建农场</button>
+                        <button class="btn btn-sm" id="btn-add-field" onclick="showFieldModal()" style="display:none">新建地块</button>
+                        <button class="btn btn-sm" id="btn-upload-traj" onclick="showUploadModal()" style="display:none">导入轨迹</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 地图区域 -->
+            <div class="farm-map-wrapper">
+                <div id="farm-map" class="farm-map"></div>
+                <div class="map-toolbar">
+                    <button class="map-tool-btn active" onclick="switchMapLayer('osm')" id="btn-osm">地图</button>
+                    <button class="map-tool-btn" onclick="switchMapLayer('satellite')" id="btn-satellite">卫星</button>
+                    <button class="map-tool-btn" onclick="switchMapLayer('road')" id="btn-road">路网</button>
+                    <div class="map-tool-divider"></div>
+                    <button class="map-tool-btn" onclick="fitMapBounds()">适应</button>
+                    <button class="map-tool-btn" onclick="clearTrajectoryPoints()">清除</button>
+                </div>
+            </div>
+        </div>
+
     </main>
+
+    <!-- ====== Farm Modal ====== -->
+<div id="farm-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="farm-modal-title">创建农场</h3>
+            <button class="btn-close" onclick="closeFarmModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="farm-form" onsubmit="event.preventDefault(); saveFarm()">
+            <div class="form-group">
+                <label>农场名称 <span class="required">*</span></label>
+                <input type="text" id="farm-name" placeholder="农场名称" required>
+            </div>
+            <div class="form-group">
+                <label>地址</label>
+                <input type="text" id="farm-location" placeholder="地址">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>面积 (亩)</label>
+                    <input type="number" id="farm-area" step="0.1" min="0" placeholder="面积">
+                </div>
+                <div class="form-group">
+                    <label>纬度</label>
+                    <input type="number" id="farm-lat" step="0.0001" placeholder="纬度">
+                </div>
+                <div class="form-group">
+                    <label>经度</label>
+                    <input type="number" id="farm-lng" step="0.0001" placeholder="经度">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <textarea id="farm-desc" rows="3" placeholder="描述"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-ghost" onclick="closeFarmModal()">取消</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ====== Field Modal ====== -->
+<div id="field-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="field-modal-title">添加地块</h3>
+            <button class="btn-close" onclick="closeFieldModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="field-form" onsubmit="event.preventDefault(); saveField()">
+            <div class="form-group">
+                <label>地块名称 <span class="required">*</span></label>
+                <input type="text" id="field-name" placeholder="地块名称" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>面积 (亩)</label>
+                    <input type="number" id="field-area" step="0.1" min="0" placeholder="面积">
+                </div>
+                <div class="form-group">
+                    <label>土壤类型</label>
+                    <select id="field-soil">
+                        <option value="">请选择</option>
+                        <option value="沙土">沙土</option>
+                        <option value="黏土">黏土</option>
+                        <option value="壤土">壤土</option>
+                        <option value="沙壤土">沙壤土</option>
+                        <option value="黏壤土">黏壤土</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>当前作物</label>
+                    <input type="text" id="field-crop" placeholder="作物">
+                </div>
+                <div class="form-group">
+                    <label>生长阶段</label>
+                    <input type="text" id="field-stage" placeholder="生长阶段">
+                </div>
+                <div class="form-group">
+                    <label>状态</label>
+                    <select id="field-status">
+                        <option value="idle">空闲</option>
+                        <option value="planting">种植中</option>
+                        <option value="fallow">休耕</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>播种日期</label>
+                    <input type="date" id="field-planting-date">
+                </div>
+                <div class="form-group">
+                    <label>预计收获</label>
+                    <input type="date" id="field-harvest-date">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <textarea id="field-notes" rows="2" placeholder="备注"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-ghost" onclick="closeFieldModal()">取消</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ====== Trajectory Modal ====== -->
+<div id="trajectory-modal" class="modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h3>轨迹管理 - <span id="trajectory-field-name"></span></h3>
+            <button class="btn-close" onclick="closeTrajectoryModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <!-- 上传区域 -->
+            <div id="trajectory-drop-zone" class="trajectory-upload-zone">
+                <input type="file" id="trajectory-file-input" accept=".xlsx,.xls" style="display:none"
+                       onchange="handleTrajectoryUpload(this)">
+                <div class="upload-text">点击或拖拽上传轨迹 Excel</div>
+                <div class="upload-hint">支持 .xlsx / .xls 格式</div>
+                <div class="coord-select">
+                    <label>坐标系:</label>
+                    <select id="coord-system">
+                        <option value="auto">自动检测</option>
+                        <option value="wgs84">WGS-84 (GPS)</option>
+                        <option value="gcj02">GCJ-02 (高德/腾讯)</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('trajectory-file-input').click()">
+                    选择文件
+                </button>
+                <div id="trajectory-upload-status" class="upload-status"></div>
+            </div>
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
 </div>
 
 <!-- ====== Global Search Modal ====== -->
@@ -536,7 +690,7 @@
     <div class="search-box">
         <div class="search-input-wrap">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input id="search-input" type="text" placeholder="搜索页面或操作...">
+            <input id="search-input" type="text" placeholder="搜索...">
         </div>
         <div class="search-results" id="search-results"></div>
     </div>
@@ -554,7 +708,7 @@
             <div id="pwd-success" class="modal-success" style="display:none;"></div>
             <div class="form-group">
                 <label>旧密码</label>
-                <input type="password" id="old-password" placeholder="请输入旧密码">
+                <input type="password" id="old-password" placeholder="旧密码">
             </div>
             <div class="form-group">
                 <label>新密码</label>
@@ -562,7 +716,7 @@
             </div>
             <div class="form-group">
                 <label>确认新密码</label>
-                <input type="password" id="confirm-new-password" placeholder="请再次输入新密码">
+                <input type="password" id="confirm-new-password" placeholder="确认新密码">
             </div>
         </div>
         <div class="modal-footer">
@@ -572,6 +726,8 @@
     </div>
 </div>
 
+<script src="/farm.js"></script>
+<script src="/farm-map.js"></script>
 <script src="/app.js?v=20260519a"></script>
 <script>
     // 用户菜单下拉切换

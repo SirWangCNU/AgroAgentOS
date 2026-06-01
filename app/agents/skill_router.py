@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import List
+
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -22,6 +24,14 @@ class SkillChoice(BaseModel):
     skill_name: str = Field(..., description="选中的 Skill name (snake_case), 必须是给定菜单中已存在的项")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="路由置信度, 0 到 1")
     reason: str = Field(default="", description="一句话说明为什么选这个 Skill, 用于可观测")
+    collaboration_skills: List[str] = Field(
+        default_factory=list,
+        description=(
+            "协同技能列表 (可选). 当用户问题需要多个领域知识时填写. "
+            "例如 '明天适合打药吗' 需要 weather_advice + pest_diagnosis 协同. "
+            "仅在问题明确涉及多个领域时填写, 否则留空."
+        ),
+    )
 
 
 # 农业领域关键词
@@ -65,6 +75,65 @@ def _looks_like_agriculture_input(text: str) -> bool:
     return any(keyword in normalized for keyword in _AGRICULTURE_KEYWORDS)
 
 
+# ============================================================
+# 协同技能检测 (Phase 3: 多Agent协同)
+# ============================================================
+# 协同关键词映射: 当用户问题同时包含多个领域关键词时, 触发协同
+_COLLABORATION_PATTERNS = [
+    {
+        "skills": ["weather_advice", "pest_diagnosis"],
+        "keywords_a": ["天气", "温度", "降雨", "下雨", "晴天", "阴天", "风速", "明天", "今天"],
+        "keywords_b": ["打药", "喷药", "农药", "杀虫", "杀菌", "病虫害", "防治", "虫害"],
+        "description": "天气+病虫害协同: 例如 '明天适合打药吗'",
+    },
+    {
+        "skills": ["weather_advice", "agriculture_qa"],
+        "keywords_a": ["天气", "温度", "降雨", "下雨", "霜冻", "干旱", "明天", "今天"],
+        "keywords_b": ["播种", "种植", "施肥", "灌溉", "收获", "插秧", "适合"],
+        "description": "天气+种植协同: 例如 '明天适合播种吗'",
+    },
+    {
+        "skills": ["pest_diagnosis", "agriculture_qa"],
+        "keywords_a": ["病虫害", "虫害", "病害", "发黄", "枯萎", "烂根", "叶子"],
+        "keywords_b": ["施肥", "浇水", "灌溉", "土壤", "肥料", "肥"],
+        "description": "病虫害+种植协同: 例如 '叶子发黄是不是肥施多了'",
+    },
+    {
+        "skills": ["weather_advice", "pest_diagnosis", "agriculture_qa"],
+        "keywords_a": ["天气", "温度", "降雨", "下雨", "明天"],
+        "keywords_b": ["病虫害", "打药", "喷药", "农药"],
+        "keywords_c": ["施肥", "浇水", "种植"],
+        "description": "三技能协同: 例如 '下雨前能打药施肥吗'",
+    },
+]
+
+
+def _detect_collaboration_skills(text: str) -> List[str]:
+    """检测是否需要协同技能, 返回协同技能列表 (不含主技能).
+
+    基于关键词匹配, 当用户问题同时涉及多个领域时返回协同技能.
+    """
+    normalized = (text or "").lower()
+    collaboration = []
+
+    for pattern in _COLLABORATION_PATTERNS:
+        has_a = any(kw in normalized for kw in pattern["keywords_a"])
+        has_b = any(kw in normalized for kw in pattern["keywords_b"])
+        has_c = any(kw in normalized for kw in pattern.get("keywords_c", []))
+
+        # 至少两个领域的关键词命中才算协同
+        if pattern.get("keywords_c"):
+            if has_a and has_b and has_c:
+                collaboration.extend(pattern["skills"])
+                logger.info(f"[Router] 检测到三技能协同: {pattern['description']}")
+        elif has_a and has_b:
+            collaboration.extend(pattern["skills"])
+            logger.info(f"[Router] 检测到双技能协同: {pattern['description']}")
+
+    # 去重
+    return list(set(collaboration))
+
+
 def _build_out_of_scope_response(user_input: str) -> str:
     return (
         "# 无法启动农业智能服务\n\n"
@@ -91,9 +160,12 @@ def _build_router_fallback_result(user_input: str) -> PlanExecuteState:
             "response": _build_out_of_scope_response(user_input),
             "iteration": 0,
         }
+    # 尝试检测协同技能
+    collab_skills = _detect_collaboration_skills(user_input)
     return {
         "selected_skill": GENERIC_SKILL_NAME,
         "skill_reason": "Router LLM 调用失败后, 规则兜底放行到 generic_oncall",
+        "collaboration_skills": collab_skills,
     }
 
 
@@ -153,7 +225,22 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
             "transition_history": [make_transition("skill_router", ROUTER_OUT_OF_SCOPE, reason)],
         }
 
+    # 处理协同技能
+    collaboration_skills = choice.collaboration_skills or []
+    if not collaboration_skills:
+        # 如果 LLM 没有返回协同技能, 尝试规则检测
+        collaboration_skills = _detect_collaboration_skills(user_input)
+    else:
+        # 验证 LLM 返回的协同技能是否存在
+        collaboration_skills = [s for s in collaboration_skills if s in available]
+
+    # 过滤掉主技能, 避免重复
     chosen = choice.skill_name.strip().lower()
+    collaboration_skills = [s for s in collaboration_skills if s != chosen]
+
+    if collaboration_skills:
+        logger.info(f"[Router] 协同技能: {collaboration_skills}")
+
     fallback_used = False
     if chosen not in available:
         logger.warning(f"[Router] LLM 返回不存在的 skill {chosen!r}, 回退到 {GENERIC_SKILL_NAME}")
@@ -178,10 +265,11 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
         transition = make_transition(
             "skill_router",
             ROUTER_OK,
-            f"chosen={chosen} confidence={choice.confidence}",
+            f"chosen={chosen} confidence={choice.confidence} collaboration={collaboration_skills}",
         )
     return {
         "selected_skill": chosen,
         "skill_reason": choice.reason,
+        "collaboration_skills": collaboration_skills,
         "transition_history": [transition],
     }

@@ -8,6 +8,7 @@
     (默认串行) 用于排错对比.
   - 工具来自 mcp_loader.get_all_tools(), 经 Harness (filter_tools_for_skill) 过滤.
   - 每次执行后, 把 (step, result) 追加到 past_steps.
+  - **协同技能支持** (Phase 3): 当存在 collaboration_skills 时, 合并多个技能的工具集
 """
 
 from typing import Any, Dict, List, Tuple
@@ -46,6 +47,7 @@ _agent_cache: Dict[Tuple[str, Tuple[str, ...], str, str], Any] = {}
 def _get_executor(
     selected_skill_name: str,
     perm_mode: PermissionMode,
+    collaboration_skills: List[str] = None,
 ) -> Tuple[str, Any, List[BaseTool], Dict[str, PermissionDecision]]:
     """返回 (runner_mode, executor, tools, decisions).
 
@@ -54,10 +56,33 @@ def _get_executor(
       - "serial"    → executor 是 create_agent 返回的 Runnable, 调用方走 .ainvoke
 
     Skill / 工具列表 / runner mode / PermissionMode 变化时会自动重建.
+    collaboration_skills: 协同技能列表, 用于合并多个技能的工具集
     """
+    all_tools = get_all_tools()
+
+    # 主技能工具过滤
     tools, decisions = filter_tools_for_skill(
-        selected_skill_name, get_all_tools(), mode=perm_mode
+        selected_skill_name, all_tools, mode=perm_mode
     )
+
+    # 如果有协同技能, 合并它们的工具
+    if collaboration_skills:
+        seen_tool_names = {t.name for t in tools}
+        for collab_skill in collaboration_skills:
+            collab_tools, collab_decisions = filter_tools_for_skill(
+                collab_skill, all_tools, mode=perm_mode
+            )
+            for tool in collab_tools:
+                if tool.name not in seen_tool_names:
+                    tools.append(tool)
+                    seen_tool_names.add(tool.name)
+            # 合并决策
+            decisions.update(collab_decisions)
+        logger.info(
+            f"[Executor] 协同工具合并: 主技能={selected_skill_name}, "
+            f"协同技能={collaboration_skills}, 总工具数={len(tools)}"
+        )
+
     tool_names = tuple(t.name for t in tools)
     harness = get_agent_harness()
     runner_mode = "parallel" if harness.executor_parallel_enabled() else "serial"
@@ -126,17 +151,29 @@ async def execute_node(state: PlanExecuteState) -> PlanExecuteState:
         }
 
     selected_skill_name = state.get("selected_skill", "")
+    collaboration_skills = state.get("collaboration_skills", [])
+    collaboration_context = state.get("collaboration_context", "")
     perm_mode = parse_permission_mode(
         state.get("permission_mode") or harness.default_permission_mode()
     )
-    runner_mode, executor, tools, decisions = _get_executor(selected_skill_name, perm_mode)
+    runner_mode, executor, tools, decisions = _get_executor(
+        selected_skill_name, perm_mode, collaboration_skills
+    )
 
+    # 构建任务提示, 如果有协同上下文则注入
     task_prompt = harness.build_executor_task_prompt(
         plan=plan,
         step_index=iteration,
         total_steps=total_steps,
         current_step=current_step,
     )
+    if collaboration_context:
+        task_prompt = (
+            f"{task_prompt}\n\n"
+            f"# 协同技能知识参考\n\n"
+            f"{collaboration_context}\n\n"
+            f"请结合以上协同知识来完成当前步骤。"
+        )
 
     transition_reason = EXECUTOR_OK
     transition_detail = f"iter={iteration}/{total_steps}"
