@@ -922,7 +922,7 @@ function renderRagStageDetails(stage, data) {
 }
 
 function iconForRagStage(stage) {
-    const map = { rewrite: "✏️", rewrite_done: "✅", retrieve: "🔍", retrieve_done: "📚", web: "🌐", web_done: "🌐", llm_start: "🤖", tool_call: "🛠️", stats: "📊" };
+    const map = { rewrite: "✏️", rewrite_done: "✅", retrieve: "🔍", retrieve_done: "📚", retrieve_degraded: "⚠️", web: "🌐", web_done: "🌐", web_degraded: "⚠️", user_context: "🏡", user_context_done: "🏡", llm_start: "🤖", tool_call: "🛠️", stats: "📊" };
     return map[stage] || "•";
 }
 
@@ -955,6 +955,10 @@ async function sendChat() {
     $("#chat-send").disabled = true;
 
     try {
+        // 调试: 确认 token 是否存在
+        const _token = typeof getToken === 'function' ? getToken() : null;
+        console.log("[chat] token exists:", !!_token, "token preview:", _token ? _token.substring(0, 20) + "..." : "null");
+
         const resp = await safeFetch(`${API}/chat/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

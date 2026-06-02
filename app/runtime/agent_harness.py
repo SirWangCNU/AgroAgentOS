@@ -266,6 +266,13 @@ class AgentHarness:
 5. 始终中文。
 6. 结合当地气候、季节和农时给出具体可操作的建议。
 7. 如果涉及农药使用, 请提醒注意安全间隔期和使用规范。
+
+# 用户数据使用规则
+当用户提问涉及自己的农场、地块、作业数据时, 优先引用"用户农场与作业数据"中的实际信息:
+1. 引用用户数据时注明来源, 如"根据您5月28日上传的A1地块作业数据..."
+2. 将用户实际数据与知识库理论知识结合, 给出针对性建议
+3. 如果用户数据与知识库建议存在矛盾(如作业深度偏大), 主动指出并分析原因
+4. 不要编造用户不存在的数据
 """
 
     _RAG_TOOL_APPENDIX = """
@@ -290,6 +297,9 @@ class AgentHarness:
 
 # 最近诊断报告
 {diagnosis_context}
+
+# 用户农场与作业数据
+{user_context}
 
 # 参考资料
 {context}
@@ -650,6 +660,7 @@ class AgentHarness:
         *,
         summary: str,
         diagnosis_context: str,
+        user_context: str,
         context: str,
         web_context: str,
         question: str,
@@ -657,6 +668,7 @@ class AgentHarness:
         return self._RAG_USER_TEMPLATE.format(
             summary=summary,
             diagnosis_context=diagnosis_context,
+            user_context=user_context,
             context=context,
             web_context=web_context,
             question=question,

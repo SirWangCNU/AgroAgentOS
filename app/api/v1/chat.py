@@ -7,17 +7,41 @@ POST /api/v1/chat/stream
 """
 
 import json
-from typing import AsyncIterator
+from typing import AsyncIterator, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
+from app.core.security import decode_access_token
 from app.schemas.chat import ChatRequest
 import app.services.chat_memory as chat_memory
 import app.services.rag_service as rag_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+_optional_bearer = HTTPBearer(auto_error=False)
+
+
+async def _get_optional_user_id(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer),
+) -> Optional[int]:
+    """从 JWT token 中提取 user_id, 无 token 时返回 None."""
+    if not credentials:
+        logger.warning("[chat] 无 Bearer token, user_id=None (请检查前端是否登录)")
+        return None
+    token_preview = credentials.credentials[:20] + "..." if len(credentials.credentials) > 20 else credentials.credentials
+    logger.info(f"[chat] 收到 Bearer token: {token_preview}")
+    try:
+        payload = decode_access_token(credentials.credentials)
+        sub = payload.get("sub")
+        user_id = int(sub) if sub else None
+        logger.info(f"[chat] JWT 解析成功: payload={payload} -> user_id={user_id}")
+        return user_id
+    except Exception as e:
+        logger.warning(f"[chat] JWT 解析失败: {type(e).__name__}: {e}")
+        return None
 
 
 @router.post(
@@ -39,14 +63,18 @@ router = APIRouter(prefix="/chat", tags=["chat"])
         "```"
     ),
 )
-async def chat_stream(req: ChatRequest) -> EventSourceResponse:
-    logger.info(f"[chat] session={req.session_id}, q={req.question[:60]}...")
+async def chat_stream(
+    req: ChatRequest,
+    user_id: Optional[int] = Depends(_get_optional_user_id),
+) -> EventSourceResponse:
+    logger.info(f"[chat] session={req.session_id}, user={user_id}, q={req.question[:60]}...")
 
     async def event_generator() -> AsyncIterator[dict]:
         try:
             async for event in rag_service.stream_chat(
                 req.question,
                 session_id=req.session_id,
+                user_id=user_id,
                 top_k=req.top_k,
                 web_search=req.web_search,
                 mcp_tools=req.mcp_tools,

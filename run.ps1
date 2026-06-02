@@ -377,6 +377,13 @@ $Python = if ($env:CONDA_PREFIX -and (Test-Path "$env:CONDA_PREFIX\python.exe"))
 }
 Write-Host "[start] Python: $Python" -ForegroundColor Cyan
 
+# 清除 __pycache__ 防止加载旧代码
+Write-Host "[clean] Clearing __pycache__ to ensure latest code is loaded..." -ForegroundColor Cyan
+Get-ChildItem -Path "$ProjectRoot\app" -Directory -Recurse -Filter "__pycache__" -ErrorAction SilentlyContinue | ForEach-Object {
+    Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+}
+Write-Host "[clean] __pycache__ cleared" -ForegroundColor DarkGray
+
 if (-not (Test-Path "$ProjectRoot\.env")) {
     Write-Host "[error] .env not found. Please create .env first." -ForegroundColor Red
     exit 1

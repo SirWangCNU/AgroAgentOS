@@ -28,6 +28,7 @@ from app.services.rag.memory import compact_if_needed, rewrite_question
 from app.services.rag.retrieval import build_context
 from app.services.rag.utils import content_to_text, history_to_messages
 from app.services.rag.web_context import build_web_context
+from app.services.user_context import get_user_context
 from app.tools.mcp_loader import get_all_tools
 from app.tools.meta import get_meta
 import app.services.history_service as history_service
@@ -81,6 +82,7 @@ async def stream_chat(
     question: str,
     *,
     session_id: str = "default",
+    user_id: int | None = None,
     top_k: int | None = None,
     web_search: bool = False,
     mcp_tools: bool = True,
@@ -248,10 +250,45 @@ async def stream_chat(
     else:
         diagnosis_context = "(暂无最近诊断报告)"
 
+    # ---------- 注入用户业务数据 (农场/轨迹) ----------
+    user_context = ""
+    if user_id:
+        logger.info(f"[rag] 开始获取用户上下文: user_id={user_id}")
+        yield progress(
+            "user_context", "正在加载您的农场数据", f"user_id={user_id}",
+            mark_start=True,
+        )
+        try:
+            from app.core.sqlite import sqlite_manager
+
+            with sqlite_manager.session() as db:
+                user_context = get_user_context(db, user_id, rewritten_question)
+                logger.info(f"[rag] 用户上下文获取成功: {len(user_context)} 字符")
+        except Exception as e:
+            logger.warning(f"[rag] 用户上下文获取失败: {type(e).__name__}: {e}")
+        if user_context:
+            yield progress(
+                "user_context_done", f"农场数据已加载 ({len(user_context)}字)", "",
+                mark_start=True,
+            )
+        else:
+            yield progress(
+                "user_context_done", "未找到您的农场数据", "请先在农场管理中添加农场",
+                mark_start=True,
+            )
+    else:
+        logger.info("[rag] user_id 为空, 跳过用户上下文注入")
+        yield progress(
+            "user_context_done", "未登录, 跳过农场数据加载", "登录后可查看您的农场信息",
+        )
+    if not user_context:
+        user_context = "(暂无用户农场数据)"
+
     harness = get_agent_harness()
     user_prompt = harness.build_rag_user_prompt(
         summary=summary,
         diagnosis_context=diagnosis_context,
+        user_context=user_context,
         context=context,
         web_context=web_context,
         question=question,
