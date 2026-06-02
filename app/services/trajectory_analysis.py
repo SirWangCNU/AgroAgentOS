@@ -5,6 +5,8 @@
   - 作业面积（幅宽 × 作业距离）
   - 深度统计（均值、合格率、分布）
   - 作业效率（作业时间/总面积）
+  - 作业量指标（时长、行程、面积、速度）
+  - 作业效率指标（达标率、生产率、时间利用率）
 """
 
 from __future__ import annotations
@@ -268,6 +270,177 @@ def calc_time_stats(points: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# ==================== 作业效率指标 ====================
+
+
+def calc_compliance_rate(
+    points: list[dict[str, Any]],
+    target_depth: float = 15.0,
+    depth_tolerance: float = 5.0,
+    min_speed: float = 0.5,
+    max_speed: float = 15.0,
+) -> dict[str, Any]:
+    """计算综合作业达标率.
+
+    达标条件:
+    1. 深度在目标范围内 (target_depth ± tolerance)
+    2. 速度在合理范围内 (min_speed ~ max_speed)
+    3. 工作状态为 working
+
+    Args:
+        points: 轨迹点列表
+        target_depth: 目标深度（厘米）
+        depth_tolerance: 深度允许误差（厘米）
+        min_speed: 最小合理速度（km/h）
+        max_speed: 最大合理速度（km/h）
+
+    Returns:
+        包含 compliance_rate, depth_compliance, speed_compliance, total_points, compliant_points
+    """
+    working_points = [p for p in points if p.get("work_status") == "working"]
+
+    if not working_points:
+        return {
+            "compliance_rate": 0.0,
+            "depth_compliance": 0.0,
+            "speed_compliance": 0.0,
+            "total_points": 0,
+            "compliant_points": 0,
+        }
+
+    total = len(working_points)
+    depth_ok = 0
+    speed_ok = 0
+    both_ok = 0
+
+    for p in working_points:
+        depth = p.get("depth", 0.0)
+        speed = p.get("speed", 0.0)
+
+        # 深度达标检查
+        d_ok = (depth > 0 and
+                abs(depth - target_depth) <= depth_tolerance)
+        if d_ok:
+            depth_ok += 1
+
+        # 速度达标检查
+        s_ok = min_speed <= speed <= max_speed
+        if s_ok:
+            speed_ok += 1
+
+        # 综合达标
+        if d_ok and s_ok:
+            both_ok += 1
+
+    return {
+        "compliance_rate": round(both_ok / total * 100, 1),
+        "depth_compliance": round(depth_ok / total * 100, 1),
+        "speed_compliance": round(speed_ok / total * 100, 1),
+        "total_points": total,
+        "compliant_points": both_ok,
+    }
+
+
+def calc_productivity(
+    work_area_mu: float,
+    total_duration_min: float,
+) -> float:
+    """计算生产率（亩/小时）.
+
+    生产率 = 作业面积 / 总耗时（含非作业时间）
+
+    Args:
+        work_area_mu: 作业面积（亩）
+        total_duration_min: 总耗时（分钟）
+
+    Returns:
+        生产率（亩/小时）
+    """
+    if total_duration_min <= 0:
+        return 0.0
+    total_hours = total_duration_min / 60
+    return round(work_area_mu / total_hours, 2)
+
+
+def calc_time_utilization(
+    work_duration_min: float,
+    total_duration_min: float,
+) -> float:
+    """计算时间利用率.
+
+    时间利用率 = 作业时间 / 总时间 × 100%
+
+    Args:
+        work_duration_min: 作业时间（分钟）
+        total_duration_min: 总时间（分钟）
+
+    Returns:
+        时间利用率（百分比）
+    """
+    if total_duration_min <= 0:
+        return 0.0
+    return round(work_duration_min / total_duration_min * 100, 1)
+
+
+def calc_work_volume_metrics(
+    points: list[dict[str, Any]],
+    work_width: float = 0.0,
+) -> dict[str, Any]:
+    """计算作业量指标.
+
+    Returns:
+        包含 work_duration_hours, work_distance_km, work_area_mu, avg_field_speed_kmh
+    """
+    total_distance = calc_total_distance(points)
+    work_distance = calc_work_distance(points)
+    work_area = calc_work_area(work_distance, work_width)
+    time_stats = calc_time_stats(points)
+
+    # 田间平均作业速度 (km/h) - 仅计算 working 状态
+    work_duration_hours = time_stats["work_duration_min"] / 60
+    avg_field_speed = 0.0
+    if work_duration_hours > 0:
+        avg_field_speed = round(work_distance / 1000 / work_duration_hours, 2)
+
+    return {
+        "work_duration_hours": round(time_stats["work_duration_min"] / 60, 2),
+        "work_distance_km": round(work_distance / 1000, 2),
+        "work_area_mu": round(work_area, 2),
+        "avg_field_speed_kmh": avg_field_speed,
+    }
+
+
+def calc_work_efficiency_metrics(
+    points: list[dict[str, Any]],
+    work_area_mu: float,
+    target_depth: float = 15.0,
+    depth_tolerance: float = 5.0,
+) -> dict[str, Any]:
+    """计算作业效率指标.
+
+    Returns:
+        包含 compliance_rate, productivity, time_utilization
+    """
+    compliance = calc_compliance_rate(points, target_depth, depth_tolerance)
+    time_stats = calc_time_stats(points)
+
+    productivity = calc_productivity(work_area_mu, time_stats["total_duration_min"])
+    time_util = calc_time_utilization(
+        time_stats["work_duration_min"],
+        time_stats["total_duration_min"],
+    )
+
+    return {
+        "compliance_rate": compliance["compliance_rate"],
+        "depth_compliance": compliance["depth_compliance"],
+        "speed_compliance": compliance["speed_compliance"],
+        "productivity_mu_per_hour": productivity,
+        "time_utilization_rate": time_util,
+        "total_points": compliance["total_points"],
+        "compliant_points": compliance["compliant_points"],
+    }
+
+
 # ==================== 综合统计 ====================
 
 
@@ -320,6 +493,7 @@ def calc_trajectory_stats(
         total_distance_m=round(total_distance, 1),
         work_distance_m=round(work_distance, 1),
         work_area_mu=round(work_area, 2),
+        work_width=work_width,
         start_time=time_stats["start_time"],
         end_time=time_stats["end_time"],
         work_duration_min=time_stats["work_duration_min"],

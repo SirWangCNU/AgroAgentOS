@@ -11,13 +11,21 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.trajectory import (
+    TrajectoryAnalysisResponse,
     TrajectoryFileInfo,
     TrajectoryListResponse,
     TrajectoryPointsResponse,
     TrajectoryStatsResponse,
     TrajectoryUploadResponse,
+    WorkEfficiencyMetrics,
+    WorkVolumeMetrics,
 )
 from app.services import trajectory_service
+from app.services.trajectory_analysis import (
+    calc_work_efficiency_metrics,
+    calc_work_volume_metrics,
+)
+from app.services.trajectory_charts import generate_combined_analysis_chart
 
 router = APIRouter(tags=["轨迹管理"])
 
@@ -121,6 +129,67 @@ def get_trajectory_stats(
     - 作业效率（亩/小时）
     """
     result = trajectory_service.get_trajectory_stats(file_id, current_user.id)
+    return ApiResponse.success(data=result)
+
+
+@router.get(
+    "/trajectories/{file_id}/analysis",
+    response_model=ApiResponse[TrajectoryAnalysisResponse],
+)
+def get_trajectory_analysis(
+    file_id: int,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
+    """获取轨迹数据分析.
+
+    返回:
+    - 作业量指标（时长、行程、面积、速度）
+    - 作业效率指标（达标率、生产率、时间利用率）
+    - 可视化图表（base64编码）
+    """
+    # 获取轨迹统计数据（包含文件信息）
+    stats = trajectory_service.get_trajectory_stats(file_id, current_user.id)
+
+    # 获取轨迹点数据
+    points_data = trajectory_service.get_trajectory_points(file_id, current_user.id)
+
+    # 转换轨迹点为字典格式
+    points = [
+        {
+            "latitude": p.latitude,
+            "longitude": p.longitude,
+            "speed": p.speed,
+            "work_status": p.work_status,
+            "depth": p.depth,
+            "gps_time": p.gps_time.isoformat() if p.gps_time else None,
+        }
+        for p in points_data.points
+    ]
+
+    # 计算作业量指标
+    work_volume = calc_work_volume_metrics(points, stats.work_width)
+
+    # 计算作业效率指标
+    work_efficiency = calc_work_efficiency_metrics(
+        points, work_volume["work_area_mu"]
+    )
+
+    # 生成图表
+    volume_chart, efficiency_chart = generate_combined_analysis_chart(
+        work_volume, work_efficiency
+    )
+
+    # 构建响应
+    result = TrajectoryAnalysisResponse(
+        file_id=file_id,
+        filename=stats.filename,
+        machine_id=stats.machine_id,
+        work_volume=WorkVolumeMetrics(**work_volume),
+        work_efficiency=WorkEfficiencyMetrics(**work_efficiency),
+        work_volume_chart=volume_chart,
+        work_efficiency_chart=efficiency_chart,
+    )
+
     return ApiResponse.success(data=result)
 
 

@@ -387,8 +387,23 @@
                             <div class="empty-text">输入问题开始对话</div>
                         </div>
                     </div>
+                    <!-- 图片预览区域 -->
+                    <div id="chat-image-preview" class="chat-image-preview" style="display:none">
+                        <img id="chat-image-thumb" src="" alt="预览">
+                        <div class="chat-image-info">
+                            <span id="chat-image-name">图片</span>
+                            <span id="chat-image-status" class="chat-image-status">待识别</span>
+                        </div>
+                        <button id="chat-image-remove" class="chat-image-remove" title="移除图片">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
                     <div class="chat-input-bar">
-                        <input id="chat-input" type="text" placeholder="输入问题...">
+                        <input type="file" id="chat-image-input" accept="image/jpeg,image/png,image/webp" style="display:none">
+                        <button class="toggle-btn green" id="chat-image-btn" title="上传图片识别病虫害">
+                            <i class="fa-solid fa-camera"></i> 图片
+                        </button>
+                        <input id="chat-input" type="text" placeholder="输入问题或上传图片识别病虫害...">
                         <button class="toggle-btn" id="chat-web-toggle" title="联网搜索">
                             <i class="fa-solid fa-globe"></i> 联网 <span id="chat-web-state">关</span>
                         </button>
@@ -520,6 +535,9 @@
                         <button class="btn btn-sm" onclick="showFarmModal()">新建农场</button>
                         <button class="btn btn-sm" id="btn-add-field" onclick="showFieldModal()" style="display:none">新建地块</button>
                         <button class="btn btn-sm" id="btn-upload-traj" onclick="showUploadModal()" style="display:none">导入轨迹</button>
+                        <button class="btn btn-sm btn-primary" id="btn-analysis" onclick="showAnalysisModal()" style="display:none">
+                            <i class="fa-solid fa-chart-bar"></i> 数据分析
+                        </button>
                     </div>
                 </div>
             </div>
@@ -677,6 +695,132 @@
                     选择文件
                 </button>
                 <div id="trajectory-upload-status" class="upload-status"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== Analysis Modal ====== -->
+<div id="analysis-modal" class="modal">
+    <div class="modal-content modal-xl">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-chart-bar"></i> 轨迹数据分析</h3>
+            <button class="btn-close" onclick="closeAnalysisModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <div id="analysis-loading" class="analysis-loading">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">正在分析数据...</div>
+            </div>
+            <div id="analysis-content" style="display:none">
+                <!-- 作业量指标 -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">
+                        <i class="fa-solid fa-chart-line"></i> 作业量指标
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-icon blue"><i class="fa-solid fa-clock"></i></div>
+                            <div class="metric-info">
+                                <div class="metric-label">作业总时长</div>
+                                <div class="metric-value" id="metric-duration">--</div>
+                                <div class="metric-unit">小时</div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon green"><i class="fa-solid fa-road"></i></div>
+                            <div class="metric-info">
+                                <div class="metric-label">作业总行程</div>
+                                <div class="metric-value" id="metric-distance">--</div>
+                                <div class="metric-unit">公里</div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon orange"><i class="fa-solid fa-vector-square"></i></div>
+                            <div class="metric-info">
+                                <div class="metric-label">作业面积</div>
+                                <div class="metric-value" id="metric-area">--</div>
+                                <div class="metric-unit">亩</div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon purple"><i class="fa-solid fa-tachometer-alt"></i></div>
+                            <div class="metric-info">
+                                <div class="metric-label">田间平均速度</div>
+                                <div class="metric-value" id="metric-speed">--</div>
+                                <div class="metric-unit">km/h</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <img id="work-volume-chart" src="" alt="作业量指标图表">
+                    </div>
+                </div>
+
+                <!-- 作业效率指标 -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">
+                        <i class="fa-solid fa-gauge-high"></i> 作业效率指标
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-icon green"><i class="fa-solid fa-check-circle"></i></div>
+                            <div class="metric-info">
+                                <div class="metric-label">综合作业达标率</div>
+                                <div class="metric-value" id="metric-compliance">--</div>
+                                <div class="metric-unit">%</div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon blue"><i class="fa-solid fa-seedling"></i></div>
+                            <div class="metric-info">
+                                <div class="metric-label">生产率</div>
+                                <div class="metric-value" id="metric-productivity">--</div>
+                                <div class="metric-unit">亩/小时</div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon orange"><i class="fa-solid fa-hourglass-half"></i></div>
+                            <div class="metric-info">
+                                <div class="metric-label">时间利用率</div>
+                                <div class="metric-value" id="metric-time-util">--</div>
+                                <div class="metric-unit">%</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <img id="work-efficiency-chart" src="" alt="作业效率指标图表">
+                    </div>
+                </div>
+
+                <!-- 详细指标 -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">
+                        <i class="fa-solid fa-list-ol"></i> 详细指标
+                    </div>
+                    <div class="detail-table">
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <td class="detail-label">深度达标率</td>
+                                    <td id="detail-depth-compliance">--</td>
+                                </tr>
+                                <tr>
+                                    <td class="detail-label">速度达标率</td>
+                                    <td id="detail-speed-compliance">--</td>
+                                </tr>
+                                <tr>
+                                    <td class="detail-label">总作业点数</td>
+                                    <td id="detail-total-points">--</td>
+                                </tr>
+                                <tr>
+                                    <td class="detail-label">达标点数</td>
+                                    <td id="detail-compliant-points">--</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

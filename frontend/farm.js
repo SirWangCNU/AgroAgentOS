@@ -153,10 +153,16 @@ function renderTrajectorySelect() {
 // 轨迹切换
 // ============================================================
 async function onTrajectoryChange(fileId) {
+    const btnAnalysis = document.getElementById("btn-analysis");
+
     if (!fileId) {
         clearTrajectoryPoints();
+        btnAnalysis.style.display = "none";
         return;
     }
+
+    // 显示数据分析按钮
+    btnAnalysis.style.display = "";
 
     // 加载轨迹点并在地图上显示
     try {
@@ -417,5 +423,92 @@ async function deleteField(fieldId) {
         }
     } catch (e) {
         alert("网络错误");
+    }
+}
+
+// ============================================================
+// 数据分析
+// ============================================================
+
+function showAnalysisModal() {
+    const trajSelect = document.getElementById("trajectory-select");
+    const fileId = trajSelect.value;
+
+    if (!fileId) {
+        alert("请先选择轨迹");
+        return;
+    }
+
+    // 显示模态框
+    document.getElementById("analysis-modal").classList.add("show");
+    document.getElementById("analysis-loading").style.display = "";
+    document.getElementById("analysis-content").style.display = "none";
+
+    // 加载分析数据
+    loadAnalysisData(fileId);
+}
+
+function closeAnalysisModal() {
+    document.getElementById("analysis-modal").classList.remove("show");
+}
+
+async function loadAnalysisData(fileId) {
+    try {
+        const resp = await safeFetch(`${FARM_API}/trajectories/${fileId}/analysis`);
+        const data = await resp.json();
+
+        if (data.code === "SUCCESS") {
+            renderAnalysisData(data.data);
+        } else {
+            alert(data.message || "分析失败");
+            closeAnalysisModal();
+        }
+    } catch (e) {
+        console.error("加载分析数据失败:", e);
+        alert("网络错误");
+        closeAnalysisModal();
+    }
+}
+
+function renderAnalysisData(analysis) {
+    // 隐藏加载状态，显示内容
+    document.getElementById("analysis-loading").style.display = "none";
+    document.getElementById("analysis-content").style.display = "";
+
+    // 作业量指标
+    const volume = analysis.work_volume;
+    document.getElementById("metric-duration").textContent = volume.work_duration_hours.toFixed(1);
+    document.getElementById("metric-distance").textContent = volume.work_distance_km.toFixed(2);
+    document.getElementById("metric-area").textContent = volume.work_area_mu.toFixed(1);
+    document.getElementById("metric-speed").textContent = volume.avg_field_speed_kmh.toFixed(1);
+
+    // 作业效率指标
+    const efficiency = analysis.work_efficiency;
+    document.getElementById("metric-compliance").textContent = efficiency.compliance_rate.toFixed(1);
+    document.getElementById("metric-productivity").textContent = efficiency.productivity_mu_per_hour.toFixed(1);
+    document.getElementById("metric-time-util").textContent = efficiency.time_utilization_rate.toFixed(1);
+
+    // 详细指标
+    document.getElementById("detail-depth-compliance").textContent = efficiency.depth_compliance.toFixed(1) + "%";
+    document.getElementById("detail-speed-compliance").textContent = efficiency.speed_compliance.toFixed(1) + "%";
+    document.getElementById("detail-total-points").textContent = efficiency.total_points;
+    document.getElementById("detail-compliant-points").textContent = efficiency.compliant_points;
+
+    // 图表
+    const volumeChart = document.getElementById("work-volume-chart");
+    const efficiencyChart = document.getElementById("work-efficiency-chart");
+
+    if (analysis.work_volume_chart) {
+        volumeChart.src = "data:image/png;base64," + analysis.work_volume_chart;
+        volumeChart.style.display = "";
+    } else {
+        volumeChart.style.display = "none";
+    }
+
+    if (analysis.work_efficiency_chart) {
+        efficiencyChart.src = "data:image/png;base64," + analysis.work_efficiency_chart;
+        efficiencyChart.style.display = "";
+    } else {
+        efficiencyChart.style.display = "none";
     }
 }

@@ -626,6 +626,7 @@ const chatState = {
     mcpEnabled: true,
     currentDetails: { retrieve: [], web: [], tools: [], stats: null },
     activeCtxTab: "detail",
+    selectedImage: null,  // { file: File, dataUrl: string }
 };
 
 // Context panel tabs
@@ -765,6 +766,70 @@ $("#chat-input")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 
+// ---- 图片上传 (病虫害识别) ----
+$("#chat-image-btn")?.addEventListener("click", () => $("#chat-image-input")?.click());
+$("#chat-image-input")?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) selectChatImage(file);
+    e.target.value = "";  // 允许重复选同一文件
+});
+$("#chat-image-remove")?.addEventListener("click", removeChatImage);
+
+function selectChatImage(file) {
+    // 校验类型和大小
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+        alert("请上传 JPEG/PNG/WebP 格式的图片");
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        alert("图片文件过大, 限制 10MB");
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+        chatState.selectedImage = { file, dataUrl: reader.result };
+        renderImagePreview();
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeChatImage() {
+    chatState.selectedImage = null;
+    renderImagePreview();
+}
+
+function renderImagePreview() {
+    const preview = $("#chat-image-preview");
+    const thumb = $("#chat-image-thumb");
+    const nameEl = $("#chat-image-name");
+    const statusEl = $("#chat-image-status");
+    if (!preview) return;
+
+    if (chatState.selectedImage) {
+        preview.style.display = "";
+        thumb.src = chatState.selectedImage.dataUrl;
+        nameEl.textContent = chatState.selectedImage.file.name;
+        statusEl.textContent = "待识别";
+        statusEl.className = "chat-image-status";
+    } else {
+        preview.style.display = "none";
+        thumb.src = "";
+    }
+}
+
+async function uploadImageForAnalysis(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const resp = await safeFetch(`${API}/image/analyze`, {
+        method: "POST",
+        body: formData,
+        // 不手动设 Content-Type, 让浏览器自动加 boundary
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+}
+
 function appendChatBubble(role, content) {
     const container = $("#chat-messages");
     const empty = container.querySelector(".empty-state");
@@ -773,6 +838,41 @@ function appendChatBubble(role, content) {
     const bubble = document.createElement("div");
     bubble.className = `chat-bubble ${role}`;
     bubble.innerHTML = role === "user" ? escapeHtml(content) : renderMarkdown(content);
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+    return bubble;
+}
+
+function appendChatImageBubble(imageDataUrl, analysisResult) {
+    const container = $("#chat-messages");
+    const empty = container.querySelector(".empty-state");
+    if (empty) empty.remove();
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble user";
+
+    let detectionsHtml = "";
+    if (analysisResult?.success && analysisResult.detections.length > 0) {
+        const items = analysisResult.detections.map(d => {
+            const pct = (d.confidence * 100).toFixed(0);
+            const barColor = d.confidence > 0.7 ? "var(--accent-green)" : d.confidence > 0.4 ? "var(--accent-amber)" : "var(--accent-red)";
+            return `<div class="detection-item">
+                <span class="detection-name">${escapeHtml(d.chinese_name)}</span>
+                <span class="detection-conf">${pct}%</span>
+                <div class="detection-bar"><div class="detection-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+            </div>`;
+        }).join("");
+        detectionsHtml = `<div class="detection-results">${items}</div>`;
+    } else {
+        detectionsHtml = `<div class="detection-results"><div style="color:var(--text-muted);font-size:12px;padding:4px 0">${escapeHtml(analysisResult?.summary || "未检测到病虫害")}</div></div>`;
+    }
+
+    bubble.innerHTML = `
+        <div class="chat-image-bubble">
+            <img src="${imageDataUrl}" alt="上传图片" class="chat-image-bubble-img">
+            <div class="chat-image-bubble-label">📷 图片识别结果</div>
+            ${detectionsHtml}
+        </div>`;
     container.appendChild(bubble);
     container.scrollTop = container.scrollHeight;
     return bubble;
@@ -939,14 +1039,50 @@ function finalizeChatProgress(box, failed = false) {
 async function sendChat() {
     const input = $("#chat-input");
     const question = input.value.trim();
-    if (!question) return;
+
+    // 如果有选中图片, 先分析图片
+    let finalQuestion = question;
+    let imageAnalysis = null;
+    if (chatState.selectedImage) {
+        const statusEl = $("#chat-image-status");
+        if (statusEl) { statusEl.textContent = "识别中..."; statusEl.className = "chat-image-status analyzing"; }
+
+        try {
+            imageAnalysis = await uploadImageForAnalysis(chatState.selectedImage.file);
+            if (imageAnalysis.success && imageAnalysis.detections.length > 0) {
+                const detText = imageAnalysis.detections
+                    .map(d => `${d.chinese_name}(置信度${(d.confidence * 100).toFixed(0)}%)`)
+                    .join(", ");
+                const userNote = question ? `\n用户补充说明: ${question}` : "";
+                finalQuestion = `[图片分析] 识别到: ${detText}。\n${imageAnalysis.summary}${userNote}\n请根据识别结果给出详细的病虫害防治建议, 包括农业防治、化学防治、生物防治方案及用药注意事项。`;
+            } else {
+                finalQuestion = `[图片分析] ${imageAnalysis.summary || "未识别到病虫害"}${question ? `\n用户说明: ${question}` : ""}\n请根据图片分析结果给出专业建议。`;
+            }
+
+            // 在聊天中显示图片和识别结果
+            appendChatImageBubble(chatState.selectedImage.dataUrl, imageAnalysis);
+
+            if (statusEl) { statusEl.textContent = "识别完成"; statusEl.className = "chat-image-status done"; }
+        } catch (err) {
+            console.error("[chat] 图片分析失败:", err);
+            if (statusEl) { statusEl.textContent = "识别失败"; statusEl.className = "chat-image-status error"; }
+            appendChatBubble("assistant", `<span style="color:var(--accent-red)">图片分析失败: ${escapeHtml(err.message)}</span>`);
+            removeChatImage();
+            return;
+        }
+    }
+
+    if (!finalQuestion.trim()) return;
     input.value = "";
+    removeChatImage();
 
-    // Reset context panel data for new message
-    chatState.currentDetails = { retrieve: [], web: [], tools: [], stats: null };
-    renderContextPanel();
-
-    appendChatBubble("user", question);
+    // 如果有图片, 不再显示纯文本 user bubble (图片 bubble 已显示)
+    if (!imageAnalysis) {
+        appendChatBubble("user", question);
+    } else if (question) {
+        // 用户在图片之外还输入了文字
+        appendChatBubble("user", question);
+    }
     const progressBox = appendChatProgress();
     const thinkingBundle = appendThinkingBubble();
     thinkingBundle.wrap.style.display = "none";
@@ -955,16 +1091,12 @@ async function sendChat() {
     $("#chat-send").disabled = true;
 
     try {
-        // 调试: 确认 token 是否存在
-        const _token = typeof getToken === 'function' ? getToken() : null;
-        console.log("[chat] token exists:", !!_token, "token preview:", _token ? _token.substring(0, 20) + "..." : "null");
-
         const resp = await safeFetch(`${API}/chat/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 session_id: "web-chat",
-                question,
+                question: finalQuestion,
                 top_k: 3,
                 web_search: chatState.webEnabled,
                 mcp_tools: chatState.mcpEnabled,

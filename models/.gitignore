@@ -1,0 +1,6 @@
+# 模型权重文件不纳入版本控制
+*.onnx
+*.pt
+*.pth
+*.bin
+!README.md

@@ -320,6 +320,24 @@ class Settings(BaseSettings):
         description="探测结果缓存秒数 (防止每次调用都探测)",
     )
 
+    # ==================== YOLO 图像识别 ====================
+    yolo_model_path: str = Field(
+        default="models/pest_yolo.onnx",
+        description="YOLO ONNX 模型文件路径 (相对于项目根目录)",
+    )
+    yolo_confidence_threshold: float = Field(
+        default=0.25,
+        description="YOLO 检测置信度阈值, 低于此值的结果被过滤",
+    )
+    yolo_nms_threshold: float = Field(
+        default=0.45,
+        description="YOLO NMS (非极大值抑制) IoU 阈值",
+    )
+    yolo_input_size: int = Field(
+        default=640,
+        description="YOLO 模型输入图片尺寸 (正方形, 像素)",
+    )
+
     # ==================== 日志 ====================
     log_level: str = Field(default="INFO", description="日志级别")
     log_dir: str = Field(default="logs", description="日志目录")
