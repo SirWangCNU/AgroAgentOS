@@ -24,7 +24,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
     localStorage.removeItem(STORAGE_KEYS.USER);
     set({ token: null, user: null });
-    window.location.href = "/login.html";
+    window.location.href = "/login";
   },
 
   isAdmin: () => get().user?.role === "admin",

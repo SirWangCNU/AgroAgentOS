@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Tractor, Plus, Trash2 } from "lucide-react";
+import { Tractor, Plus, Trash2, ArrowLeft } from "lucide-react";
 import {
   getFarms,
   getFarmDetail,
@@ -11,6 +12,7 @@ import { useUIStore } from "../stores/ui";
 import type { Field } from "../types/farm";
 
 export default function Farms() {
+  const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
   const queryClient = useQueryClient();
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
@@ -40,9 +42,14 @@ export default function Farms() {
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <Tractor className="w-5 h-5 text-primary" /> 农场管理
-        </h1>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate("/workspace")} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <Tractor className="w-5 h-5 text-primary" /> 农场管理
+          </h1>
+        </div>
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors"

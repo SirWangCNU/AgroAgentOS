@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { CloudSun, Droplets, Wind, CloudRain } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { CloudSun, Droplets, Wind, CloudRain, ArrowLeft } from "lucide-react";
 import { getWeather } from "../api/weather";
 
 export default function Weather() {
+  const navigate = useNavigate();
   const { data: weather, isLoading } = useQuery({
     queryKey: ["weather"],
     queryFn: () => getWeather("北京"),
@@ -26,9 +28,14 @@ export default function Weather() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
-        <CloudSun className="w-5 h-5 text-accent-amber" /> 天气信息
-      </h1>
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate("/workspace")} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <CloudSun className="w-5 h-5 text-accent-amber" /> 天气信息
+        </h1>
+      </div>
 
       {/* Current */}
       <div className="bg-bg-card rounded-xl border border-border p-6">

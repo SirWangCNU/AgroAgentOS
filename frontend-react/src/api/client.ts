@@ -28,7 +28,7 @@ export async function authFetch<T = unknown>(
   if (resp.status === 401) {
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
     localStorage.removeItem(STORAGE_KEYS.USER);
-    window.location.href = "/login.html";
+    window.location.href = "/login";
     throw new ApiError(401, "Unauthorized");
   }
 
@@ -59,7 +59,7 @@ export async function authFetchRaw(
   if (resp.status === 401) {
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
     localStorage.removeItem(STORAGE_KEYS.USER);
-    window.location.href = "/login.html";
+    window.location.href = "/login";
     throw new ApiError(401, "Unauthorized");
   }
 

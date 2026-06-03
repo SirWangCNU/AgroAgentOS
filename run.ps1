@@ -2,16 +2,19 @@
 # AgroAgentOS 智农协同平台 - Windows launcher
 # ============================================================
 # Startup order:
-#   1. Start / check Milvus container
-#   2. Start / check Redis container (RAG Chat session memory)
-#   3. Start open-webSearch daemon
-#   4. Start FastAPI by uvicorn in foreground
+#   1. Clean __pycache__ + Vite cache (prevents stale code)
+#   2. Start / check Milvus container
+#   3. Start / check Redis container (RAG Chat session memory)
+#   4. Start open-webSearch daemon
+#   5. Start frontend Vite dev server (background)
+#   6. Start FastAPI by uvicorn in foreground
 #
 # Usage:
 #   .\run.ps1
 #   .\run.ps1 -NoMilvus
 #   .\run.ps1 -NoRedis
 #   .\run.ps1 -NoWebSearch
+#   .\run.ps1 -NoFrontend
 #   .\run.ps1 -Stop
 # ============================================================
 
@@ -19,6 +22,7 @@ param(
     [switch]$NoMilvus,
     [switch]$NoRedis,
     [switch]$NoWebSearch,
+    [switch]$NoFrontend,
     [switch]$Stop,
     [switch]$Logs
 )
@@ -361,7 +365,7 @@ if ($Stop) {
         }
     }
     $openWebSearchStopPort = Get-PortFromUrl -Url (Get-EnvValue -Name "OPEN_WEBSEARCH_BASE_URL" -DefaultValue "http://127.0.0.1:3210") -DefaultPort 3210
-    8006,9800,$openWebSearchStopPort | ForEach-Object {
+    5173,8006,9800,$openWebSearchStopPort | ForEach-Object {
         Stop-PortProcess -Port $_
     }
     Write-Host "[stop] done" -ForegroundColor Green
@@ -383,6 +387,19 @@ Get-ChildItem -Path "$ProjectRoot\app" -Directory -Recurse -Filter "__pycache__"
     Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
 }
 Write-Host "[clean] __pycache__ cleared" -ForegroundColor DarkGray
+
+# 清除 Vite 前端缓存，防止加载旧代码
+$FrontendDir = Join-Path $ProjectRoot "frontend-react"
+$viteCache = Join-Path $FrontendDir "node_modules\.vite"
+$tsCache = Join-Path $FrontendDir "node_modules\.cache"
+if (Test-Path $viteCache) {
+    Remove-Item -Path $viteCache -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "[clean] Vite cache cleared" -ForegroundColor DarkGray
+}
+if (Test-Path $tsCache) {
+    Remove-Item -Path $tsCache -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "[clean] .cache cleared" -ForegroundColor DarkGray
+}
 
 if (-not (Test-Path "$ProjectRoot\.env")) {
     Write-Host "[error] .env not found. Please create .env first." -ForegroundColor Red
@@ -435,6 +452,34 @@ if (-not $NoWebSearch) {
 
 # Start MCP websearch server (weather is a local tool, no MCP server needed)
 Start-PythonServer -Name "websearch_server" -Script "$ProjectRoot\mcp_servers\websearch_server.py" -Port 8006
+
+# Start frontend Vite dev server
+if (-not $NoFrontend) {
+    $FrontendPort = 5173
+    if (-not (Test-TcpPort -HostName "127.0.0.1" -Port $FrontendPort)) {
+        $npm = Get-NpmCommand
+        if ($npm -and (Test-Path $FrontendDir)) {
+            # Kill any lingering vite process
+            Stop-PortProcess -Port $FrontendPort
+            $feOutLog = Join-Path $LogDir "vite.out.log"
+            $feErrLog = Join-Path $LogDir "vite.err.log"
+            Write-Host "[start] Vite frontend dev server (port $FrontendPort)..." -ForegroundColor Cyan
+            Start-Process -FilePath $npm `
+                -ArgumentList "run", "dev" `
+                -WindowStyle Hidden `
+                -WorkingDirectory $FrontendDir `
+                -RedirectStandardOutput $feOutLog `
+                -RedirectStandardError $feErrLog
+            Wait-TcpPort -Name "Vite" -HostName "127.0.0.1" -Port $FrontendPort -TimeoutSec 20 | Out-Null
+        } else {
+            Write-Host "[skip] frontend-react not found or npm missing" -ForegroundColor DarkYellow
+        }
+    } else {
+        Write-Host "[skip] Vite already listening on port $FrontendPort" -ForegroundColor DarkYellow
+    }
+} else {
+    Write-Host "[skip] Frontend auto-start disabled by -NoFrontend" -ForegroundColor DarkYellow
+}
 
 if (Test-TcpPort -HostName "127.0.0.1" -Port $AppPort) {
     if (Test-HttpReady -Port $AppPort) {

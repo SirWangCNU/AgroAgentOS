@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.middleware import setup_middlewares
-from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, image, observability, skills, trajectories, weather, webhook
+from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, image, observability, sessions, skills, trajectories, weather, webhook
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
 from app.core.milvus import milvus_manager
@@ -169,38 +169,32 @@ app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(farms.router, prefix=API_PREFIX)
 app.include_router(trajectories.router, prefix=API_PREFIX)
 app.include_router(image.router, prefix=API_PREFIX)
+app.include_router(sessions.router, prefix=API_PREFIX)
 
 
 # ============================================================
-# 静态文件 (前端)
+# 静态文件 (前端 - React 构建产物)
 # ============================================================
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+REACT_DIST_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
+LEGACY_FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
-# 前端文件路由表
-FRONTEND_FILES = {
-    "/": "index.html",
-    "/login.html": "login.html",
-    "/index.html": "index.html",
-    "/styles.css": "styles.css",
-    "/app.js": "app.js",
-    "/auth.js": "auth.js",
-    "/farm.js": "farm.js",
-    "/farm-map.js": "farm-map.js",
-}
+# 优先使用 React 构建产物，回退到旧版前端
+FRONTEND_DIR = REACT_DIST_DIR if REACT_DIST_DIR.exists() else LEGACY_FRONTEND_DIR
 
 if FRONTEND_DIR.exists():
-    # 为前端文件创建显式 GET 路由，避免 StaticFiles 拦截 POST 请求
-    for route_path, file_name in FRONTEND_FILES.items():
-        # 使用默认参数捕获循环变量
-        def _make_route(path: str, fname: str):
-            @app.get(path, include_in_schema=False)
-            async def serve_file() -> FileResponse:
-                return FileResponse(str(FRONTEND_DIR / fname))
+    # 挂载静态资源 (JS/CSS/图片等)
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
 
-        _make_route(route_path, file_name)
-
-    # 挂载 /static 目录用于 CSS/JS 中引用的图片等资源
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+    # SPA 路由：所有非 API 路径都返回 index.html
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str) -> FileResponse:
+        """SPA 路由：返回 index.html 让前端路由处理."""
+        # 如果请求的是静态文件，直接返回
+        file_path = FRONTEND_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        # 否则返回 index.html (SPA 路由)
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
 else:
     logger.warning(f"前端目录不存在: {FRONTEND_DIR} (将在阶段 5 创建)")
 

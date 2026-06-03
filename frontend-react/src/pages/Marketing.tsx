@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Megaphone, Copy, Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Megaphone, Copy, Check, ArrowLeft } from "lucide-react";
 
 export default function Marketing() {
+  const navigate = useNavigate();
   const [productName, setProductName] = useState("");
   const [features, setFeatures] = useState("");
   const [platform, setPlatform] = useState("douyin");
@@ -27,9 +29,14 @@ export default function Marketing() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
-        <Megaphone className="w-5 h-5 text-accent-purple" /> 营销生成
-      </h1>
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate("/workspace")} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <Megaphone className="w-5 h-5 text-accent-purple" /> 营销生成
+        </h1>
+      </div>
 
       <div className="bg-bg-card rounded-xl border border-border p-6 space-y-4">
         <div>

@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Bug, Send, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Bug, Send, Loader2, ArrowLeft } from "lucide-react";
 import { chatStream } from "../api/chat";
 import { consumeSSE } from "../api/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 export default function PestDiagnosis() {
+  const navigate = useNavigate();
   const [cropType, setCropType] = useState("");
   const [symptoms, setSymptoms] = useState("");
   const [affectedPart, setAffectedPart] = useState("leaf");
@@ -44,9 +46,14 @@ export default function PestDiagnosis() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
-        <Bug className="w-5 h-5 text-accent-red" /> 病虫害诊断
-      </h1>
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate("/workspace")} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <Bug className="w-5 h-5 text-accent-red" /> 病虫害诊断
+        </h1>
+      </div>
 
       <div className="bg-bg-card rounded-xl border border-border p-6 space-y-4">
         <div>

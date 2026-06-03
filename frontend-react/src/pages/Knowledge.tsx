@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Upload, Trash2, RefreshCw } from "lucide-react";
+import { BookOpen, Upload, Trash2, RefreshCw, ArrowLeft } from "lucide-react";
 import { uploadDocument, getDocuments, deleteDocument } from "../api/knowledge";
 import { useUIStore } from "../stores/ui";
 import { STORAGE_KEYS } from "../lib/constants";
 
 export default function Knowledge() {
+  const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
@@ -52,9 +54,14 @@ export default function Knowledge() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
-        <BookOpen className="w-5 h-5 text-accent-blue" /> 知识库
-      </h1>
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate("/workspace")} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-accent-blue" /> 知识库
+        </h1>
+      </div>
 
       {/* Upload */}
       <div className="bg-bg-card rounded-xl border border-border p-6">
