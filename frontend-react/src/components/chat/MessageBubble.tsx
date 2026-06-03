@@ -1,11 +1,19 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Brain, ChevronDown, ChevronUp, Leaf, User } from "lucide-react";
+import {
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  Leaf,
+  User,
+  BookOpen,
+} from "lucide-react";
 import type { ChatMessage } from "../../types/chat";
 
 export default function MessageBubble({ msg }: { msg: ChatMessage }) {
   const [thinkingOpen, setThinkingOpen] = useState(false);
+  const [citationsOpen, setCitationsOpen] = useState(false);
 
   if (msg.role === "user") {
     return (
@@ -28,7 +36,7 @@ export default function MessageBubble({ msg }: { msg: ChatMessage }) {
         <div className="w-8 h-8 rounded-full bg-accent-green/20 flex items-center justify-center flex-shrink-0">
           <Leaf className="w-4 h-4 text-accent-green" />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 flex-1 min-w-0">
           {/* Thinking bubble */}
           {msg.thinking && (
             <div className="border border-border rounded-lg overflow-hidden">
@@ -58,6 +66,56 @@ export default function MessageBubble({ msg }: { msg: ChatMessage }) {
               {msg.content || "..."}
             </ReactMarkdown>
           </div>
+
+          {/* Citations */}
+          {msg.citations && msg.citations.length > 0 && (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setCitationsOpen(!citationsOpen)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-text-muted hover:bg-bg-hover transition-colors"
+              >
+                <BookOpen className="w-3 h-3 text-accent-blue" />
+                <span>
+                  引用来源 ({msg.citations.length})
+                </span>
+                {citationsOpen ? (
+                  <ChevronUp className="w-3 h-3 ml-auto" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 ml-auto" />
+                )}
+              </button>
+              {citationsOpen && (
+                <div className="px-3 pb-3 space-y-2 max-h-60 overflow-y-auto">
+                  {msg.citations.map((c, i) => (
+                    <div
+                      key={i}
+                      className="text-xs border-l-2 border-accent-blue/30 pl-2"
+                    >
+                      <div className="font-medium text-text-secondary">
+                        {c.source}
+                        {c.chapter && (
+                          <span className="text-text-muted">
+                            {" "}
+                            · {c.chapter}
+                          </span>
+                        )}
+                        {c.score != null && (
+                          <span className="text-accent-blue ml-1">
+                            {(c.score * 100).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                      {c.preview && (
+                        <div className="text-text-muted mt-0.5 line-clamp-2">
+                          {c.preview}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -14,9 +14,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.sqlite import Base
 from app.models.user import User  # noqa: F401
 
+# Import settings to get dynamic database URL
+from app.config import settings
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Override sqlalchemy.url with dynamic config
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

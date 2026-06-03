@@ -43,15 +43,15 @@ TRAJECTORY_STATS_TTL = 7200     # 2小时
 
 # 列名映射（支持中英文）
 COLUMN_MAPPING = {
-    "gps_time": ["gps_time", "GPS时间", "时间", "time", "datetime"],
+    "gps_time": ["gps_time", "GPS时间", "时间", "time", "datetime", "记录时间"],
     "latitude": ["latitude", "纬度", "lat", "y", "lat_wgs84", "lat_gcj02"],
     "longitude": ["longitude", "经度", "lng", "lon", "x", "lon_wgs84", "lon_gcj02"],
-    "speed": ["speed", "速度", "velocity"],
-    "work_status": ["work_status", "工作状态", "status", "state"],
-    "depth": ["depth", "作业深度", "耕深"],
-    "depth_std": ["depth_std", "深度标准值", "标准深度"],
-    "work_width": ["work_width", "幅宽", "width"],
-    "machine_id": ["machine_id", "农机编号", "机器号", "tractor_id"],
+    "speed": ["speed", "速度", "velocity", "km/h", "速度(km/h)"],
+    "work_status": ["work_status", "工作状态", "作业状态", "status", "state", "是否作业"],
+    "depth": ["depth", "作业深度", "耕深", "深度", "depth_cm"],
+    "depth_std": ["depth_std", "深度标准值", "标准深度", "目标深度"],
+    "work_width": ["work_width", "幅宽", "width", "作业幅宽"],
+    "machine_id": ["machine_id", "农机编号", "机器号", "tractor_id", "机具编号"],
 }
 
 
@@ -127,14 +127,19 @@ def _detect_columns(headers: list[str]) -> dict[str, int]:
 
 
 def _parse_work_status(value: Any) -> str:
-    """解析工作状态."""
+    """解析工作状态，支持多种格式."""
     if not value:
         return "idle"
     val = str(value).strip().lower()
-    if val in ("working", "作业", "工作中"):
+    # Working 状态
+    if val in ("working", "作业", "工作中", "作业中", "1", "true", "是", "yes"):
         return "working"
-    if val in ("transporting", "转移", "运输"):
+    # Transporting 状态
+    if val in ("transporting", "转移", "运输", "运输中"):
         return "transporting"
+    # Idle 状态
+    if val in ("idle", "空闲", "0", "false", "否", "no", "停止"):
+        return "idle"
     return "idle"
 
 

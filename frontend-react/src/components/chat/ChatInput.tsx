@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Camera, Loader2, Square } from "lucide-react";
+import { Send, Camera, Loader2, Square, Globe, Wrench } from "lucide-react";
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE } from "../../lib/constants";
 
 interface Props {
@@ -8,6 +8,10 @@ interface Props {
   disabled?: boolean;
   streaming?: boolean;
   compact?: boolean;
+  webSearch?: boolean;
+  onWebSearchChange?: (v: boolean) => void;
+  mcpTools?: boolean;
+  onMcpToolsChange?: (v: boolean) => void;
 }
 
 export default function ChatInput({
@@ -16,6 +20,10 @@ export default function ChatInput({
   disabled,
   streaming,
   compact,
+  webSearch = false,
+  onWebSearchChange,
+  mcpTools = true,
+  onMcpToolsChange,
 }: Props) {
   const [text, setText] = useState("");
   const [image, setImage] = useState<File | null>(null);
@@ -117,6 +125,39 @@ export default function ChatInput({
           className="flex-1 bg-transparent outline-none text-sm resize-none max-h-[200px] py-2"
           disabled={disabled}
         />
+
+        {/* Toggle buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Web search toggle */}
+          <button
+            onClick={() => onWebSearchChange?.(!webSearch)}
+            className={`p-1.5 rounded-lg transition-all ${
+              webSearch
+                ? "text-accent-amber bg-accent-amber/10"
+                : "text-text-muted hover:text-text-secondary"
+            }`}
+            title={webSearch ? "联网搜索：已开启" : "联网搜索：已关闭"}
+          >
+            <Globe className="w-4 h-4" />
+          </button>
+
+          {/* MCP tools toggle */}
+          <button
+            onClick={() => onMcpToolsChange?.(!mcpTools)}
+            className={`p-1.5 rounded-lg transition-all ${
+              mcpTools
+                ? "text-primary bg-primary/10"
+                : "text-text-muted hover:text-text-secondary"
+            }`}
+            title={mcpTools ? "MCP 工具：已开启" : "MCP 工具：已关闭"}
+          >
+            <Wrench className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-5 bg-border mx-0.5" />
+
         {streaming ? (
           <button
             onClick={onStop}
@@ -139,9 +180,27 @@ export default function ChatInput({
           </button>
         )}
       </div>
-      <p className="text-center text-xs text-text-muted mt-2">
-        AgroAgentOS 智农协同平台 · 基于 RAG + 多智能体的农业 AI 助手
-      </p>
+
+      {/* Status indicators */}
+      <div className="flex items-center justify-center gap-3 mt-2">
+        {webSearch && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-accent-amber">
+            <Globe className="w-3 h-3" />
+            联网搜索
+          </span>
+        )}
+        {mcpTools && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-primary">
+            <Wrench className="w-3 h-3" />
+            MCP 工具
+          </span>
+        )}
+        {!webSearch && !mcpTools && (
+          <span className="text-[11px] text-text-muted">
+            AgroAgentOS · 基于 RAG + 多智能体的农业 AI 助手
+          </span>
+        )}
+      </div>
     </div>
   );
 }

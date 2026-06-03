@@ -67,12 +67,19 @@ def search_open_websearch(query: str, max_results: int) -> List[Dict[str, Any]]:
         json=payload,
         timeout=float(cfg.get("timeout") or 15.0),
     )
-    resp.raise_for_status()
-    envelope = resp.json()
-    if envelope.get("status") != "ok":
+    # 先尝试解析 JSON body，再决定是否 raise（daemon 错误时也可能返回结构化错误信息）
+    try:
+        envelope = resp.json()
+    except Exception:
+        resp.raise_for_status()
+        raise RuntimeError(f"open-webSearch 返回非 JSON 响应 (HTTP {resp.status_code})")
+
+    if not resp.is_success or envelope.get("status") != "ok":
         err = envelope.get("error") or {}
         message = err.get("message") if isinstance(err, dict) else str(err)
-        raise RuntimeError(message or "open-webSearch 返回 error")
+        raise RuntimeError(
+            message or f"open-webSearch 返回错误 (HTTP {resp.status_code})"
+        )
 
     data = envelope.get("data") or {}
     return [

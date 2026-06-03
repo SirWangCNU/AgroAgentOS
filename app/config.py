@@ -343,8 +343,26 @@ class Settings(BaseSettings):
     log_dir: str = Field(default="logs", description="日志目录")
     log_retention_days: int = Field(default=14, description="日志保留天数")
 
-    # ==================== SQLite 轻量级数据库 ====================
+    # ==================== 数据库配置 (SQLite / MySQL 切换) ====================
+    use_sqlite: bool = Field(default=True, description="是否使用 SQLite (false 则使用 MySQL)")
     sqlite_db_path: str = Field(default="data/agro_agent.db", description="SQLite 数据库文件路径")
+    mysql_user: str = Field(default="root", description="MySQL 用户名")
+    mysql_password: str = Field(default="", description="MySQL 密码")
+    mysql_host: str = Field(default="127.0.0.1", description="MySQL 主机")
+    mysql_port: int = Field(default=3306, description="MySQL 端口")
+    mysql_database: str = Field(default="agro_agent_db", description="MySQL 数据库名")
+    mysql_charset: str = Field(default="utf8mb4", description="MySQL 字符集")
+
+    @property
+    def database_url(self) -> str:
+        """获取数据库连接 URL."""
+        if self.use_sqlite:
+            return f"sqlite:///{self.sqlite_db_path}"
+        return (
+            f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}"
+            f"@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
+            f"?charset={self.mysql_charset}"
+        )
 
     # ==================== 和风天气 API ====================
     qweather_api_key: str = Field(default="", description="和风天气 API Key (可选)")

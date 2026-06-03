@@ -283,23 +283,18 @@ def calc_compliance_rate(
     """计算综合作业达标率.
 
     达标条件:
-    1. 深度在目标范围内 (target_depth ± tolerance)
-    2. 速度在合理范围内 (min_speed ~ max_speed)
-    3. 工作状态为 working
-
-    Args:
-        points: 轨迹点列表
-        target_depth: 目标深度（厘米）
-        depth_tolerance: 深度允许误差（厘米）
-        min_speed: 最小合理速度（km/h）
-        max_speed: 最大合理速度（km/h）
+    1. 深度在目标范围内 (target_depth ± tolerance)，无深度数据时跳过
+    2. 速度在合理范围内 (min_speed ~ max_speed)，无速度数据时跳过
+    3. 优先使用 working 状态的点，无 working 点时使用全部点
 
     Returns:
         包含 compliance_rate, depth_compliance, speed_compliance, total_points, compliant_points
     """
     working_points = [p for p in points if p.get("work_status") == "working"]
+    # 没有 working 点时，使用全部点
+    target_points = working_points if working_points else points
 
-    if not working_points:
+    if not target_points:
         return {
             "compliance_rate": 0.0,
             "depth_compliance": 0.0,
@@ -308,25 +303,32 @@ def calc_compliance_rate(
             "compliant_points": 0,
         }
 
-    total = len(working_points)
+    total = len(target_points)
+    depth_checked = 0
     depth_ok = 0
+    speed_checked = 0
     speed_ok = 0
     both_ok = 0
 
-    for p in working_points:
+    for p in target_points:
         depth = p.get("depth", 0.0)
         speed = p.get("speed", 0.0)
 
-        # 深度达标检查
-        d_ok = (depth > 0 and
-                abs(depth - target_depth) <= depth_tolerance)
-        if d_ok:
-            depth_ok += 1
+        # 深度达标检查（仅有深度数据时才检查）
+        d_ok = True
+        if depth > 0:
+            depth_checked += 1
+            d_ok = abs(depth - target_depth) <= depth_tolerance
+            if d_ok:
+                depth_ok += 1
 
-        # 速度达标检查
-        s_ok = min_speed <= speed <= max_speed
-        if s_ok:
-            speed_ok += 1
+        # 速度达标检查（仅有速度数据时才检查）
+        s_ok = True
+        if speed > 0:
+            speed_checked += 1
+            s_ok = min_speed <= speed <= max_speed
+            if s_ok:
+                speed_ok += 1
 
         # 综合达标
         if d_ok and s_ok:
@@ -334,8 +336,8 @@ def calc_compliance_rate(
 
     return {
         "compliance_rate": round(both_ok / total * 100, 1),
-        "depth_compliance": round(depth_ok / total * 100, 1),
-        "speed_compliance": round(speed_ok / total * 100, 1),
+        "depth_compliance": round(depth_ok / depth_checked * 100, 1) if depth_checked > 0 else 0.0,
+        "speed_compliance": round(speed_ok / speed_checked * 100, 1) if speed_checked > 0 else 0.0,
         "total_points": total,
         "compliant_points": both_ok,
     }
@@ -388,23 +390,39 @@ def calc_work_volume_metrics(
 ) -> dict[str, Any]:
     """计算作业量指标.
 
+    当存在 working 状态的点时，基于 working 点计算；
+    否则回退到使用全部点（只要有轨迹数据就展示）。
+
     Returns:
-        包含 work_duration_hours, work_distance_km, work_area_mu, avg_field_speed_kmh
+        包含 total_distance_km, work_duration_hours, work_distance_km, work_area_mu, avg_field_speed_kmh
     """
     total_distance = calc_total_distance(points)
     work_distance = calc_work_distance(points)
-    work_area = calc_work_area(work_distance, work_width)
     time_stats = calc_time_stats(points)
 
-    # 田间平均作业速度 (km/h) - 仅计算 working 状态
-    work_duration_hours = time_stats["work_duration_min"] / 60
+    # 判断是否有 working 状态的点
+    has_working = any(p.get("work_status") == "working" for p in points)
+
+    if has_working:
+        # 有 working 点：用 work_distance 和 work_duration
+        effective_distance = work_distance
+        effective_duration_min = time_stats["work_duration_min"]
+    else:
+        # 没有 working 点：回退到全部轨迹数据
+        effective_distance = total_distance
+        effective_duration_min = time_stats["total_duration_min"]
+
+    work_area = calc_work_area(effective_distance, work_width)
+
+    effective_duration_hours = effective_duration_min / 60
     avg_field_speed = 0.0
-    if work_duration_hours > 0:
-        avg_field_speed = round(work_distance / 1000 / work_duration_hours, 2)
+    if effective_duration_hours > 0:
+        avg_field_speed = round(effective_distance / 1000 / effective_duration_hours, 2)
 
     return {
-        "work_duration_hours": round(time_stats["work_duration_min"] / 60, 2),
-        "work_distance_km": round(work_distance / 1000, 2),
+        "total_distance_km": round(total_distance / 1000, 2),
+        "work_duration_hours": round(effective_duration_hours, 2),
+        "work_distance_km": round(effective_distance / 1000, 2),
         "work_area_mu": round(work_area, 2),
         "avg_field_speed_kmh": avg_field_speed,
     }

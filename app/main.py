@@ -29,9 +29,9 @@ from app.api.middleware import setup_middlewares
 from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, image, observability, sessions, skills, trajectories, weather, webhook
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
+from app.core.database import database_manager
 from app.core.milvus import milvus_manager
 from app.core.redis import redis_manager
-from app.core.sqlite import sqlite_manager
 from app.exceptions import AppException
 from app.logging_config import setup_logging
 from app.schemas.common import ApiResponse
@@ -60,8 +60,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 2. 连接 Milvus (必需依赖, 失败则启动失败)
     milvus_manager.connect()
 
-    # 3. 连接 SQLite (历史记录存储)
-    sqlite_manager.connect()
+    # 3. 连接数据库 (SQLite 或 MySQL, 根据配置切换)
+    database_manager.connect()
+    logger.info(f"当前数据库类型: {database_manager.db_type}")
 
     # 4. 连接 Redis (缓存，可选依赖)
     redis_manager.connect()
@@ -79,7 +80,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await mcp_client_manager.close()
     redis_manager.disconnect()
     milvus_manager.disconnect()
-    sqlite_manager.disconnect()
+    database_manager.disconnect()
     logger.info("应用已关闭")
 
 

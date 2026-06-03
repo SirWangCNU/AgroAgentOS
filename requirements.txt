@@ -50,6 +50,10 @@ loguru>=0.7.2
 # ---------- 数据库迁移 ----------
 alembic>=1.14.0
 
+# ---------- MySQL 驱动 ----------
+pymysql>=1.1.0
+cryptography>=41.0.0  # pymysql 的 caching_sha2_password 认证需要
+
 # ---------- 认证与安全 ----------
 bcrypt>=4.0.0
 python-jose[cryptography]>=3.3.0

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { ChatMessage } from "../types/chat";
+import type { ChatMessage, Citation } from "../types/chat";
+import type { ProgressStep } from "../components/chat/ProgressSteps";
 import {
   createSession,
   listSessions,
@@ -19,6 +20,15 @@ interface ConversationState {
   activeId: string | null;
   isStreaming: boolean;
 
+  // Chat settings
+  webSearch: boolean;
+  mcpTools: boolean;
+
+  // Live streaming state
+  liveProgress: ProgressStep[];
+  liveCitations: Citation[];
+  progressPhase: boolean; // true = still in retrieval/search phase
+
   // Actions
   loadConversations: () => Promise<void>;
   createNew: () => Promise<string>;
@@ -30,6 +40,16 @@ interface ConversationState {
   updateLastAssistant: (content: string) => void;
   setThinking: (content: string) => void;
   setStreaming: (v: boolean) => void;
+  setWebSearch: (v: boolean) => void;
+  setMcpTools: (v: boolean) => void;
+
+  // Progress tracking
+  addProgressStep: (step: ProgressStep) => void;
+  updateLastProgressStep: (step: Partial<ProgressStep>) => void;
+  setLiveCitations: (citations: Citation[]) => void;
+  setProgressPhase: (v: boolean) => void;
+  markAllProgressDone: () => void;
+  clearLiveState: () => void;
 
   // Getters
   activeConversation: () => Conversation | null;
@@ -39,6 +59,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
   activeId: null,
   isStreaming: false,
+  webSearch: false,
+  mcpTools: true,
+  liveProgress: [],
+  liveCitations: [],
+  progressPhase: true,
 
   loadConversations: async () => {
     try {
@@ -153,6 +178,37 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   setStreaming: (v) => set({ isStreaming: v }),
+  setWebSearch: (v) => set({ webSearch: v }),
+  setMcpTools: (v) => set({ mcpTools: v }),
+
+  addProgressStep: (step) => {
+    set((s) => ({ liveProgress: [...s.liveProgress, step] }));
+  },
+
+  updateLastProgressStep: (update) => {
+    set((s) => {
+      const steps = [...s.liveProgress];
+      if (steps.length > 0) {
+        steps[steps.length - 1] = { ...steps[steps.length - 1], ...update };
+      }
+      return { liveProgress: steps };
+    });
+  },
+
+  setLiveCitations: (citations) => set({ liveCitations: citations }),
+
+  setProgressPhase: (v) => set({ progressPhase: v }),
+
+  markAllProgressDone: () => {
+    set((s) => ({
+      progressPhase: false,
+      liveProgress: s.liveProgress.map((step) =>
+        step.status === "running" ? { ...step, status: "done" as const } : step
+      ),
+    }));
+  },
+
+  clearLiveState: () => set({ liveProgress: [], liveCitations: [], progressPhase: true }),
 
   activeConversation: () => {
     const { conversations, activeId } = get();

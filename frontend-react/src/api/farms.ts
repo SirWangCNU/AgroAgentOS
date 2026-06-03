@@ -1,6 +1,6 @@
 import { authFetch } from "./client";
 import type { ApiResponse } from "../types/api";
-import type { Farm, Field, TrajectoryFile, TrajectoryPoint } from "../types/farm";
+import type { Farm, Field, TrajectoryFile, TrajectoryPoint, TrajectoryAnalysis } from "../types/farm";
 
 // ---- Farms ----
 export async function getFarms(): Promise<Farm[]> {
@@ -98,17 +98,20 @@ export async function getTrajectoryPoints(
   return resp.data.points;
 }
 
-export async function getTrajectoryAnalysis(fileId: number): Promise<{
-  work_volume: Record<string, unknown>;
-  work_efficiency: Record<string, unknown>;
-  work_volume_chart: string;
-  work_efficiency_chart: string;
-}> {
-  const resp = await authFetch<ApiResponse<{
-    work_volume: Record<string, unknown>;
-    work_efficiency: Record<string, unknown>;
-    work_volume_chart: string;
-    work_efficiency_chart: string;
-  }>>(`/trajectories/${fileId}/analysis`);
+export async function getTrajectoryAnalysis(fileId: number): Promise<TrajectoryAnalysis> {
+  const resp = await authFetch<ApiResponse<TrajectoryAnalysis>>(
+    `/trajectories/${fileId}/analysis`
+  );
   return resp.data;
+}
+
+export async function getTrajectoryStats(fileId: number): Promise<Record<string, unknown>> {
+  const resp = await authFetch<ApiResponse<{ stats: Record<string, unknown> }>>(
+    `/trajectories/${fileId}/stats`
+  );
+  return resp.data.stats;
+}
+
+export async function deleteTrajectory(fileId: number): Promise<void> {
+  await authFetch<ApiResponse>(`/trajectories/${fileId}`, { method: "DELETE" });
 }

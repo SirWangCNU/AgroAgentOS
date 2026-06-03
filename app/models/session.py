@@ -30,7 +30,7 @@ class ChatSessionMessage(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(
-        String(36), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True
+        String(128), ForeignKey("chat_sessions.session_id", ondelete="CASCADE"), nullable=False, index=True
     )
     role = Column(String(20), nullable=False)  # user / assistant
     content = Column(Text, nullable=False)

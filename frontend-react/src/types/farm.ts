@@ -39,10 +39,34 @@ export interface TrajectoryFile {
 }
 
 export interface TrajectoryPoint {
+  id?: number;
   seq: number;
   latitude: number;
   longitude: number;
-  work_status: number;
+  gps_time?: string;
+  work_status: "working" | "idle" | "transporting";
   speed: number;
   depth: number;
+  depth_std?: number;
+}
+
+export interface TrajectoryStats {
+  total_points: number;
+  work_duration_hours: number;
+  work_distance_km: number;
+  work_area_mu: number;
+  avg_depth: number;
+  depth_std: number;
+  avg_speed: number;
+  max_speed: number;
+  compliance_rate: number;
+  depth_compliance: number;
+  speed_compliance: number;
+}
+
+export interface TrajectoryAnalysis {
+  work_volume: Record<string, unknown>;
+  work_efficiency: Record<string, unknown>;
+  work_volume_chart: string;
+  work_efficiency_chart: string;
 }

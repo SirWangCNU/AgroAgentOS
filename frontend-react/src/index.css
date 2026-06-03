@@ -123,3 +123,17 @@ body {
 .leaflet-container {
   font-family: inherit;
 }
+
+/* Isolate Leaflet z-index so it doesn't bleed outside the map container */
+.map-isolation {
+  isolation: isolate;
+  position: relative;
+  z-index: 0;
+}
+.map-isolation .leaflet-container {
+  z-index: 0;
+}
+.map-isolation .leaflet-top,
+.map-isolation .leaflet-bottom {
+  z-index: 1;
+}
