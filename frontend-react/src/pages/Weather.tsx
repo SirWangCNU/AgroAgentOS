@@ -1,109 +1,152 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { CloudSun, Droplets, Wind, CloudRain, ArrowLeft } from "lucide-react";
+import {
+  CloudSun,
+  Droplets,
+  Wind,
+  CloudRain,
+  Thermometer,
+  Search,
+  Wheat,
+} from "lucide-react";
 import { getWeather } from "../api/weather";
+import WorkspaceLayout from "../components/layout/WorkspaceLayout";
+import StatCard from "../components/ui/StatCard";
+import LoadingGrid from "../components/ui/LoadingGrid";
 
 export default function Weather() {
-  const navigate = useNavigate();
+  const [city, setCity] = useState("北京");
+  const [inputCity, setInputCity] = useState("北京");
+
   const { data: weather, isLoading } = useQuery({
-    queryKey: ["weather"],
-    queryFn: () => getWeather("北京"),
+    queryKey: ["weather", city],
+    queryFn: () => getWeather(city),
     staleTime: 5 * 60 * 1000,
   });
 
-  if (isLoading) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-4">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <CloudSun className="w-5 h-5 text-accent-amber" /> 天气信息
-        </h1>
-        <div className="h-64 skeleton rounded-xl" />
-      </div>
-    );
-  }
-
-  if (!weather) return null;
-
-  const { current, forecast, agriculture_advice } = weather;
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputCity.trim()) setCity(inputCity.trim());
+  };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate("/workspace")} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <CloudSun className="w-5 h-5 text-accent-amber" /> 天气信息
-        </h1>
-      </div>
-
-      {/* Current */}
-      <div className="bg-bg-card rounded-xl border border-border p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm text-text-muted">{current.location}</div>
-            <div className="text-4xl font-bold mt-1">{current.temperature}°</div>
-            <div className="text-text-secondary mt-1">{current.condition}</div>
-          </div>
-          <CloudSun className="w-16 h-16 text-accent-amber" />
+    <WorkspaceLayout
+      title="天气查询"
+      icon={CloudSun}
+      iconColor="text-accent-amber"
+      description="实时天气、农事建议与未来预报"
+    >
+      {/* City search */}
+      <form onSubmit={handleSearch} className="mb-6">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            value={inputCity}
+            onChange={(e) => setInputCity(e.target.value)}
+            placeholder="输入城市名称..."
+            className="w-full pl-9 pr-4 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary bg-bg-card transition-colors"
+          />
         </div>
-        <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-border">
-          <div className="flex items-center gap-2">
-            <Droplets className="w-4 h-4 text-accent-blue" />
-            <div>
-              <div className="text-xs text-text-muted">湿度</div>
-              <div className="text-sm font-medium">{current.humidity}%</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Wind className="w-4 h-4 text-text-muted" />
-            <div>
-              <div className="text-xs text-text-muted">风力</div>
-              <div className="text-sm font-medium">{current.wind_level}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <CloudRain className="w-4 h-4 text-accent-blue" />
-            <div>
-              <div className="text-xs text-text-muted">降雨概率</div>
-              <div className="text-sm font-medium">{current.rain_probability}%</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </form>
 
-      {/* Agriculture advice */}
-      {agriculture_advice && (
-        <div className="bg-bg-card rounded-xl border border-border p-4">
-          <h3 className="text-sm font-medium mb-2">🌾 农事建议</h3>
-          <div className="text-sm text-text-secondary whitespace-pre-line">
-            {agriculture_advice}
-          </div>
-        </div>
-      )}
-
-      {/* Forecast */}
-      {forecast?.length > 0 && (
-        <div className="bg-bg-card rounded-xl border border-border p-4">
-          <h3 className="text-sm font-medium mb-3">未来预报</h3>
-          <div className="space-y-2">
-            {forecast.map((f, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-2 border-b border-border last:border-0"
-              >
-                <span className="text-sm text-text-secondary">{f.date}</span>
-                <span className="text-sm">
-                  {f.temp_min}° ~ {f.temp_max}°
-                </span>
-                <span className="text-xs text-accent-blue">
-                  {f.rain_probability}% 雨
-                </span>
+      {isLoading ? (
+        <LoadingGrid rows={2} cols={3} height="h-24" />
+      ) : weather ? (
+        <div className="space-y-6">
+          {/* Current weather hero */}
+          <div className="bg-bg-card rounded-xl border border-border p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-text-muted">
+                  {weather.current.location}
+                </div>
+                <div className="text-5xl font-bold mt-2">
+                  {weather.current.temperature}°
+                </div>
+                <div className="text-lg text-text-secondary mt-1">
+                  {weather.current.condition}
+                </div>
               </div>
-            ))}
+              <CloudSun className="w-24 h-24 text-accent-amber opacity-50" />
+            </div>
+
+            {/* Detail stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-border">
+              <StatCard
+                icon={Droplets}
+                label="湿度"
+                value={`${weather.current.humidity}%`}
+                color="text-accent-blue"
+              />
+              <StatCard
+                icon={Wind}
+                label="风力"
+                value={weather.current.wind_level}
+                color="text-text-secondary"
+              />
+              <StatCard
+                icon={CloudRain}
+                label="降雨概率"
+                value={`${weather.current.rain_probability}%`}
+                color="text-accent-blue"
+              />
+              <StatCard
+                icon={Thermometer}
+                label="体感温度"
+                value={`${weather.current.temperature}°`}
+                color="text-accent-amber"
+              />
+            </div>
           </div>
+
+          {/* Agriculture advice */}
+          {weather.agriculture_advice && (
+            <div className="bg-bg-card rounded-xl border border-border p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Wheat className="w-5 h-5 text-accent-green" />
+                <h3 className="text-sm font-semibold text-text-primary">
+                  农事建议
+                </h3>
+              </div>
+              <div className="text-sm text-text-secondary whitespace-pre-line leading-relaxed">
+                {weather.agriculture_advice}
+              </div>
+            </div>
+          )}
+
+          {/* Forecast */}
+          {weather.forecast?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-text-secondary mb-3">
+                未来预报
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {weather.forecast.map((f, i) => (
+                  <div
+                    key={i}
+                    className="bg-bg-card rounded-xl border border-border p-4 text-center hover:shadow-sm transition-shadow"
+                  >
+                    <div className="text-xs text-text-muted font-medium">
+                      {f.date}
+                    </div>
+                    <CloudSun className="w-8 h-8 text-accent-amber mx-auto my-2 opacity-60" />
+                    <div className="text-sm font-semibold">
+                      {f.temp_min}° ~ {f.temp_max}°
+                    </div>
+                    <div className="text-xs text-accent-blue mt-1">
+                      {f.rain_probability}% 雨
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-12 text-sm text-text-muted">
+          无法获取天气数据，请检查城市名称
         </div>
       )}
-    </div>
+    </WorkspaceLayout>
   );
 }

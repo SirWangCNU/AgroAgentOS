@@ -1,22 +1,39 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Tractor, Plus, Trash2, ArrowLeft } from "lucide-react";
+import {
+  Tractor,
+  Plus,
+  Trash2,
+  MapPin,
+  ChevronRight,
+  FileText,
+  Ruler,
+  Gauge,
+  Wheat,
+} from "lucide-react";
 import {
   getFarms,
   getFarmDetail,
   createFarm,
   deleteFarm,
+  getTrajectories,
+  getTrajectoryPoints,
 } from "../api/farms";
 import { useUIStore } from "../stores/ui";
-import type { Field } from "../types/farm";
+import WorkspaceLayout from "../components/layout/WorkspaceLayout";
+import Modal from "../components/ui/Modal";
+import EmptyState from "../components/ui/EmptyState";
+import LoadingGrid from "../components/ui/LoadingGrid";
+import FarmMap from "../components/map/FarmMap";
+import type { Field, TrajectoryFile, TrajectoryPoint } from "../types/farm";
 
 export default function Farms() {
-  const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
   const queryClient = useQueryClient();
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
+  const [selectedFieldId, setSelectedFieldId] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [trajectoryPoints, setTrajectoryPoints] = useState<TrajectoryPoint[]>([]);
 
   const { data: farms, isLoading } = useQuery({
     queryKey: ["farms"],
@@ -29,6 +46,12 @@ export default function Farms() {
     enabled: !!selectedFarmId,
   });
 
+  const { data: trajectories } = useQuery({
+    queryKey: ["trajectories", selectedFieldId],
+    queryFn: () => getTrajectories(selectedFieldId!),
+    enabled: !!selectedFieldId,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: deleteFarm,
     onSuccess: () => {
@@ -39,95 +62,218 @@ export default function Farms() {
     onError: (err: any) => showToast(err.message, "error"),
   });
 
+  const handleLoadTrajectory = async (file: TrajectoryFile) => {
+    try {
+      const points = await getTrajectoryPoints(file.id);
+      setTrajectoryPoints(points);
+    } catch (err: any) {
+      showToast(`加载轨迹失败: ${err.message}`, "error");
+    }
+  };
+
+  // Prepare farm markers for map
+  const farmMarkers =
+    farms?.map((f) => ({
+      id: f.id,
+      name: f.name,
+      location: f.location,
+      area_mu: f.area_mu,
+      latitude: f.latitude,
+      longitude: f.longitude,
+    })) || [];
+
+  // Prepare trajectory lines for map
+  const trajectoryLines =
+    trajectoryPoints.length > 0
+      ? [
+          {
+            points: trajectoryPoints.map((p) => [p.latitude, p.longitude] as [number, number]),
+            color: "#3b82f6",
+          },
+        ]
+      : [];
+
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/workspace")} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-lg font-semibold flex items-center gap-2">
-            <Tractor className="w-5 h-5 text-primary" /> 农场管理
-          </h1>
-        </div>
+    <WorkspaceLayout
+      title="农场管理"
+      icon={Tractor}
+      iconColor="text-accent-green"
+      description="管理农场、地块和作业轨迹"
+      fullWidth
+      action={
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors"
         >
           <Plus className="w-4 h-4" /> 新建农场
         </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Farm list */}
-        <div className="space-y-3">
-          {isLoading ? (
-            [1, 2, 3].map((i) => <div key={i} className="h-20 skeleton rounded-xl" />)
-          ) : farms?.length ? (
-            farms.map((farm) => (
-              <div
-                key={farm.id}
-                onClick={() => setSelectedFarmId(farm.id)}
-                className={`bg-bg-card rounded-xl border p-4 cursor-pointer transition-all ${
-                  selectedFarmId === farm.id
-                    ? "border-primary ring-1 ring-primary/20"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-medium text-sm">{farm.name}</div>
-                    <div className="text-xs text-text-muted mt-1">
-                      {farm.location} · {farm.area_mu} 亩
+      }
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ height: "calc(100vh - 180px)" }}>
+        {/* Left panel — farm & field list */}
+        <div className="lg:col-span-4 flex flex-col gap-4 min-h-0">
+          {/* Farm list */}
+          <div className="bg-bg-card rounded-xl border border-border flex-1 min-h-0 flex flex-col">
+            <div className="px-4 py-3 border-b border-border">
+              <h3 className="text-sm font-semibold text-text-primary">
+                农场列表
+              </h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {isLoading ? (
+                <LoadingGrid rows={3} height="h-16" />
+              ) : farms?.length ? (
+                farms.map((farm) => (
+                  <div
+                    key={farm.id}
+                    onClick={() => {
+                      setSelectedFarmId(farm.id);
+                      setSelectedFieldId(null);
+                      setTrajectoryPoints([]);
+                    }}
+                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${
+                      selectedFarmId === farm.id
+                        ? "bg-primary/10 border border-primary/30"
+                        : "hover:bg-bg-hover border border-transparent"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {farm.name}
+                      </div>
+                      <div className="text-xs text-text-muted mt-0.5 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {farm.location} · {farm.area_mu} 亩
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`确定删除 "${farm.name}"？`))
+                            deleteMutation.mutate(farm.id);
+                        }}
+                        className="p-1 text-text-muted hover:text-accent-red rounded"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <ChevronRight className="w-4 h-4 text-text-muted" />
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`确定删除 "${farm.name}"？`))
-                        deleteMutation.mutate(farm.id);
-                    }}
-                    className="p-1 text-text-muted hover:text-accent-red"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                ))
+              ) : (
+                <EmptyState
+                  icon={Tractor}
+                  title="暂无农场"
+                  description="点击右上角创建您的第一个农场"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Field list (when farm selected) */}
+          {selectedFarmId && (
+            <div className="bg-bg-card rounded-xl border border-border flex-1 min-h-0 flex flex-col">
+              <div className="px-4 py-3 border-b border-border">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  地块列表
+                </h3>
               </div>
-            ))
-          ) : (
-            <div className="text-center py-8 text-sm text-text-muted">
-              暂无农场，点击右上角创建
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {fields?.length ? (
+                  fields.map((field) => (
+                    <div
+                      key={field.id}
+                      onClick={() => {
+                        setSelectedFieldId(field.id);
+                        setTrajectoryPoints([]);
+                      }}
+                      className={`p-3 rounded-lg cursor-pointer transition-all ${
+                        selectedFieldId === field.id
+                          ? "bg-accent-blue/10 border border-accent-blue/30"
+                          : "hover:bg-bg-hover border border-transparent"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">{field.name}</div>
+                        <StatusBadge status={field.status} />
+                      </div>
+                      <div className="text-xs text-text-muted mt-1 flex items-center gap-2">
+                        {field.current_crop && (
+                          <span className="flex items-center gap-0.5">
+                            <Wheat className="w-3 h-3" />
+                            {field.current_crop}
+                          </span>
+                        )}
+                        <span>{field.area_mu} 亩</span>
+                        <span>{field.soil_type}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState
+                    icon={MapPin}
+                    title="暂无地块"
+                    description="该农场下还没有地块"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Trajectory list (when field selected) */}
+          {selectedFieldId && trajectories && trajectories.length > 0 && (
+            <div className="bg-bg-card rounded-xl border border-border">
+              <div className="px-4 py-3 border-b border-border">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  作业轨迹
+                </h3>
+              </div>
+              <div className="p-2 space-y-1">
+                {trajectories.map((traj) => (
+                  <button
+                    key={traj.id}
+                    onClick={() => handleLoadTrajectory(traj)}
+                    className="w-full text-left p-3 rounded-lg hover:bg-bg-hover transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-text-muted flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {traj.filename}
+                        </div>
+                        <div className="text-xs text-text-muted flex items-center gap-3 mt-0.5">
+                          <span className="flex items-center gap-0.5">
+                            <Ruler className="w-3 h-3" />
+                            {(traj.total_distance_m / 1000).toFixed(1)}km
+                          </span>
+                          <span className="flex items-center gap-0.5">
+                            <Gauge className="w-3 h-3" />
+                            {traj.avg_speed.toFixed(1)}m/s
+                          </span>
+                          <span>{traj.work_area_mu.toFixed(1)}亩</span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Field list */}
-        <div className="lg:col-span-2">
-          {selectedFarmId ? (
-            <div className="bg-bg-card rounded-xl border border-border p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium">地块列表</h3>
-                <button className="flex items-center gap-1 px-2 py-1 text-xs text-primary border border-primary/20 rounded-lg hover:bg-primary-light">
-                  <Plus className="w-3 h-3" /> 新建地块
-                </button>
-              </div>
-              {fields?.length ? (
-                <div className="space-y-2">
-                  {fields.map((field) => (
-                    <FieldCard key={field.id} field={field} />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-sm text-text-muted">
-                  暂无地块
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-64 text-sm text-text-muted bg-bg-card rounded-xl border border-border">
-              请先选择一个农场
-            </div>
-          )}
+        {/* Right — map */}
+        <div className="lg:col-span-8 min-h-0">
+          <FarmMap
+            farms={farmMarkers}
+            selectedFarmId={selectedFarmId}
+            trajectories={trajectoryLines}
+            onFarmClick={(id) => {
+              setSelectedFarmId(id);
+              setSelectedFieldId(null);
+              setTrajectoryPoints([]);
+            }}
+          />
         </div>
       </div>
 
@@ -141,33 +287,19 @@ export default function Farms() {
           }}
         />
       )}
-    </div>
+    </WorkspaceLayout>
   );
 }
 
-function FieldCard({ field }: { field: Field }) {
-  const statusColors = {
-    idle: "bg-gray-100 text-gray-600",
-    planting: "bg-green-100 text-green-700",
-    fallow: "bg-amber-100 text-amber-700",
+function StatusBadge({ status }: { status: Field["status"] }) {
+  const config = {
+    idle: { label: "空闲", cls: "bg-gray-100 text-gray-600" },
+    planting: { label: "种植中", cls: "bg-green-100 text-green-700" },
+    fallow: { label: "休耕", cls: "bg-amber-100 text-amber-700" },
   };
-  const statusLabels = { idle: "空闲", planting: "种植中", fallow: "休耕" };
-
+  const c = config[status] || config.idle;
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-bg-hover transition-colors">
-      <div>
-        <div className="text-sm font-medium">{field.name}</div>
-        <div className="text-xs text-text-muted mt-1">
-          {field.current_crop && `${field.current_crop} · `}
-          {field.area_mu} 亩 · {field.soil_type}
-        </div>
-      </div>
-      <span
-        className={`px-2 py-0.5 text-xs rounded ${statusColors[field.status]}`}
-      >
-        {statusLabels[field.status]}
-      </span>
-    </div>
+    <span className={`px-1.5 py-0.5 text-xs rounded ${c.cls}`}>{c.label}</span>
   );
 }
 
@@ -198,76 +330,107 @@ function CreateFarmModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-bg-card rounded-xl border border-border p-6 shadow-lg">
-        <h3 className="text-lg font-semibold mb-4">新建农场</h3>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              农场名称
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              位置
-            </label>
-            <input
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                面积 (亩)
-              </label>
-              <input
-                type="number"
-                value={form.area_mu}
-                onChange={(e) =>
-                  setForm({ ...form, area_mu: Number(e.target.value) })
-                }
-                className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              描述
-            </label>
-            <textarea
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-              rows={3}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary resize-none"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
+    <Modal
+      title="新建农场"
+      onClose={onClose}
+      footer={
+        <>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-bg-hover"
+            className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-bg-hover transition-colors"
           >
             取消
           </button>
           <button
             onClick={() => mutation.mutate()}
             disabled={!form.name}
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
           >
             创建
           </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            农场名称
+          </label>
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="如：张庄有机农场"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            位置
+          </label>
+          <input
+            value={form.location}
+            onChange={(e) => setForm({ ...form, location: e.target.value })}
+            placeholder="如：山东省寿光市"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              面积 (亩)
+            </label>
+            <input
+              type="number"
+              value={form.area_mu}
+              onChange={(e) =>
+                setForm({ ...form, area_mu: Number(e.target.value) })
+              }
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              纬度
+            </label>
+            <input
+              type="number"
+              step="any"
+              value={form.latitude}
+              onChange={(e) =>
+                setForm({ ...form, latitude: Number(e.target.value) })
+              }
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              经度
+            </label>
+            <input
+              type="number"
+              step="any"
+              value={form.longitude}
+              onChange={(e) =>
+                setForm({ ...form, longitude: Number(e.target.value) })
+              }
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            描述
+          </label>
+          <textarea
+            value={form.description}
+            onChange={(e) =>
+              setForm({ ...form, description: e.target.value })
+            }
+            rows={2}
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary resize-none"
+          />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
