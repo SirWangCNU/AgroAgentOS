@@ -19,6 +19,7 @@ interface ConversationState {
   conversations: Conversation[];
   activeId: string | null;
   isStreaming: boolean;
+  isLoadingMessages: boolean;
 
   // Chat settings
   webSearch: boolean;
@@ -31,6 +32,7 @@ interface ConversationState {
 
   // Actions
   loadConversations: () => Promise<void>;
+  refreshConversations: () => Promise<void>;
   createNew: () => Promise<string>;
   setActive: (id: string | null) => void;
   deleteOne: (id: string) => Promise<void>;
@@ -59,6 +61,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
   activeId: null,
   isStreaming: false,
+  isLoadingMessages: false,
   webSearch: false,
   mcpTools: true,
   liveProgress: [],
@@ -71,8 +74,26 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       set({
         conversations: sessions.map((s) => ({ ...s, messages: [] })),
       });
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.error("Failed to load conversations:", err);
+    }
+  },
+
+  refreshConversations: async () => {
+    try {
+      const sessions = await listSessions();
+      set((s) => {
+        // Merge: keep already-loaded messages for existing conversations
+        const msgMap = new Map(s.conversations.map((c) => [c.id, c.messages]));
+        return {
+          conversations: sessions.map((session) => ({
+            ...session,
+            messages: msgMap.get(session.id) || [],
+          })),
+        };
+      });
+    } catch (err) {
+      console.error("Failed to refresh conversations:", err);
     }
   },
 
@@ -83,6 +104,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       conversations: [conv, ...s.conversations],
       activeId: conv.id,
     }));
+    // Refresh in background to get accurate message_count
+    get().refreshConversations().catch(() => {});
     return conv.id;
   },
 
@@ -109,16 +132,46 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   loadMessages: async (id) => {
-    const detail = await getSession(id);
-    const messages: ChatMessage[] = detail.messages.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
-    set((s) => ({
-      conversations: s.conversations.map((c) =>
-        c.id === id ? { ...c, messages } : c
-      ),
-    }));
+    set({ isLoadingMessages: true });
+    try {
+      const detail = await getSession(id);
+      const messages: ChatMessage[] = detail.messages.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        ...(m.image_url ? { imageUrl: m.image_url } : {}),
+      }));
+      set((s) => {
+        const exists = s.conversations.some((c) => c.id === id);
+        if (exists) {
+          // Update existing conversation
+          return {
+            isLoadingMessages: false,
+            conversations: s.conversations.map((c) =>
+              c.id === id ? { ...c, messages, title: detail.title } : c
+            ),
+          };
+        }
+        // Conversation not in store (e.g. direct URL navigation) — add it
+        return {
+          isLoadingMessages: false,
+          conversations: [
+            {
+              id: detail.id,
+              title: detail.title,
+              created_at: detail.created_at,
+              updated_at: detail.updated_at,
+              message_count: detail.messages.length,
+              messages,
+            },
+            ...s.conversations,
+          ],
+        };
+      });
+    } catch (err) {
+      console.error("Failed to load messages:", err);
+      set({ isLoadingMessages: false });
+      throw err; // Re-throw so the caller can handle the error
+    }
   },
 
   addMessage: (msg) => {

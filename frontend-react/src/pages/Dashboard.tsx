@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -39,8 +39,8 @@ const TOOLS = [
   },
   {
     icon: BookOpen,
-    label: "知识库",
-    desc: "上传管理农业知识文档",
+    label: "智能体技能和知识库",
+    desc: "查看智能体技能与管理知识文档",
     path: "/workspace/knowledge",
     color: "text-accent-blue",
     bg: "bg-accent-blue/10",
@@ -195,18 +195,18 @@ export default function Dashboard() {
             <div className="bg-bg-card rounded-xl border border-border divide-y divide-border">
               {recentConversations.length > 0 ? (
                 recentConversations.map((conv) => (
-                  <button
+                  <Link
                     key={conv.id}
-                    onClick={() => navigate(`/chat/${conv.id}`)}
-                    className="w-full text-left px-4 py-3 hover:bg-bg-hover transition-colors first:rounded-t-xl last:rounded-b-xl"
+                    to={`/chat/${conv.id}`}
+                    className="block w-full text-left px-4 py-3 hover:bg-bg-hover transition-colors first:rounded-t-xl last:rounded-b-xl no-underline"
                   >
                     <div className="text-sm font-medium text-text-primary truncate">
                       {conv.title}
                     </div>
                     <div className="text-xs text-text-muted mt-0.5">
-                      {conv.messages.length} 条消息
+                      {conv.message_count} 条消息
                     </div>
-                  </button>
+                  </Link>
                 ))
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-text-muted">

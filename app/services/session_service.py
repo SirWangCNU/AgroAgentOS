@@ -58,7 +58,7 @@ class SessionService:
             for s in sessions:
                 msg_count = (
                     sess.query(func.count(ChatSessionMessage.id))
-                    .filter(ChatSessionMessage.session_id == str(s.id))
+                    .filter(ChatSessionMessage.session_id == s.session_id)
                     .scalar()
                     or 0
                 )
@@ -89,7 +89,7 @@ class SessionService:
 
             messages = (
                 sess.query(ChatSessionMessage)
-                .filter(ChatSessionMessage.session_id == str(session.id))
+                .filter(ChatSessionMessage.session_id == session.session_id)
                 .order_by(ChatSessionMessage.created_at.asc())
                 .all()
             )
@@ -144,7 +144,7 @@ class SessionService:
                 return False
             # 先删消息
             sess.query(ChatSessionMessage).filter(
-                ChatSessionMessage.session_id == str(session.id)
+                ChatSessionMessage.session_id == session.session_id
             ).delete()
             sess.delete(session)
             return True
@@ -166,7 +166,7 @@ class SessionService:
                 raise ValueError(f"会话不存在: {session_uuid}")
 
             msg = ChatSessionMessage(
-                session_id=str(session.id),
+                session_id=session.session_id,
                 role=role,
                 content=content,
                 image_url=image_url,

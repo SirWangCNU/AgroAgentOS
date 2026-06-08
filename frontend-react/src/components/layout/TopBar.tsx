@@ -21,7 +21,7 @@ const WORKSPACE_ITEMS = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/workspace" },
   { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
   { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
-  { icon: BookOpen, label: "知识库", path: "/workspace/knowledge" },
+  { icon: BookOpen, label: "智能体技能和知识库", path: "/workspace/knowledge" },
   { icon: Megaphone, label: "营销生成", path: "/workspace/marketing" },
   { icon: Bug, label: "病虫害诊断", path: "/workspace/pest" },
   { icon: Users, label: "用户管理", path: "/workspace/users", adminOnly: true },

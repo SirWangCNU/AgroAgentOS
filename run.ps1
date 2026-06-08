@@ -456,26 +456,58 @@ Start-PythonServer -Name "websearch_server" -Script "$ProjectRoot\mcp_servers\we
 # Start frontend Vite dev server
 if (-not $NoFrontend) {
     $FrontendPort = 5173
-    if (-not (Test-TcpPort -HostName "127.0.0.1" -Port $FrontendPort)) {
+    # Also check if Vite is running on a nearby port (it auto-selects if 5173 is busy)
+    $viteAlreadyRunning = $false
+    if (Test-TcpPort -HostName "127.0.0.1" -Port $FrontendPort) {
+        $viteAlreadyRunning = $true
+    } else {
+        # Check common Vite fallback ports (3000-3010)
+        for ($p = 3000; $p -le 3010; $p++) {
+            if (Test-TcpPort -HostName "127.0.0.1" -Port $p) {
+                Write-Host "[info] Vite likely already running on port $p (port $FrontendPort was free)" -ForegroundColor Yellow
+                $viteAlreadyRunning = $true
+                break
+            }
+        }
+    }
+    if (-not $viteAlreadyRunning) {
         $npm = Get-NpmCommand
         if ($npm -and (Test-Path $FrontendDir)) {
-            # Kill any lingering vite process
+            # Kill any lingering vite/node process on target port
             Stop-PortProcess -Port $FrontendPort
             $feOutLog = Join-Path $LogDir "vite.out.log"
             $feErrLog = Join-Path $LogDir "vite.err.log"
+            # Clear old logs
+            if (Test-Path $feOutLog) { Clear-Content $feOutLog -ErrorAction SilentlyContinue }
+            if (Test-Path $feErrLog) { Clear-Content $feErrLog -ErrorAction SilentlyContinue }
             Write-Host "[start] Vite frontend dev server (port $FrontendPort)..." -ForegroundColor Cyan
-            Start-Process -FilePath $npm `
-                -ArgumentList "run", "dev" `
+            Write-Host "        npm: $npm" -ForegroundColor DarkGray
+            # Use cmd.exe to launch npm in background — avoids PowerShell Start-Process hang
+            $fePidLog = Join-Path $LogDir "vite.pid"
+            Start-Process -FilePath "cmd.exe" `
+                -ArgumentList "/c", "`"$npm`" run dev > `"$feOutLog`" 2> `"$feErrLog`" & echo %PID% > `"$fePidLog`"" `
                 -WindowStyle Hidden `
-                -WorkingDirectory $FrontendDir `
-                -RedirectStandardOutput $feOutLog `
-                -RedirectStandardError $feErrLog
-            Wait-TcpPort -Name "Vite" -HostName "127.0.0.1" -Port $FrontendPort -TimeoutSec 20 | Out-Null
+                -WorkingDirectory $FrontendDir
+            Write-Host "[wait] Waiting for Vite to be ready..." -ForegroundColor DarkGray
+            $viteReady = Wait-TcpPort -Name "Vite" -HostName "127.0.0.1" -Port $FrontendPort -TimeoutSec 30
+            if (-not $viteReady) {
+                # Vite may have auto-selected a different port; check the log
+                if (Test-Path $feOutLog) {
+                    $viteLog = Get-Content $feOutLog -Raw -ErrorAction SilentlyContinue
+                    if ($viteLog -match "localhost:(\d+)") {
+                        $actualPort = [int]$Matches[1]
+                        Write-Host "[info] Vite started on port $actualPort instead of $FrontendPort" -ForegroundColor Yellow
+                        Write-Host "       Access frontend at: http://localhost:$actualPort" -ForegroundColor Yellow
+                    } else {
+                        Write-Host "[warn] Vite may not have started. Check: $feOutLog / $feErrLog" -ForegroundColor Yellow
+                    }
+                }
+            }
         } else {
             Write-Host "[skip] frontend-react not found or npm missing" -ForegroundColor DarkYellow
         }
     } else {
-        Write-Host "[skip] Vite already listening on port $FrontendPort" -ForegroundColor DarkYellow
+        Write-Host "[skip] Vite already listening (frontend running)" -ForegroundColor DarkYellow
     }
 } else {
     Write-Host "[skip] Frontend auto-start disabled by -NoFrontend" -ForegroundColor DarkYellow

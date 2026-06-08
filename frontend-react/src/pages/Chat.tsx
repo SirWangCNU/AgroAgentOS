@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { chatStream } from "../api/chat";
@@ -17,7 +17,9 @@ import ProgressSteps, {
 
 export default function Chat() {
   const { sessionId } = useParams();
+  const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const {
     activeId,
@@ -28,8 +30,10 @@ export default function Chat() {
     setThinking,
     setStreaming,
     isStreaming,
+    isLoadingMessages,
     activeConversation,
     createNew,
+    refreshConversations,
     webSearch,
     mcpTools,
     setWebSearch,
@@ -47,11 +51,32 @@ export default function Chat() {
 
   // Sync URL param with store
   useEffect(() => {
-    if (sessionId && sessionId !== activeId) {
-      setActive(sessionId);
-      loadMessages(sessionId);
+    if (!sessionId) {
+      // Navigated to /chat (no session) — clear active so welcome screen shows
+      if (activeId) setActive(null);
+      setLoadError(null);
+      return;
     }
-  }, [sessionId, activeId, setActive, loadMessages]);
+
+    // Always ensure activeId matches the URL
+    if (sessionId !== activeId) {
+      setActive(sessionId);
+    }
+
+    // Clear previous errors when navigating to a new conversation
+    setLoadError(null);
+
+    // Load messages if not already loaded
+    const conv = useConversationStore.getState().conversations.find((c) => c.id === sessionId);
+    if (!conv || conv.messages.length === 0) {
+      loadMessages(sessionId).catch((err) => {
+        const message = err?.status === 404
+          ? "对话不存在或已被删除"
+          : `加载对话失败: ${err?.message || "未知错误"}`;
+        setLoadError(message);
+      });
+    }
+  }, [sessionId, activeId]);
 
   // Auto-scroll on new messages or progress updates
   const conversation = activeConversation();
@@ -69,6 +94,8 @@ export default function Chat() {
     let convId = activeId;
     if (!convId) {
       convId = await createNew();
+      // Update URL so the conversation is bookmarkable
+      navigate(`/chat/${convId}`, { replace: true });
     }
 
     // Clear previous live state
@@ -199,6 +226,9 @@ export default function Chat() {
       if (assistantContent) {
         addSessionMessage(convId!, "assistant", assistantContent).catch(() => {});
       }
+
+      // Refresh conversation list so sidebar shows updated message_count
+      refreshConversations().catch(() => {});
     } catch (err: any) {
       showToast(`网络错误: ${err.message}`, "error");
     } finally {
@@ -214,6 +244,36 @@ export default function Chat() {
   const handleQuickAction = (text: string) => {
     handleSend(text);
   };
+
+  // Show loading state while fetching messages for a conversation
+  if (sessionId && isLoadingMessages) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-text-muted text-sm">
+          <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+          加载对话记录中...
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if loading failed
+  if (sessionId && loadError) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-4">
+        <div className="text-red-400 text-sm">{loadError}</div>
+        <button
+          onClick={() => {
+            setLoadError(null);
+            navigate("/chat");
+          }}
+          className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+        >
+          返回首页
+        </button>
+      </div>
+    );
+  }
 
   // Show welcome screen if no messages
   if (!messages.length) {

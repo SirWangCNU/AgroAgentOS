@@ -17,6 +17,11 @@ export interface User {
   is_active: boolean;
 }
 
+export interface UserInfo extends User {
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LoginResponse {
   access_token: string;
   user: User;
@@ -33,5 +38,8 @@ export interface HealthData {
 export interface Skill {
   name: string;
   display_name: string;
+  description: string;
+  triggers: string[];
+  allowed_tools: string[];
   risk_level: string;
 }

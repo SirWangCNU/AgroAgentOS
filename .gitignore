@@ -43,6 +43,9 @@ open-webSearch-main/*.log
 .DS_Store
 Thumbs.db
 
+# Backups
+backups/
+
 # Test run artifacts
 tests/__*.log
 tests/__*.log.err

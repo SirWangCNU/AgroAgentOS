@@ -7,8 +7,7 @@ interface DocumentInfo {
 }
 
 export async function uploadDocument(
-  file: File,
-  adminToken: string
+  file: File
 ): Promise<{ chunks_indexed: number; bytes: number }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -17,7 +16,6 @@ export async function uploadDocument(
   >("/documents/upload", {
     method: "POST",
     body: formData,
-    headers: { "X-KB-Admin-Token": adminToken },
   });
   return resp.data;
 }
@@ -29,12 +27,8 @@ export async function getDocuments(): Promise<DocumentInfo[]> {
   return resp.data.documents;
 }
 
-export async function deleteDocument(
-  source: string,
-  adminToken: string
-): Promise<void> {
+export async function deleteDocument(source: string): Promise<void> {
   await authFetch<ApiResponse>(`/documents/${encodeURIComponent(source)}`, {
     method: "DELETE",
-    headers: { "X-KB-Admin-Token": adminToken },
   });
 }

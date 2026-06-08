@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
   MessageSquare,
@@ -8,21 +9,23 @@ import {
   X,
 } from "lucide-react";
 import { useConversationStore } from "../../stores/conversation";
+import { useUIStore } from "../../stores/ui";
 
 export default function ConversationSidebar() {
+  const navigate = useNavigate();
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const {
     conversations,
     activeId,
-    loadConversations,
+    refreshConversations,
     createNew,
-    setActive,
     deleteOne,
     renameOne,
   } = useConversationStore();
 
   useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+    refreshConversations();
+  }, [refreshConversations]);
 
   // Group by date
   const groups = groupByDate(conversations);
@@ -31,7 +34,11 @@ export default function ConversationSidebar() {
     <aside className="w-[260px] flex flex-col bg-[#1e1e2e] text-white h-full shadow-xl">
       {/* New Chat button */}
       <button
-        onClick={() => createNew()}
+        onClick={async () => {
+          const id = await createNew();
+          navigate(`/chat/${id}`);
+          toggleSidebar();
+        }}
         className="flex items-center gap-2 mx-3 mt-3 px-3 py-2.5 text-sm border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
       >
         <Plus className="w-4 h-4" /> 新对话
@@ -51,7 +58,7 @@ export default function ConversationSidebar() {
                   id={conv.id}
                   title={conv.title}
                   active={conv.id === activeId}
-                  onClick={() => setActive(conv.id)}
+                  onNavigate={() => toggleSidebar()}
                   onDelete={() => deleteOne(conv.id)}
                   onRename={(title) => renameOne(conv.id, title)}
                 />
@@ -70,17 +77,17 @@ export default function ConversationSidebar() {
 }
 
 function ConversationItem({
-  id: _id,
+  id,
   title,
   active,
-  onClick,
+  onNavigate,
   onDelete,
   onRename,
 }: {
   id: string;
   title: string;
   active: boolean;
-  onClick: () => void;
+  onNavigate: () => void;
   onDelete: () => void;
   onRename: (title: string) => void;
 }) {
@@ -93,9 +100,10 @@ function ConversationItem({
   };
 
   return (
-    <div
-      onClick={onClick}
-      className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+    <Link
+      to={`/chat/${id}`}
+      onClick={onNavigate}
+      className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors no-underline ${
         active
           ? "bg-white/15 text-white"
           : "text-white/70 hover:bg-white/8"
@@ -113,11 +121,11 @@ function ConversationItem({
             }}
             className="flex-1 bg-transparent border-b border-white/30 outline-none text-sm"
             autoFocus
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => e.preventDefault()}
           />
           <button
             onClick={(e) => {
-              e.stopPropagation();
+              e.preventDefault();
               handleSave();
             }}
           >
@@ -125,7 +133,7 @@ function ConversationItem({
           </button>
           <button
             onClick={(e) => {
-              e.stopPropagation();
+              e.preventDefault();
               setEditing(false);
             }}
           >
@@ -138,7 +146,7 @@ function ConversationItem({
           <div className="hidden group-hover:flex items-center gap-1">
             <button
               onClick={(e) => {
-                e.stopPropagation();
+                e.preventDefault();
                 setEditValue(title);
                 setEditing(true);
               }}
@@ -148,7 +156,7 @@ function ConversationItem({
             </button>
             <button
               onClick={(e) => {
-                e.stopPropagation();
+                e.preventDefault();
                 onDelete();
               }}
               className="p-0.5 hover:bg-white/20 rounded"
@@ -158,7 +166,7 @@ function ConversationItem({
           </div>
         </>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -177,6 +185,11 @@ function groupByDate(conversations: { created_at: string; title: string; id: str
 
   for (const conv of conversations) {
     const d = new Date(conv.created_at);
+    // Skip conversations with invalid dates — put them in "更早" as fallback
+    if (isNaN(d.getTime())) {
+      groups[3].items.push(conv);
+      continue;
+    }
     if (d >= today) groups[0].items.push(conv);
     else if (d >= yesterday) groups[1].items.push(conv);
     else if (d >= weekAgo) groups[2].items.push(conv);
