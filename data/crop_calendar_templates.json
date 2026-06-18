@@ -1,0 +1,77 @@
+{
+  "水稻": {
+    "type": "粮食作物",
+    "zones": {
+      "华南": {"sowing_window": "02-01~03-15", "seasons": 2},
+      "华中": {"sowing_window": "03-15~04-15", "seasons": 1},
+      "华北": {"sowing_window": "04-15~05-15", "seasons": 1},
+      "东北": {"sowing_window": "04-20~05-10", "seasons": 1}
+    },
+    "stage_offsets_days": [
+      {"name": "播种育秧", "offset": 0, "category": "播种", "note": "选用抗病品种，浸种消毒，催芽温度30-35℃"},
+      {"name": "移栽返青", "offset": 25, "category": "管理", "note": "保持浅水层3-5cm，促进返青，避免深水闷苗"},
+      {"name": "分蘖期追肥", "offset": 35, "category": "施肥", "note": "氮肥为主，配施钾肥，促进分蘖早生快发"},
+      {"name": "晒田控苗", "offset": 45, "category": "管理", "note": "排水晒田，控制无效分蘖，促进根系下扎"},
+      {"name": "病虫害高发期", "offset": 50, "category": "防虫", "note": "重点防稻飞虱、稻瘟病、纹枯病，适时喷药"},
+      {"name": "拔节孕穗期", "offset": 65, "category": "施肥", "note": "增施磷钾肥，控制氮肥用量，促进幼穗分化"},
+      {"name": "抽穗扬花期", "offset": 80, "category": "管理", "note": "保持浅水层，高温天气灌深水降温，辅助授粉"},
+      {"name": "灌浆结实期", "offset": 90, "category": "管理", "note": "干湿交替灌溉，防止早衰，养根保叶"},
+      {"name": "收获期", "offset": 110, "category": "收获", "note": "九成黄即可适时收割，避免过迟落粒损失"}
+    ]
+  },
+  "玉米": {
+    "type": "粮食作物",
+    "zones": {
+      "华南": {"sowing_window": "02-15~03-15", "seasons": 2},
+      "华中": {"sowing_window": "04-01~04-25", "seasons": 1},
+      "华北": {"sowing_window": "04-20~05-10", "seasons": 1},
+      "东北": {"sowing_window": "04-25~05-15", "seasons": 1}
+    },
+    "stage_offsets_days": [
+      {"name": "播种期", "offset": 0, "category": "播种", "note": "土壤温度稳定在10℃以上，墒情适宜时播种"},
+      {"name": "苗期管理", "offset": 15, "category": "管理", "note": "及时间苗补苗，3叶期间苗，5叶期定苗"},
+      {"name": "拔节期追肥", "offset": 35, "category": "施肥", "note": "重施氮肥，促进茎叶生长，每亩追尿素15-20kg"},
+      {"name": "大喇叭口期", "offset": 55, "category": "施肥", "note": "追施穗肥，决定穗粒数关键期，每亩追尿素10-15kg"},
+      {"name": "病虫害高发期", "offset": 60, "category": "防虫", "note": "重点防玉米螟、黏虫、蚜虫，大喇叭口期丢心叶"},
+      {"name": "抽雄吐丝期", "offset": 70, "category": "管理", "note": "需水临界期，保证充足水分，遇旱及时灌溉"},
+      {"name": "灌浆期", "offset": 85, "category": "管理", "note": "养根保叶，防止后期脱肥早衰"},
+      {"name": "收获期", "offset": 125, "category": "收获", "note": "苞叶变黄、籽粒变硬、黑层形成后收获"}
+    ]
+  },
+  "冬小麦": {
+    "type": "粮食作物",
+    "zones": {
+      "华中": {"sowing_window": "10-01~10-15", "seasons": 1},
+      "华北": {"sowing_window": "09-25~10-10", "seasons": 1}
+    },
+    "stage_offsets_days": [
+      {"name": "播种期", "offset": 0, "category": "播种", "note": "适墒播种，深度3-5cm，亩播量10-15kg"},
+      {"name": "越冬前管理", "offset": 50, "category": "管理", "note": "浇好越冬水，防旱防冻，促根增蘖"},
+      {"name": "返青期追肥", "offset": 150, "category": "施肥", "note": "返青后及时追施氮肥，每亩追尿素10-15kg"},
+      {"name": "起身期管理", "offset": 165, "category": "管理", "note": "化学除草，防治纹枯病"},
+      {"name": "拔节期追肥", "offset": 175, "category": "施肥", "note": "重施拔节肥，促进穗分化"},
+      {"name": "病虫害防治期", "offset": 180, "category": "防虫", "note": "重点防小麦蚜虫、白粉病、锈病"},
+      {"name": "抽穗扬花期", "offset": 195, "category": "管理", "note": "一喷三防：防虫防病防干热风"},
+      {"name": "灌浆期管理", "offset": 210, "category": "管理", "note": "防干热风，适时灌水，叶面喷肥"},
+      {"name": "收获期", "offset": 230, "category": "收获", "note": "蜡熟末期至完熟期收获，及时晾晒入库"}
+    ]
+  },
+  "番茄": {
+    "type": "蔬菜作物",
+    "zones": {
+      "华南": {"sowing_window": "01-15~02-15", "seasons": 2},
+      "华中": {"sowing_window": "02-01~03-01", "seasons": 1},
+      "华北": {"sowing_window": "03-01~04-01", "seasons": 1}
+    },
+    "stage_offsets_days": [
+      {"name": "育苗期", "offset": 0, "category": "播种", "note": "温床育苗，保持25-30℃，苗龄50-60天"},
+      {"name": "定植期", "offset": 55, "category": "播种", "note": "4-5片真叶时定植，亩栽2000-2500株"},
+      {"name": "缓苗期管理", "offset": 65, "category": "管理", "note": "浇缓苗水，中耕松土促根"},
+      {"name": "开花期追肥", "offset": 80, "category": "施肥", "note": "第一穗果坐住后追肥，高钾复合肥为主"},
+      {"name": "病虫害防治", "offset": 85, "category": "防虫", "note": "重点防早疫病、晚疫病、蚜虫、白粉虱"},
+      {"name": "盛果期管理", "offset": 100, "category": "施肥", "note": "每穗果膨大期追肥一次，保持土壤湿润"},
+      {"name": "整枝打杈", "offset": 90, "category": "管理", "note": "单干整枝或双干整枝，及时摘除侧芽"},
+      {"name": "收获期", "offset": 120, "category": "收获", "note": "果实转色后采收，分批采摘促进后续坐果"}
+    ]
+  }
+}

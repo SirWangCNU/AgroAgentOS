@@ -15,6 +15,9 @@ import ProgressSteps, {
   toProgressStep,
 } from "../components/chat/ProgressSteps";
 
+// 模块级 ref：跨组件卸载/重挂载保持状态，防止 navigate 导致 sendingRef 被重置
+const _globalSendingRef = { current: false };
+
 export default function Chat() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -53,7 +56,12 @@ export default function Chat() {
   useEffect(() => {
     if (!sessionId) {
       // Navigated to /chat (no session) — clear active so welcome screen shows
-      if (activeId) setActive(null);
+      // Bug fix: 不要在发送过程中清除 activeId
+      // createNew() 会在 navigate() 之前更新 store 中的 activeId，
+      // 此时 sessionId 还是 undefined，如果不加保护就会清掉刚设置的 activeId，
+      // 导致后续 addMessage 失败（addMessage 内部有 if (!activeId) return），
+      // 用户消息不显示也不持久化，最终触发了 loadMessages 出现"加载对话记录"
+      if (activeId && !_globalSendingRef.current) setActive(null);
       setLoadError(null);
       return;
     }
@@ -67,6 +75,10 @@ export default function Chat() {
     setLoadError(null);
 
     // Load messages if not already loaded
+    // Skip if we're mid-send: createNew() + addMessage() already populated the conversation
+    // 双重保护：模块级 ref + store 中的 isStreaming 状态
+    if (_globalSendingRef.current) return;
+    if (useConversationStore.getState().isStreaming) return;
     const conv = useConversationStore.getState().conversations.find((c) => c.id === sessionId);
     if (!conv || conv.messages.length === 0) {
       loadMessages(sessionId).catch((err) => {
@@ -88,14 +100,20 @@ export default function Chat() {
   }, [messages, liveProgress]);
 
   const handleSend = async (text: string, image?: File) => {
+    // Prevent double-send (e.g. rapid clicks or double Enter)
+    if (_globalSendingRef.current) return;
     let finalQuestion = text;
+
+    // Mark sending in progress BEFORE createNew() — createNew triggers a store
+    // update that re-renders the component and runs the useEffect. If the flag
+    // is set after createNew, the effect sees _globalSendingRef.current=false
+    // and calls loadMessages, which overwrites the user's first message.
+    _globalSendingRef.current = true;
 
     // Ensure we have an active conversation
     let convId = activeId;
     if (!convId) {
       convId = await createNew();
-      // Update URL so the conversation is bookmarkable
-      navigate(`/chat/${convId}`, { replace: true });
     }
 
     // Clear previous live state
@@ -114,7 +132,7 @@ export default function Chat() {
         } else {
           finalQuestion = `[图片分析] ${result.summary || "未识别到病虫害"}${text ? `\n用户说明: ${text}` : ""}`;
         }
-        addMessage({
+        await addMessage({
           role: "user",
           content: text || "(图片分析)",
           type: "image",
@@ -124,7 +142,15 @@ export default function Chat() {
         return;
       }
     } else {
-      addMessage({ role: "user", content: text });
+      await addMessage({ role: "user", content: text });
+    }
+
+    // Navigate AFTER addMessage — ensures user message is in the store before
+    // the URL change triggers a component remount (different route = unmount/remount).
+    // This prevents the "加载对话记录中..." flash where loadMessages overwrites
+    // the user's first message.
+    if (!activeId) {
+      navigate(`/chat/${convId}`, { replace: true });
     }
 
     setStreaming(true);
@@ -232,6 +258,7 @@ export default function Chat() {
     } catch (err: any) {
       showToast(`网络错误: ${err.message}`, "error");
     } finally {
+      _globalSendingRef.current = false;
       setStreaming(false);
     }
   };

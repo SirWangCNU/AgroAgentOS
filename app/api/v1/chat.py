@@ -18,6 +18,7 @@ from app.core.security import decode_access_token
 from app.schemas.chat import ChatRequest
 import app.services.chat_memory as chat_memory
 import app.services.rag_service as rag_service
+from app.services.session_service import session_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -68,6 +69,28 @@ async def chat_stream(
     user_id: Optional[int] = Depends(_get_optional_user_id),
 ) -> EventSourceResponse:
     logger.info(f"[chat] session={req.session_id}, user={user_id}, q={req.question[:60]}...")
+
+    # 兜底持久化 user 消息：避免前端 fire-and-forget POST 在 SSE 长连接占用
+    # 连接池时偶发丢失，导致 DB 里只有 assistant 消息没有对应的 user 消息。
+    # 只在该 session 还没有该条 user 消息时写（按内容去重，幂等）。
+    if user_id is not None and req.session_id and req.question:
+        try:
+            detail = session_service.get_session(req.session_id, user_id)
+            if detail is not None:
+                already_persisted = any(
+                    m.role == "user" and m.content == req.question
+                    for m in detail.messages
+                )
+                if not already_persisted:
+                    session_service.add_message(
+                        req.session_id, "user", req.question, image_url=None
+                    )
+                    logger.info(
+                        f"[chat] 兜底持久化 user 消息 session={req.session_id} len={len(req.question)}"
+                    )
+        except Exception as e:
+            # 持久化失败不阻塞 SSE 流（消息历史的 fallback 是前端自己 POST）
+            logger.warning(f"[chat] 兜底持久化 user 消息失败: {type(e).__name__}: {e}")
 
     async def event_generator() -> AsyncIterator[dict]:
         try:

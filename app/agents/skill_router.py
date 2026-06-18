@@ -93,6 +93,12 @@ _COLLABORATION_PATTERNS = [
         "description": "天气+种植协同: 例如 '明天适合播种吗'",
     },
     {
+        "skills": ["weather_advice", "crop_advisory"],
+        "keywords_a": ["天气", "温度", "降雨", "节气", "种植历", "霜冻", "干旱", "预警"],
+        "keywords_b": ["施肥", "灌溉", "播种", "追肥", "生长阶段", "管理", "浇水"],
+        "description": "天气+种植顾问协同: 例如 '现在施肥合适吗'、'节气到了要施肥吗'",
+    },
+    {
         "skills": ["pest_diagnosis", "agriculture_qa"],
         "keywords_a": ["病虫害", "虫害", "病害", "发黄", "枯萎", "烂根", "叶子"],
         "keywords_b": ["施肥", "浇水", "灌溉", "土壤", "肥料", "肥"],

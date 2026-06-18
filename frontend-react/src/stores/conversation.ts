@@ -38,7 +38,7 @@ interface ConversationState {
   deleteOne: (id: string) => Promise<void>;
   renameOne: (id: string, title: string) => Promise<void>;
   loadMessages: (id: string) => Promise<void>;
-  addMessage: (msg: ChatMessage) => void;
+  addMessage: (msg: ChatMessage) => Promise<void>;
   updateLastAssistant: (content: string) => void;
   setThinking: (content: string) => void;
   setStreaming: (v: boolean) => void;
@@ -83,13 +83,24 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     try {
       const sessions = await listSessions();
       set((s) => {
-        // Merge: keep already-loaded messages for existing conversations
-        const msgMap = new Map(s.conversations.map((c) => [c.id, c.messages]));
+        // Build map of existing local conversations to preserve their messages
+        const existingMap = new Map(s.conversations.map((c) => [c.id, c]));
+        const serverIds = new Set(sessions.map((sess) => sess.id));
         return {
-          conversations: sessions.map((session) => ({
-            ...session,
-            messages: msgMap.get(session.id) || [],
-          })),
+          conversations: [
+            // Server sessions (with local messages preserved if any)
+            ...sessions.map((session) => {
+              const existing = existingMap.get(session.id);
+              return {
+                ...session,
+                messages: existing?.messages ?? [],
+              };
+            }),
+            // Bug fix: 保留本地存在但服务器尚未返回的会话
+            // 这种情况通常发生在 listSessions 因时序问题没看到刚刚 createNew 的会话
+            // 如果不保留，本地新会话及其所有消息会被整体移除，导致 addMessage 找不到目标会话
+            ...s.conversations.filter((c) => !serverIds.has(c.id)),
+          ],
         };
       });
     } catch (err) {
@@ -141,13 +152,27 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         ...(m.image_url ? { imageUrl: m.image_url } : {}),
       }));
       set((s) => {
-        const exists = s.conversations.some((c) => c.id === id);
-        if (exists) {
-          // Update existing conversation
+        const existing = s.conversations.find((c) => c.id === id);
+        if (existing) {
+          // Bug fix: 更稳健的合并策略 —— 保留所有本地消息，用服务器消息补充本地没有的
+          // 之前的逻辑基于数量比较，可能在本地流式生成中错误覆盖本地用户消息
+          // 现在的逻辑：本地消息全保留，服务器消息中本地没有的（按 role + content 前缀匹配）追加到末尾
+          const existingKeys = new Set(
+            existing.messages.map(
+              (m) => `${m.role}:${(m.content || "").slice(0, 100)}`
+            )
+          );
+          const merged: ChatMessage[] = [...existing.messages];
+          for (const serverMsg of messages) {
+            const key = `${serverMsg.role}:${(serverMsg.content || "").slice(0, 100)}`;
+            if (!existingKeys.has(key)) {
+              merged.push(serverMsg);
+            }
+          }
           return {
             isLoadingMessages: false,
             conversations: s.conversations.map((c) =>
-              c.id === id ? { ...c, messages, title: detail.title } : c
+              c.id === id ? { ...c, messages: merged, title: detail.title } : c
             ),
           };
         }
@@ -174,18 +199,47 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
-  addMessage: (msg) => {
+  addMessage: async (msg) => {
     const { activeId } = get();
-    if (!activeId) return;
-    set((s) => ({
-      conversations: s.conversations.map((c) =>
-        c.id === activeId
-          ? { ...c, messages: [...c.messages, msg] }
-          : c
-      ),
-    }));
-    // Persist to backend
-    addSessionMessage(activeId, msg.role, msg.content).catch(() => {});
+    // 防御：如果 activeId 为空，记录警告而不是静默失败
+    // 这通常发生在 useEffect 时序问题中 —— createNew 更新了 activeId 但
+    // useEffect 在 navigate 完成前就运行了 setActive(null)
+    if (!activeId) {
+      console.warn(
+        "[conversation] addMessage called with no activeId, message dropped:",
+        msg
+      );
+      return;
+    }
+    // 本地 store 立即更新（乐观更新，UI 即时反馈）
+    // 注意：activeId 对应的会话必须已经在 store 里 —— createNew() 是唯一的入口
+    // 之前这里有个"会话不存在就新建"的防御分支，会和 refreshConversations 的时序
+    // 竞争产生同 id 的孤儿条目（sidebar 出现两条"新对话"），现已删除
+    set((s) => {
+      const conv = s.conversations.find((c) => c.id === activeId);
+      if (!conv) {
+        console.error(
+          "[conversation] activeId 对应的会话不在 store, 不修改状态以避免重复:",
+          activeId
+        );
+        return s;
+      }
+      return {
+        conversations: s.conversations.map((c) =>
+          c.id === activeId
+            ? { ...c, messages: [...c.messages, msg] }
+            : c
+        ),
+      };
+    });
+    // Persist to backend —— 必须 await
+    // 之前用 fire-and-forget 模式发出 POST，紧接着 chatStream 占用 HTTP 连接池，
+    // 导致 user 消息的 POST 偶发被 abort/丢弃，DB 里只有 assistant 消息没有 user 消息
+    try {
+      await addSessionMessage(activeId, msg.role, msg.content);
+    } catch (err) {
+      console.error("[conversation] addSessionMessage failed:", err);
+    }
     // Auto-title from first user message
     if (msg.role === "user") {
       const conv = get().conversations.find((c) => c.id === activeId);

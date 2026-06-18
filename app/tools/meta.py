@@ -122,6 +122,33 @@ TOOL_META: Dict[str, ToolMeta] = {
         search_hint="weather 天气 气温 湿度 降雨 农事",
     ),
 
+    # ===== 天气预报工具 =====
+    "get_weather_forecast": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        max_result_chars=5000,
+        risk_level="low",
+        search_hint="forecast 预报 预警 霜冻 暴雨 高温 干旱 7天",
+    ),
+
+    # ===== 节气提醒工具 =====
+    "solar_term_reminder": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        max_result_chars=4000,
+        risk_level="low",
+        search_hint="solar term 节气 农时 二十四节气 农事提醒",
+    ),
+
+    # ===== 种植历工具 =====
+    "generate_planting_calendar": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        max_result_chars=6000,
+        risk_level="low",
+        search_hint="calendar 种植历 种植计划 全年安排 播种期",
+    ),
+
     # ===== 联网搜索 =====
     "web_search": ToolMeta(
         read_only=True,

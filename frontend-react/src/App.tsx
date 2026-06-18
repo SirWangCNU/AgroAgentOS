@@ -27,7 +27,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<AppLayout />}>
-            {/* Main chat interface */}
+            {/* Main chat interface — single route with optional param to avoid
+                unmount/remount when navigating from /chat to /chat/:sessionId */}
             <Route index element={<Chat />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:sessionId" element={<Chat />} />

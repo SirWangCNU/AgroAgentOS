@@ -65,6 +65,35 @@ class WeatherResult:
     source: str = "mock"
 
 
+@dataclass
+class DailyForecastDetail:
+    """详细日预报 (支持 7 天, 用于风险分析)."""
+    date: str
+    min_temp: float
+    max_temp: float
+    precipitation_mm: float = 0.0
+    condition: str = "多云"
+    wind_level: int = 0
+
+
+@dataclass
+class WeatherAlert:
+    """极端天气预警."""
+    alert_type: str   # 霜冻/暴雨/高温/干旱
+    date: str
+    severity: str     # 高/中/低
+    advice: str
+
+
+@dataclass
+class WeatherForecastResult:
+    """7 天天气预报 + 预警."""
+    location: str
+    daily: List[DailyForecastDetail] = field(default_factory=list)
+    alerts: List[WeatherAlert] = field(default_factory=list)
+    source: str = "mock"
+
+
 # ============================================================
 # 农业建议规则引擎
 # ============================================================
@@ -139,6 +168,32 @@ MOCK_FORECAST: List[Dict[str, Any]] = [
     {"date": "大后天", "temp_high": 27, "temp_low": 19, "condition": "阴", "rain": 40, "wind_level": 2},
 ]
 
+MOCK_FORECAST_7D: List[Dict[str, Any]] = [
+    {"date": "2026-06-15", "temp_high": 30, "temp_low": 22, "condition": "多云", "precip": 0, "wind_level": 3},
+    {"date": "2026-06-16", "temp_high": 28, "temp_low": 20, "condition": "小雨", "precip": 15, "wind_level": 2},
+    {"date": "2026-06-17", "temp_high": 27, "temp_low": 19, "condition": "阴", "precip": 5, "wind_level": 2},
+    {"date": "2026-06-18", "temp_high": 32, "temp_low": 23, "condition": "晴", "precip": 0, "wind_level": 2},
+    {"date": "2026-06-19", "temp_high": 34, "temp_low": 25, "condition": "晴", "precip": 0, "wind_level": 3},
+    {"date": "2026-06-20", "temp_high": 31, "temp_low": 24, "condition": "多云", "precip": 0, "wind_level": 2},
+    {"date": "2026-06-21", "temp_high": 29, "temp_low": 21, "condition": "小雨", "precip": 10, "wind_level": 2},
+]
+
+
+def _parse_wind_scale(scale_str: str) -> int:
+    """解析风力等级, 处理 '1-3' 这样的范围格式."""
+    try:
+        if "-" in str(scale_str):
+            return int(str(scale_str).split("-")[-1])
+        return int(scale_str)
+    except (ValueError, TypeError):
+        return 2
+
+
+def _analyze_weather_risks(forecast: List[DailyForecastDetail], crop: str | None = None) -> List[WeatherAlert]:
+    """根据预报数据计算极端天气预警."""
+    from app.tools.weather_risk import analyze_weather_risks as _analyze
+    return _analyze(forecast, crop)
+
 
 def _build_mock_result(location: str) -> WeatherResult:
     """构建 Mock 天气结果."""
@@ -170,6 +225,28 @@ def _build_mock_result(location: str) -> WeatherResult:
     ]
     advice = generate_agriculture_advice(current, forecast)
     return WeatherResult(current=current, forecast=forecast, agriculture_advice=advice, source="mock")
+
+
+def _build_mock_forecast_result(location: str) -> WeatherForecastResult:
+    """构建 Mock 7 天预报结果."""
+    daily = []
+    for d in MOCK_FORECAST_7D:
+        daily.append(DailyForecastDetail(
+            date=d["date"],
+            min_temp=d["temp_low"],
+            max_temp=d["temp_high"],
+            precipitation_mm=d.get("precip", 0),
+            condition=d["condition"],
+            wind_level=d["wind_level"],
+        ))
+
+    alerts = _analyze_weather_risks(daily)
+    return WeatherForecastResult(
+        location=location,
+        daily=daily,
+        alerts=alerts,
+        source="mock",
+    )
 
 
 # ============================================================
@@ -279,7 +356,7 @@ class QWeatherClient:
         return None
 
     async def get_forecast(self, location_id: str, days: int = 3) -> List[Dict[str, Any]]:
-        """获取天气预报."""
+        """获取天气预报 (3天)."""
         client = await self._get_client()
         try:
             resp = await client.get(
@@ -292,6 +369,22 @@ class QWeatherClient:
                 return data.get("daily", [])[:days]
         except Exception as e:
             logger.warning(f"[QWeather] 天气预报查询失败: {e}")
+        return []
+
+    async def get_forecast_7d(self, location_id: str) -> List[Dict[str, Any]]:
+        """获取 7 天天气预报."""
+        client = await self._get_client()
+        try:
+            resp = await client.get(
+                f"{self.BASE_URL}/weather/7d",
+                params={"location": location_id, "key": self._api_key, "lang": "zh"},
+            )
+            import json
+            data = json.loads(resp.content.decode("utf-8"))
+            if data.get("code") == "200":
+                return data.get("daily", [])
+        except Exception as e:
+            logger.warning(f"[QWeather] 7天预报查询失败: {e}")
         return []
 
 
@@ -339,6 +432,58 @@ class WeatherService:
 
         return _build_mock_result(location)
 
+    async def get_forecast_with_alerts(self, location: str, days: int = 7) -> WeatherForecastResult:
+        """获取天气预报 + 极端天气预警 (带缓存)."""
+        cache_key = f"forecast_{location.strip()}_{days}"
+        cached = await _cache.get(cache_key)
+        if cached and isinstance(cached, WeatherForecastResult):
+            logger.debug(f"[WeatherService] 预报缓存命中: {location}")
+            return cached
+
+        result = await self._fetch_forecast_with_alerts(location, days)
+        await _cache.set(cache_key, result)
+        return result
+
+    async def _fetch_forecast_with_alerts(self, location: str, days: int = 7) -> WeatherForecastResult:
+        """从 API 或 Mock 获取 7 天预报 + 预警."""
+        if self._qweather:
+            try:
+                return await self._fetch_qweather_forecast(location, days)
+            except Exception as e:
+                logger.warning(f"[WeatherService] 7天预报 API 失败, 回退 Mock: {e}")
+
+        return _build_mock_forecast_result(location)
+
+    async def _fetch_qweather_forecast(self, location: str, days: int = 7) -> WeatherForecastResult:
+        """从和风天气获取 7 天预报."""
+        location_id = await self._qweather._get_location_id(location)
+        if not location_id:
+            logger.warning(f"[QWeather] 未找到城市: {location}, 回退 Mock")
+            return _build_mock_forecast_result(location)
+
+        forecast_data = await self._qweather.get_forecast_7d(location_id)
+        if not forecast_data:
+            return _build_mock_forecast_result(location)
+
+        daily = []
+        for day in forecast_data:
+            daily.append(DailyForecastDetail(
+                date=day.get("fxDate", ""),
+                min_temp=float(day.get("tempMin", 15)),
+                max_temp=float(day.get("tempMax", 30)),
+                precipitation_mm=float(day.get("precip", 0)),
+                condition=day.get("textDay", "多云"),
+                wind_level=_parse_wind_scale(day.get("windScaleDay", "2")),
+            ))
+
+        alerts = _analyze_weather_risks(daily)
+        return WeatherForecastResult(
+            location=location,
+            daily=daily[:days],
+            alerts=alerts,
+            source="qweather",
+        )
+
     async def _fetch_qweather(self, location: str) -> WeatherResult:
         """从和风天气 API 获取数据."""
         location_id = await self._qweather._get_location_id(location)
@@ -368,16 +513,6 @@ class WeatherService:
             update_time=now_data.get("obsTime", ""),
         )
 
-        def parse_wind_scale(scale_str: str) -> int:
-            """解析风力等级，处理 '1-3' 这样的范围格式."""
-            try:
-                if "-" in str(scale_str):
-                    # 取范围的最大值
-                    return int(str(scale_str).split("-")[-1])
-                return int(scale_str)
-            except (ValueError, TypeError):
-                return 2
-
         forecast = []
         for day in forecast_data:
             forecast.append(ForecastDay(
@@ -388,7 +523,7 @@ class WeatherService:
                 condition_day=day.get("textDay", ""),
                 condition_night=day.get("textNight", ""),
                 rain_probability=int(float(day.get("precip", 0))),
-                wind_level=parse_wind_scale(day.get("windScaleDay", "2")),
+                wind_level=_parse_wind_scale(day.get("windScaleDay", "2")),
             ))
 
         advice = generate_agriculture_advice(current, forecast)

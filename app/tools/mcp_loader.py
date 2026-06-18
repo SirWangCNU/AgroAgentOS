@@ -15,9 +15,10 @@ from langchain_core.tools import BaseTool
 from loguru import logger
 
 from app.core.mcp_client import mcp_client_manager
+from app.tools.calendar_tools import generate_planting_calendar, solar_term_reminder
 from app.tools.knowledge_tool import search_knowledge_base
 from app.tools.time_tool import get_current_time
-from app.tools.weather_tool import get_weather
+from app.tools.weather_tool import get_weather, get_weather_forecast
 
 
 def get_local_tools() -> List[BaseTool]:
@@ -27,11 +28,17 @@ def get_local_tools() -> List[BaseTool]:
     - search_knowledge_base: 知识库检索
     - get_current_time: 获取当前时间
     - get_weather: 天气查询与农业建议
+    - get_weather_forecast: 7天天气预报与极端天气预警
+    - solar_term_reminder: 节气农事提醒
+    - generate_planting_calendar: 全年种植历生成
     """
     return [
         search_knowledge_base,
         get_current_time,
         get_weather,
+        get_weather_forecast,
+        solar_term_reminder,
+        generate_planting_calendar,
     ]
 
 
