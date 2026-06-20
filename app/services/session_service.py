@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Optional
 
@@ -19,6 +20,47 @@ from app.schemas.session import (
 )
 
 
+# ============================================================
+# 进程内 TTL 缓存 (减少 DB IO, 避免 StaticPool 串行阻塞)
+# ============================================================
+
+class _TTLCache:
+    """简单 TTL 缓存."""
+
+    def __init__(self, ttl_seconds: int = 30) -> None:
+        self._ttl = ttl_seconds
+        self._store: dict[str, tuple[float, object]] = {}
+
+    def get(self, key: str) -> Optional[object]:
+        entry = self._store.get(key)
+        if entry and (time.time() - entry[0]) < self._ttl:
+            return entry[1]
+        return None
+
+    def set(self, key: str, value: object) -> None:
+        self._store[key] = (time.time(), value)
+
+    def invalidate(self, prefix: str = "") -> None:
+        """失效指定前缀的缓存 (创建/删除会话时调用)."""
+        if not prefix:
+            self._store.clear()
+        else:
+            keys = [k for k in self._store if k.startswith(prefix)]
+            for k in keys:
+                del self._store[k]
+
+
+# 缓存: list_sessions 5s, get_session 30s (对话消息更新频率低)
+_list_cache = _TTLCache(ttl_seconds=5)
+_detail_cache = _TTLCache(ttl_seconds=30)
+
+
+def _invalidate_session_caches() -> None:
+    """会话变更时调用, 清除相关缓存."""
+    _list_cache.invalidate()
+    _detail_cache.invalidate()
+
+
 class SessionService:
     """对话会话管理服务."""
 
@@ -33,48 +75,87 @@ class SessionService:
             )
             sess.add(session)
             sess.flush()
-            return SessionOut(
+            result = SessionOut(
                 id=session.session_id,
                 title=session.title,
                 created_at=session.created_at,
                 updated_at=session.updated_at,
                 message_count=0,
             )
+        # Bug 修复: 创建/更新/删除会话时失效缓存, 避免脏数据
+        _invalidate_session_caches()
+        return result
 
     def list_sessions(
         self, user_id: int, page: int = 1, page_size: int = 50
     ) -> SessionListOut:
-        """获取用户会话列表."""
+        """获取用户会话列表.
+
+        Bug 修复: 之前是 N+1 查询 (每个 session 一次 count), 用户有 50 个对话时触发 51 次 SQL.
+        现在用 LEFT JOIN + GROUP BY 子查询一次完成, 性能提升数十倍.
+        加 5s 进程内缓存, 避免重复请求 StaticPool 单连接的 SQLite 阻塞.
+        """
+        cache_key = f"list:{user_id}:{page}:{page_size}"
+        cached = _list_cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"[sessions] list 缓存命中: {cache_key}")
+            return cached  # type: ignore[return-value]
+
         with sqlite_manager.session() as sess:
+            # 子查询: 按 session_id GROUP BY 一次性计算每个会话的消息数
+            msg_count_subq = (
+                sess.query(
+                    ChatSessionMessage.session_id.label("session_id"),
+                    func.count(ChatSessionMessage.id).label("msg_count"),
+                )
+                .group_by(ChatSessionMessage.session_id)
+                .subquery()
+            )
+
+            # 主查询: LEFT JOIN 子查询, 单次查完所有数据
             query = (
-                sess.query(ChatSession)
+                sess.query(
+                    ChatSession,
+                    func.coalesce(msg_count_subq.c.msg_count, 0).label("msg_count"),
+                )
+                .outerjoin(
+                    msg_count_subq,
+                    ChatSession.session_id == msg_count_subq.c.session_id,
+                )
                 .filter(ChatSession.user_id == str(user_id))
                 .order_by(ChatSession.updated_at.desc())
             )
             total = query.count()
-            sessions = query.offset((page - 1) * page_size).limit(page_size).all()
+            rows = query.offset((page - 1) * page_size).limit(page_size).all()
 
-            result = []
-            for s in sessions:
-                msg_count = (
-                    sess.query(func.count(ChatSessionMessage.id))
-                    .filter(ChatSessionMessage.session_id == s.session_id)
-                    .scalar()
-                    or 0
-                )
-                result.append(
+            result = SessionListOut(
+                sessions=[
                     SessionOut(
                         id=s.session_id,
                         title=s.title,
                         created_at=s.created_at,
                         updated_at=s.updated_at,
-                        message_count=msg_count,
+                        message_count=msg_count or 0,
                     )
-                )
-            return SessionListOut(sessions=result, total=total)
+                    for s, msg_count in rows
+                ],
+                total=total,
+            )
+        _list_cache.set(cache_key, result)
+        return result
 
     def get_session(self, session_uuid: str, user_id: int) -> Optional[SessionDetailOut]:
-        """获取会话详情 (含消息)."""
+        """获取会话详情 (含消息).
+
+        加 30s 进程内缓存, 避免进入对话时重复查 DB.
+        StaticPool 单连接模式下, 高频 fetch 会让所有请求串行阻塞.
+        """
+        cache_key = f"detail:{user_id}:{session_uuid}"
+        cached = _detail_cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"[sessions] detail 缓存命中: {cache_key}")
+            return cached  # type: ignore[return-value]
+
         with sqlite_manager.session() as sess:
             session = (
                 sess.query(ChatSession)
@@ -94,7 +175,7 @@ class SessionService:
                 .all()
             )
 
-            return SessionDetailOut(
+            result = SessionDetailOut(
                 id=session.session_id,
                 title=session.title,
                 created_at=session.created_at,
@@ -110,6 +191,8 @@ class SessionService:
                     for m in messages
                 ],
             )
+        _detail_cache.set(cache_key, result)
+        return result
 
     def update_session(
         self, session_uuid: str, user_id: int, data
@@ -127,7 +210,9 @@ class SessionService:
             if not session:
                 return False
             session.title = data.title
-            return True
+        # Bug 修复: 更新后失效缓存
+        _invalidate_session_caches()
+        return True
 
     def delete_session(self, session_uuid: str, user_id: int) -> bool:
         """删除会话."""
@@ -147,13 +232,12 @@ class SessionService:
                 ChatSessionMessage.session_id == session.session_id
             ).delete()
             sess.delete(session)
-            return True
+        # Bug 修复: 删除后失效缓存
+        _invalidate_session_caches()
+        return True
 
     def add_message(
-        self,
-        session_uuid: str,
-        role: str,
-        content: str,
+        self, session_uuid: str, role: str, content: str,
         image_url: Optional[str] = None,
     ) -> MessageOut:
         """向会话添加消息."""
@@ -174,13 +258,16 @@ class SessionService:
             sess.add(msg)
             sess.flush()
 
-            return MessageOut(
+            result = MessageOut(
                 id=msg.id,
                 role=msg.role,
                 content=msg.content,
                 image_url=msg.image_url,
                 created_at=msg.created_at,
             )
+        # Bug 修复: 写入新消息后失效缓存, 否则 get_session 返回旧数据
+        _invalidate_session_caches()
+        return result
 
     def auto_title_from_message(self, session_uuid: str, content: str) -> None:
         """用第一条用户消息自动设置会话标题."""
@@ -193,6 +280,8 @@ class SessionService:
             ).first()
             if session and session.title == "新对话":
                 session.title = title
+        # Bug 修复: 标题更新后失效缓存
+        _invalidate_session_caches()
 
 
 session_service = SessionService()

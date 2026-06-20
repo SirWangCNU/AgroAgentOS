@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -23,7 +23,13 @@ export default function ConversationSidebar() {
     renameOne,
   } = useConversationStore();
 
+  // Bug 修复: 组件 mount 时拉取列表, 但短时间内重复 mount (如路由切换/刷新) 会重复请求.
+  // 用 useRef 记录上次 fetch 时间, 3s 内的重复请求直接跳过.
+  const lastFetchRef = useRef<number>(0);
   useEffect(() => {
+    const now = Date.now();
+    if (now - lastFetchRef.current < 3000) return;
+    lastFetchRef.current = now;
     refreshConversations();
   }, [refreshConversations]);
 

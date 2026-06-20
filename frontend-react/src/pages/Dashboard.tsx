@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Sprout,
   ArrowRight,
+  TrendingUp,
 } from "lucide-react";
 import { useAuthStore } from "../stores/auth";
 import { useHealthStore } from "../stores/health";
@@ -60,6 +61,14 @@ const TOOLS = [
     path: "/workspace/pest",
     color: "text-accent-red",
     bg: "bg-accent-red/10",
+  },
+  {
+    icon: TrendingUp,
+    label: "市场行情",
+    desc: "价格、供需、政策补贴与销售建议",
+    path: "/workspace/market",
+    color: "text-accent-green",
+    bg: "bg-accent-green/10",
   },
   {
     icon: MessageSquare,

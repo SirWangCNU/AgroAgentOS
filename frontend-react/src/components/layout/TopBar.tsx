@@ -13,6 +13,7 @@ import {
   Users,
   Leaf,
   MessageSquare,
+  TrendingUp,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
@@ -24,6 +25,7 @@ const WORKSPACE_ITEMS = [
   { icon: BookOpen, label: "智能体技能和知识库", path: "/workspace/knowledge" },
   { icon: Megaphone, label: "营销生成", path: "/workspace/marketing" },
   { icon: Bug, label: "病虫害诊断", path: "/workspace/pest" },
+  { icon: TrendingUp, label: "市场行情", path: "/workspace/market" },
   { icon: Users, label: "用户管理", path: "/workspace/users", adminOnly: true },
 ];
 

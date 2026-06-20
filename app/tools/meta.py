@@ -159,6 +159,36 @@ TOOL_META: Dict[str, ToolMeta] = {
         search_hint="web search internet 联网 搜索 农业资料",
     ),
 
+    # ===== 市场行情工具 =====
+    "get_market_price": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        max_result_chars=6000,
+        risk_level="low",
+        search_hint="market price 价格 行情 农产品 批发价",
+    ),
+    "get_supply_demand": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        max_result_chars=4000,
+        risk_level="low",
+        search_hint="supply demand 供需 产量 库存 进出口",
+    ),
+    "get_policy_subsidies": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        max_result_chars=6000,
+        risk_level="low",
+        search_hint="policy subsidy 政策 补贴 惠农 申报",
+    ),
+    "get_market_analysis": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        max_result_chars=8000,
+        risk_level="low",
+        search_hint="analysis 预测 建议 销售 走势",
+    ),
+
     # ===== Lazy MCP 元工具 =====
     "mcp_search_tools": ToolMeta(
         read_only=True,

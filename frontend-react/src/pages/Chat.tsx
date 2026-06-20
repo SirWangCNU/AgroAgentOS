@@ -23,6 +23,11 @@ export default function Chat() {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bug 修复: 记录已加载的 sessionId, 防止 useEffect 因 activeId 变化重复触发 loadMessages
+  // 之前的问题: setActive(sessionId) 触发 store 更新 → 组件 re-render → useEffect 依赖 [sessionId, activeId]
+  // 重跑, 但此时 conv.find 仍找不到 (loadMessages 还在进行中), 会再次调用 loadMessages.
+  // 这浪费网络请求, 且 isLoadingMessages 反复被设为 true, UI 卡在 "加载对话记录中..." 状态.
+  const loadedSessionRef = useRef<Set<string>>(new Set());
 
   const {
     activeId,
@@ -79,22 +84,53 @@ export default function Chat() {
     // 双重保护：模块级 ref + store 中的 isStreaming 状态
     if (_globalSendingRef.current) return;
     if (useConversationStore.getState().isStreaming) return;
+    // Bug 修复: 已加载过该 sessionId 则跳过, 避免 setActive 触发的二次调用
+    if (loadedSessionRef.current.has(sessionId)) return;
     const conv = useConversationStore.getState().conversations.find((c) => c.id === sessionId);
     if (!conv || conv.messages.length === 0) {
-      loadMessages(sessionId).catch((err) => {
-        const message = err?.status === 404
-          ? "对话不存在或已被删除"
-          : `加载对话失败: ${err?.message || "未知错误"}`;
+      loadedSessionRef.current.add(sessionId);
+      // Bug 修复: 包装 loadMessages 带超时, 避免后端慢/挂起时永远卡在 "加载对话记录中..."
+      // 之前如果 getSession 端点慢/超时, isLoadingMessages 一直 true, 用户卡在 loading 状态
+      // Bug 修复: 超时从 8s 缩短到 4s. 后端有 TTL 缓存 + LEFT JOIN 优化, 正常请求 < 100ms,
+      // 4s 内未返回基本可以判定为后端异常, 立即兜底让用户看到内容.
+      const timeoutPromise = new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), 4000)
+      );
+      Promise.race([
+        loadMessages(sessionId).then(() => "ok" as const),
+        timeoutPromise,
+      ]).then((result) => {
+        if (result === "timeout") {
+          // 超时兜底: 强制结束 loading 状态, 让用户看到内容(可能是空对话的 welcome 页面)
+          // 如果 store 中已有 stub (AppLayout 预加载的), 用户会看到空对话的 welcome 页面;
+          // 如果 store 仍为空 (冷启动且 list 加载失败), 强制清空 isLoadingMessages 让 Chat 渲染欢迎页.
+          loadedSessionRef.current.delete(sessionId);
+          useConversationStore.setState({ isLoadingMessages: false });
+        }
+      }).catch((err) => {
+        // 失败时清除标记, 允许重试
+        loadedSessionRef.current.delete(sessionId);
+        // 404 (会话不存在) 静默处理, 不弹错误 —— 用户可能刷新到一个旧链接,
+        // 强制清空 loading 让 Chat 渲染 welcome 页面, 体验更平滑
+        if (err?.status === 404) {
+          useConversationStore.setState({ isLoadingMessages: false });
+          return;
+        }
+        const message = `加载对话失败: ${err?.message || "未知错误"}`;
         setLoadError(message);
       });
+    } else {
+      // store 已有消息也标记为已加载
+      loadedSessionRef.current.add(sessionId);
     }
   }, [sessionId, activeId]);
 
-  // Auto-scroll on new messages or progress updates
+  // 当前激活会话 (从 store 取, 避免组件渲染时再次 fetch)
   const conversation = activeConversation();
   const messages = conversation?.messages || [];
   const lastMsg = messages[messages.length - 1];
 
+  // Auto-scroll on new messages or progress updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, liveProgress]);
@@ -272,8 +308,14 @@ export default function Chat() {
     handleSend(text);
   };
 
-  // Show loading state while fetching messages for a conversation
-  if (sessionId && isLoadingMessages) {
+  // Show loading state only when fetching messages for a conversation that
+  // isn't even in the store yet (e.g. cold start, list still loading).
+  // If AppLayout eagerly preloaded conversations, we already have a stub
+  // here — render the chat shell immediately and let loadMessages fill in
+  // messages silently in the background. This avoids the "stuck on loading"
+  // flash when the backend is slow on first hit.
+  const hasStub = !!conversation;
+  if (sessionId && isLoadingMessages && !hasStub) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="flex items-center gap-2 text-text-muted text-sm">

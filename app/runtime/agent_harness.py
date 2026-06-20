@@ -64,6 +64,7 @@ class AgentHarness:
    - 天气/温度/降雨/风速/气象 → weather_advice
    - 病虫害/打药/农药/虫害/病害 → pest_diagnosis
    - 营销/广告/文案/销售/推广 → marketing_generator
+   - 价格/行情/市场/报价/供需/补贴/政策/走势 → market_intelligence
    - 知识库/查资料/检索/文档 → knowledge_retrieval
    - 其它无法归类 → generic_oncall
 

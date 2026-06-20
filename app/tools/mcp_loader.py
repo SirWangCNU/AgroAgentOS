@@ -17,6 +17,12 @@ from loguru import logger
 from app.core.mcp_client import mcp_client_manager
 from app.tools.calendar_tools import generate_planting_calendar, solar_term_reminder
 from app.tools.knowledge_tool import search_knowledge_base
+from app.tools.market_tool import (
+    get_market_analysis,
+    get_market_price,
+    get_policy_subsidies,
+    get_supply_demand,
+)
 from app.tools.time_tool import get_current_time
 from app.tools.weather_tool import get_weather, get_weather_forecast
 
@@ -31,6 +37,10 @@ def get_local_tools() -> List[BaseTool]:
     - get_weather_forecast: 7天天气预报与极端天气预警
     - solar_term_reminder: 节气农事提醒
     - generate_planting_calendar: 全年种植历生成
+    - get_market_price: 农产品市场价格查询
+    - get_supply_demand: 农产品供需分析
+    - get_policy_subsidies: 农业政策补贴查询
+    - get_market_analysis: 市场综合分析 (价格预测+销售建议)
     """
     return [
         search_knowledge_base,
@@ -39,6 +49,10 @@ def get_local_tools() -> List[BaseTool]:
         get_weather_forecast,
         solar_term_reminder,
         generate_planting_calendar,
+        get_market_price,
+        get_supply_demand,
+        get_policy_subsidies,
+        get_market_analysis,
     ]
 
 

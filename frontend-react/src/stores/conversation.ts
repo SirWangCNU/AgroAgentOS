@@ -192,10 +192,37 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           ],
         };
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load messages:", err);
+      // Bug 修复: 404 (会话不存在/已删除) 时不抛错, 改为写入一个空 stub
+      // 之前: 抛错 → Chat 组件显示 "对话不存在或已被删除" 整页错误, 用户体验差
+      // 现在: 写入一个空消息的 stub → Chat 渲染 welcome 页面 + ChatInput, 用户可立即开始新对话
+      if (err?.status === 404) {
+        set((s) => {
+          const exists = s.conversations.find((c) => c.id === id);
+          if (exists) {
+            return { isLoadingMessages: false };
+          }
+          // 写入一个空 stub, 用 sessionId 作为标题, 用户可以基于此继续对话
+          return {
+            isLoadingMessages: false,
+            conversations: [
+              {
+                id,
+                title: "新对话",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                message_count: 0,
+                messages: [],
+              },
+              ...s.conversations,
+            ],
+          };
+        });
+        return; // 不再 re-throw, 让 Chat 走欢迎页分支
+      }
       set({ isLoadingMessages: false });
-      throw err; // Re-throw so the caller can handle the error
+      throw err; // 其他错误继续向上抛, 让 Chat 显示错误信息
     }
   },
 
