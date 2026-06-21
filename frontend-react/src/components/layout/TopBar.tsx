@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
+import WeatherBadge from "./WeatherBadge";
 
 const WORKSPACE_ITEMS = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/workspace" },
@@ -131,6 +132,9 @@ export default function TopBar() {
             </div>
           )}
         </div>
+
+        {/* Weather badge */}
+        <WeatherBadge />
 
         {/* Divider */}
         <div className="w-px h-5 bg-border mx-1" />
