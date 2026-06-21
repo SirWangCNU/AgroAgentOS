@@ -657,6 +657,38 @@ class SQLiteManager:
             )
 
 
+class VideoTask(Base):
+    """视频生成任务表."""
+
+    __tablename__ = "video_tasks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(String(128), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    prompt = Column(Text, nullable=False)
+    image_url = Column(String(512), nullable=True)
+    model = Column(String(128), nullable=True)
+    status = Column(String(32), nullable=False, default="pending")
+    video_url = Column(String(1024), nullable=True)
+    error_message = Column(Text, nullable=True)
+    duration = Column(Float, nullable=True)
+    extra_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+
+    @property
+    def extra(self) -> dict[str, Any]:
+        if not self.extra_json:
+            return {}
+        try:
+            return json.loads(self.extra_json)
+        except Exception:
+            return {}
+
+    def set_extra(self, data: dict[str, Any]) -> None:
+        self.extra_json = json.dumps(data, ensure_ascii=False, default=str)
+
+
 # 向后兼容: 保留 SQLiteManager 类，但 sqlite_manager 单例使用统一的 DatabaseManager
 # 新代码建议使用: from app.core.database import database_manager
 

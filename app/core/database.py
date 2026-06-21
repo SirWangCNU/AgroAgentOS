@@ -37,6 +37,7 @@ from app.core.sqlite import (
     HistoryRecord,
     MarketingTask,
     PestDiagnosis,
+    VideoTask,
     WeatherQuery,
 )
 

@@ -151,3 +151,17 @@ class AgentExecutionError(ServiceError):
 
     code = "AGENT_EXECUTION_ERROR"
     message = "智能体执行失败"
+
+
+class VideoGenerationError(ServiceError):
+    """视频生成错误."""
+
+    code = "VIDEO_GENERATION_ERROR"
+    message = "视频生成失败"
+
+
+class VideoTaskNotFoundError(NotFoundError):
+    """视频任务不存在."""
+
+    code = "VIDEO_TASK_NOT_FOUND"
+    message = "视频任务不存在"

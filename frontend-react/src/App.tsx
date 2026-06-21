@@ -10,6 +10,7 @@ import Knowledge from "./pages/Knowledge";
 import Marketing from "./pages/Marketing";
 import PestDiagnosis from "./pages/PestDiagnosis";
 import MarketPrice from "./pages/MarketPrice";
+import VideoGen from "./pages/VideoGen";
 import Users from "./pages/Users";
 
 const queryClient = new QueryClient({
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/workspace/marketing" element={<Marketing />} />
             <Route path="/workspace/pest" element={<PestDiagnosis />} />
             <Route path="/workspace/market" element={<MarketPrice />} />
+            <Route path="/workspace/video" element={<VideoGen />} />
             <Route path="/workspace/users" element={<Users />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CloudSun,
@@ -8,26 +8,102 @@ import {
   Thermometer,
   Search,
   Wheat,
+  MapPin,
+  Loader2,
 } from "lucide-react";
-import { getWeather } from "../api/weather";
+import {
+  getWeather,
+  getWeatherByLocation,
+  getWeatherLocationConfig,
+} from "../api/weather";
 import WorkspaceLayout from "../components/layout/WorkspaceLayout";
 import StatCard from "../components/ui/StatCard";
 import LoadingGrid from "../components/ui/LoadingGrid";
+import type { WeatherData } from "../types/weather";
+
+type WeatherQuery =
+  | { type: "city"; city: string }
+  | { type: "location"; lat: number; lon: number };
 
 export default function Weather() {
-  const [city, setCity] = useState("北京");
   const [inputCity, setInputCity] = useState("北京");
+  const [weatherQuery, setWeatherQuery] = useState<WeatherQuery>({
+    type: "city",
+    city: "北京",
+  });
+  const [locationStatus, setLocationStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
 
-  const { data: weather, isLoading } = useQuery({
-    queryKey: ["weather", city],
-    queryFn: () => getWeather(city),
+  const { data: config } = useQuery({
+    queryKey: ["weather-location-config"],
+    queryFn: getWeatherLocationConfig,
+    staleTime: Infinity,
+  });
+
+  const { data: weather, isLoading } = useQuery<WeatherData>({
+    queryKey: ["weather", weatherQuery],
+    queryFn: () => {
+      if (weatherQuery.type === "location") {
+        return getWeatherByLocation(weatherQuery.lat, weatherQuery.lon);
+      }
+      return getWeather(weatherQuery.city);
+    },
     staleTime: 5 * 60 * 1000,
   });
 
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      return;
+    }
+
+    setLocationStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        setWeatherQuery({ type: "location", lat, lon });
+        setLocationStatus("success");
+      },
+      () => {
+        setLocationStatus("error");
+      },
+      {
+        enableHighAccuracy: config?.high_accuracy ?? false,
+        timeout: config?.timeout_ms ?? 10000,
+        maximumAge: 60 * 1000,
+      }
+    );
+  }, [config?.high_accuracy, config?.timeout_ms]);
+
+  useEffect(() => {
+    if (!config || !config.location_enabled) return;
+    // 自动定位：浏览器 geolocation 为一次性异步回调，需通过 effect 启动
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    requestLocation();
+  }, [config, requestLocation]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputCity.trim()) setCity(inputCity.trim());
+    const trimmed = inputCity.trim();
+    if (!trimmed) return;
+    setLocationStatus("idle");
+    setWeatherQuery({ type: "city", city: trimmed });
   };
+
+  const handleLocate = () => {
+    requestLocation();
+  };
+
+  const locationLabel =
+    locationStatus === "loading"
+      ? "定位中..."
+      : locationStatus === "success"
+      ? "已定位"
+      : locationStatus === "error"
+      ? "定位失败"
+      : null;
 
   return (
     <WorkspaceLayout
@@ -38,15 +114,38 @@ export default function Weather() {
     >
       {/* City search */}
       <form onSubmit={handleSearch} className="mb-6">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            value={inputCity}
-            onChange={(e) => setInputCity(e.target.value)}
-            placeholder="输入城市名称..."
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary bg-bg-card transition-colors"
-          />
+        <div className="relative max-w-sm flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+            <input
+              value={inputCity}
+              onChange={(e) => setInputCity(e.target.value)}
+              placeholder="输入城市名称..."
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary bg-bg-card transition-colors"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleLocate}
+            title="定位当前位置"
+            className="flex items-center justify-center w-10 h-10 rounded-xl border border-border bg-bg-card text-text-secondary hover:text-primary hover:border-primary transition-colors shrink-0"
+          >
+            {locationStatus === "loading" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <MapPin className="w-4 h-4" />
+            )}
+          </button>
         </div>
+        {locationLabel && (
+          <div className="mt-2 text-xs text-text-muted flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            {locationLabel}
+            {locationStatus === "error" && config && (
+              <span>, 已切换为默认城市 {config.default_city}</span>
+            )}
+          </div>
+        )}
       </form>
 
       {isLoading ? (

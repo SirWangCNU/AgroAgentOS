@@ -339,6 +339,26 @@ class QWeatherClient:
             logger.warning(f"[QWeather] 城市查询失败: {e}")
         return None
 
+    async def get_city_by_coordinates(self, lat: float, lon: float) -> Optional[tuple[str, str]]:
+        """通过经纬度获取城市信息，返回 (location_id, city_name).
+
+        和风天气 GEO API 的 location 参数支持 `经度,纬度` 格式。
+        """
+        client = await self._get_client()
+        try:
+            resp = await client.get(
+                f"{self.GEO_URL}/city/lookup",
+                params={"location": f"{lon},{lat}", "key": self._api_key, "lang": "zh"},
+            )
+            import json
+            data = json.loads(resp.content.decode("utf-8"))
+            if data.get("code") == "200" and data.get("location"):
+                loc = data["location"][0]
+                return loc["id"], loc.get("name", "")
+        except Exception as e:
+            logger.warning(f"[QWeather] 经纬度城市查询失败: {e}")
+        return None
+
     async def get_now(self, location_id: str) -> Optional[Dict[str, Any]]:
         """获取实时天气."""
         client = await self._get_client()
@@ -484,9 +504,40 @@ class WeatherService:
             source="qweather",
         )
 
-    async def _fetch_qweather(self, location: str) -> WeatherResult:
+    async def get_weather_by_coordinates(
+        self, lat: float, lon: float
+    ) -> WeatherResult:
+        """根据经纬度获取天气 (带缓存)."""
+        cache_key = f"coord:{lat:.4f},{lon:.4f}"
+        cached = await _cache.get(cache_key)
+        if cached:
+            logger.debug(f"[WeatherService] 坐标天气缓存命中: {lat}, {lon}")
+            return cached
+
+        result = await self._fetch_weather_by_coordinates(lat, lon)
+        await _cache.set(cache_key, result)
+        return result
+
+    async def _fetch_weather_by_coordinates(self, lat: float, lon: float) -> WeatherResult:
+        """从 API 或 Mock 根据经纬度获取天气."""
+        if self._qweather:
+            try:
+                city_info = await self._qweather.get_city_by_coordinates(lat, lon)
+                if city_info:
+                    location_id, city_name = city_info
+                    return await self._fetch_qweather(city_name, location_id=location_id)
+                logger.warning(f"[WeatherService] 未找到坐标对应城市: {lat}, {lon}, 回退 Mock")
+            except Exception as e:
+                logger.warning(f"[WeatherService] 坐标天气 API 调用失败, 回退 Mock: {e}")
+
+        return _build_mock_result("当前位置")
+
+    async def _fetch_qweather(
+        self, location: str, location_id: str | None = None
+    ) -> WeatherResult:
         """从和风天气 API 获取数据."""
-        location_id = await self._qweather._get_location_id(location)
+        if location_id is None:
+            location_id = await self._qweather._get_location_id(location)
         if not location_id:
             logger.warning(f"[QWeather] 未找到城市: {location}, 回退 Mock")
             return _build_mock_result(location)

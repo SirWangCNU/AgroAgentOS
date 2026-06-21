@@ -14,6 +14,7 @@ import {
   Sprout,
   ArrowRight,
   TrendingUp,
+  Film,
 } from "lucide-react";
 import { useAuthStore } from "../stores/auth";
 import { useHealthStore } from "../stores/health";
@@ -69,6 +70,14 @@ const TOOLS = [
     path: "/workspace/market",
     color: "text-accent-green",
     bg: "bg-accent-green/10",
+  },
+  {
+    icon: Film,
+    label: "AI 视频生成",
+    desc: "文本/图片生成农业短视频",
+    path: "/workspace/video",
+    color: "text-accent-purple",
+    bg: "bg-accent-purple/10",
   },
   {
     icon: MessageSquare,

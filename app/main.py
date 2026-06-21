@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.middleware import setup_middlewares
-from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, image, market, observability, sessions, skills, trajectories, weather, webhook
+from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, image, market, observability, sessions, skills, trajectories, video, weather, webhook
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
 from app.core.database import database_manager
@@ -172,6 +172,7 @@ app.include_router(trajectories.router, prefix=API_PREFIX)
 app.include_router(image.router, prefix=API_PREFIX)
 app.include_router(sessions.router, prefix=API_PREFIX)
 app.include_router(market.router, prefix=API_PREFIX)
+app.include_router(video.router, prefix=API_PREFIX)
 
 
 # ============================================================

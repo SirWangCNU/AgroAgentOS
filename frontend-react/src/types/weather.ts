@@ -22,3 +22,10 @@ export interface WeatherData {
   agriculture_advice: string;
   source: string;
 }
+
+export interface WeatherLocationConfig {
+  location_enabled: boolean;
+  default_city: string;
+  timeout_ms: number;
+  high_accuracy: boolean;
+}

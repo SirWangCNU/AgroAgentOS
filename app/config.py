@@ -368,11 +368,31 @@ class Settings(BaseSettings):
     qweather_api_key: str = Field(default="", description="和风天气 API Key (可选)")
     qweather_base_url: str = Field(default="", description="和风天气付费版自定义域名 (可选)")
 
+    # ==================== 天气实时定位 ====================
+    weather_location_enabled: bool = Field(
+        default=True, description="是否启用天气页自动定位当前位置"
+    )
+    weather_default_city: str = Field(
+        default="北京", description="定位失败或用户拒绝时使用的默认城市"
+    )
+    weather_location_timeout_ms: int = Field(
+        default=10000, description="浏览器定位超时时间 (毫秒)"
+    )
+    weather_location_high_accuracy: bool = Field(
+        default=False, description="浏览器定位是否使用高精度"
+    )
+
     # ==================== JWT 认证 ====================
     jwt_secret_key: str = Field(default="", description="JWT 签名密钥 (至少32字符)")
     jwt_algorithm: str = Field(default="HS256", description="JWT 算法")
     jwt_expire_minutes: int = Field(default=1440, description="JWT 过期时间 (分钟, 默认24小时)")
     admin_default_password: str = Field(default="admin123", description="管理员默认密码 (仅首次创建时使用)")
+
+    # ==================== 视频生成 ====================
+    video_gen_api_key: str = Field(default="", description="视频生成 API Key (火山引擎)")
+    video_gen_base_url: str = Field(default="https://ark.cn-beijing.volces.com/api/v3", description="视频生成 API Base URL")
+    video_gen_model: str = Field(default="seedance-2.0-lite", description="视频生成模型名称")
+    video_gen_timeout: int = Field(default=300, description="视频生成超时 (秒)")
 
     # ==================== 计算属性 ====================
     @property
