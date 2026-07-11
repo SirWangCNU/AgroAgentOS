@@ -25,6 +25,18 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="密码")
 
 
+class WxLoginRequest(BaseModel):
+    """微信小程序登录请求."""
+
+    code: str = Field(..., description="wx.login 返回的临时登录凭证 code")
+
+
+class WxBindConfirmRequest(BaseModel):
+    """小程序端确认绑定 Web 账号请求."""
+
+    bind_code: str = Field(..., min_length=6, max_length=6, description="Web 端展示的 6 位绑定码")
+
+
 class ChangePasswordRequest(BaseModel):
     """修改密码请求."""
 
@@ -60,6 +72,9 @@ class UserInfo(BaseModel):
     email: str
     role: str
     is_active: bool
+    wx_openid: Optional[str] = None
+    nickname: Optional[str] = None
+    avatar_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

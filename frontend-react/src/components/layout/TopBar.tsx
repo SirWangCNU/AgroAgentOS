@@ -15,6 +15,7 @@ import {
   MessageSquare,
   TrendingUp,
   Film,
+  UserCircle,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
@@ -139,11 +140,12 @@ export default function TopBar() {
         {/* Divider */}
         <div className="w-px h-5 bg-border mx-1" />
 
-        {/* User avatar */}
+        {/* User avatar — 直接跳转个人中心 */}
         <div ref={userRef} className="relative">
           <button
-            onClick={() => setUserOpen(!userOpen)}
+            onClick={() => navigate("/profile")}
             className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-bg-hover transition-colors"
+            title="个人中心"
           >
             <div className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-medium">
               {user?.username?.[0]?.toUpperCase() || "U"}
@@ -160,6 +162,16 @@ export default function TopBar() {
                   {user?.role === "admin" ? "管理员" : "用户"}
                 </div>
               </div>
+              <button
+                onClick={() => {
+                  navigate("/profile");
+                  setUserOpen(false);
+                }}
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                <UserCircle className="w-4 h-4" />
+                个人中心
+              </button>
               <button
                 onClick={() => {
                   logout();

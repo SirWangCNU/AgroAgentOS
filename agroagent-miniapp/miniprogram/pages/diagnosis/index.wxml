@@ -1,0 +1,27 @@
+<view class="page">
+  <view class="head">拍照识别病虫害</view>
+
+  <view class="picker" bindtap="chooseImage">
+    <image wx:if="{{imagePath}}" src="{{imagePath}}" mode="aspectFill" class="preview" />
+    <view wx:else class="ph">
+      <text class="ph-ico">📷</text>
+      <text class="ph-t">点击拍照 / 从相册选择</text>
+    </view>
+  </view>
+
+  <button class="btn" bindtap="onAnalyze" loading="{{analyzing}}" disabled="{{analyzing}}">
+    {{analyzing ? '识别中...' : '开始识别'}}
+  </button>
+
+  <view wx:if="{{result}}" class="result card">
+    <view class="r-title">识别结果</view>
+    <view class="r-summary">{{result.summary}}</view>
+    <view wx:if="{{result.detections.length}}" class="r-list">
+      <view class="r-item" wx:for="{{result.detections}}" wx:key="chinese_name">
+        <text class="r-name">{{item.chinese_name}}</text>
+        <text class="r-conf">置信度 {{item.confidence}}</text>
+      </view>
+    </view>
+    <view wx:if="{{!result.success}}" class="r-tip">提示：请上传清晰的农作物叶片照片</view>
+  </view>
+</view>

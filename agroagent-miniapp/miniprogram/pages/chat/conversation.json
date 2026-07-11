@@ -1,0 +1,6 @@
+{
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "chat-bubble": "/components/chat-bubble/chat-bubble"
+  }
+}

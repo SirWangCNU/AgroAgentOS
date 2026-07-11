@@ -15,6 +15,9 @@ export interface User {
   email: string;
   role: "admin" | "user";
   is_active: boolean;
+  wx_openid?: string | null;
+  nickname?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface UserInfo extends User {

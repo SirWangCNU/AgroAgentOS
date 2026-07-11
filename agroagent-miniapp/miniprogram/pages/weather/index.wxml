@@ -1,0 +1,21 @@
+<view class="page">
+  <view class="head">
+    <text class="city">{{city || '定位中...'}}</text>
+    <text class="refresh" bindtap="onRefresh">↻</text>
+  </view>
+
+  <view wx:if="{{current}}" class="now card">
+    <view class="temp">{{current.temperature}}°C</view>
+    <view class="cond">{{current.condition}}</view>
+    <view class="meta">
+      <text>湿度 {{current.humidity}}%</text>
+      <text>风速 {{current.wind_speed}}</text>
+      <text>等级 {{current.wind_level}}</text>
+    </view>
+  </view>
+
+  <view class="advice card">
+    <view class="a-title">🌱 农事建议</view>
+    <view class="a-text">{{advice}}</view>
+  </view>
+</view>

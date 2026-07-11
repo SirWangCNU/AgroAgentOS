@@ -1,0 +1,65 @@
+.msg {
+  display: flex;
+  gap: 16rpx;
+  max-width: 92%;
+  margin: 16rpx 0;
+}
+.msg.u { align-self: flex-end; flex-direction: row-reverse; }
+.msg.ai { align-self: flex-start; }
+
+.avatar {
+  width: 64rpx; height: 64rpx; border-radius: 50%;
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.avatar-t { font-size: 32rpx; }
+
+.bubble {
+  border-radius: 24rpx;
+  padding: 24rpx 28rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  position: relative;
+}
+.msg.u .bubble {
+  background: var(--brand);
+  color: #fff;
+  border-bottom-right-radius: 8rpx;
+}
+.msg.ai .bubble {
+  background: var(--surface);
+  color: var(--text);
+  border: 1rpx solid var(--border);
+  border-bottom-left-radius: 8rpx;
+  box-shadow: var(--sh-sm);
+}
+.text { white-space: pre-wrap; word-break: break-word; }
+
+.src {
+  margin-top: 16rpx; padding-top: 16rpx;
+  border-top: 1rpx solid var(--border);
+  font-size: 24rpx; color: var(--text-sec);
+}
+
+.typing { display: flex; gap: 8rpx; align-items: center; padding: 8rpx 0; }
+.dot {
+  width: 16rpx; height: 16rpx; border-radius: 50%;
+  background: #94a3b8; animation: bnce 1.4s infinite ease-in-out both;
+}
+.dot:nth-child(1) { animation-delay: -0.32s; }
+.dot:nth-child(2) { animation-delay: -0.16s; }
+@keyframes bnce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-16rpx); }
+}
+
+.progress-line {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: var(--text-sec);
+  padding: 8rpx 16rpx;
+  background: #f1f5f9;
+  border-radius: 12rpx;
+  display: inline-block;
+}

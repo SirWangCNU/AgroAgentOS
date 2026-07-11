@@ -382,6 +382,14 @@ class Settings(BaseSettings):
         default=False, description="浏览器定位是否使用高精度"
     )
 
+    # ==================== 微信小程序 ====================
+    wx_appid: str = Field(default="", description="微信小程序 AppID")
+    wx_secret: str = Field(default="", description="微信小程序 AppSecret")
+    wx_code2session_url: str = Field(
+        default="https://api.weixin.qq.com/sns/jscode2session",
+        description="微信 code2Session 接口地址",
+    )
+
     # ==================== JWT 认证 ====================
     jwt_secret_key: str = Field(default="", description="JWT 签名密钥 (至少32字符)")
     jwt_algorithm: str = Field(default="HS256", description="JWT 算法")

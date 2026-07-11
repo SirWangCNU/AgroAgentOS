@@ -1,0 +1,10 @@
+<view class="page">
+  <view class="head">农技发现</view>
+  <view class="list">
+    <view class="card art" wx:for="{{articles}}" wx:key="id" data-id="{{item.id}}" bindtap="onArticle">
+      <view class="tag">{{item.tag}}</view>
+      <view class="title">{{item.title}}</view>
+      <view class="read">👁 {{item.read}} 阅读</view>
+    </view>
+  </view>
+</view>

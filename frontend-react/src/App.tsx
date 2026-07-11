@@ -12,6 +12,7 @@ import PestDiagnosis from "./pages/PestDiagnosis";
 import MarketPrice from "./pages/MarketPrice";
 import VideoGen from "./pages/VideoGen";
 import Users from "./pages/Users";
+import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="/workspace/market" element={<MarketPrice />} />
             <Route path="/workspace/video" element={<VideoGen />} />
             <Route path="/workspace/users" element={<Users />} />
+            <Route path="/profile" element={<Profile />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

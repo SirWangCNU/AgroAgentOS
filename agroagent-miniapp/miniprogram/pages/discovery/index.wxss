@@ -1,0 +1,11 @@
+.page { padding: 40rpx; background: var(--bg); min-height: 100vh; }
+.head { font-size: 40rpx; font-weight: 700; color: var(--text); margin-bottom: 32rpx; }
+.list { display: flex; flex-direction: column; gap: 24rpx; }
+.art { padding: 32rpx; }
+.tag {
+  display: inline-block; font-size: 22rpx; font-weight: 600;
+  color: var(--brand-dark); background: #f0fdf4; border: 1rpx solid #bbf7d0;
+  border-radius: 20rpx; padding: 4rpx 20rpx; margin-bottom: 16rpx;
+}
+.title { font-size: 32rpx; font-weight: 600; color: var(--text); line-height: 1.5; margin-bottom: 16rpx; }
+.read { font-size: 24rpx; color: var(--text-ter); }
