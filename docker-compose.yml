@@ -14,6 +14,7 @@
 #   - 9001:  MinIO 控制台 (root/Milvus)
 #   - 8000:  Attu Milvus 可视化界面
 #   - 6379:  Redis
+#   - 3306:  MySQL (业务数据库, root 密码见 .env MYSQL_PASSWORD)
 #   - 3210:  open-webSearch
 
 services:
@@ -98,6 +99,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ==================== MySQL 业务数据库 ====================
+  # 与 .env 中 MYSQL_* 配置对齐. 后端在宿主机通过 127.0.0.1:3306 连接.
+  # 首次启动会自动用 MYSQL_ROOT_PASSWORD 创建 root 账号, 并初始化 MYSQL_DATABASE 库.
+  # 数据持久化到 ./volumes/mysql, 删容器不丢数据.
+  mysql:
+    container_name: agro-mysql
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-agro_agent_db}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - ./volumes/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   open-websearch:
     container_name: agro-open-websearch

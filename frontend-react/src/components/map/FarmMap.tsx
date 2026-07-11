@@ -5,7 +5,6 @@ import {
   LayersControl,
   Marker,
   Popup,
-  Polyline,
   CircleMarker,
   useMap,
 } from "react-leaflet";
@@ -14,7 +13,10 @@ import "leaflet/dist/leaflet.css";
 import type { TrajectoryPoint } from "../../types/farm";
 
 // Fix Leaflet default marker icons in bundlers
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+const iconDefaultProto = L.Icon.Default.prototype as unknown as {
+  _getIconUrl?: string;
+};
+delete iconDefaultProto._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -117,9 +119,6 @@ export default function FarmMap({
 
   const zoom = selectedFarm ? 13 : 4;
 
-  // Build trajectory segments by work_status
-  const segments = buildSegments(trajectoryPoints);
-
   return (
     <div className="w-full h-full rounded-xl overflow-hidden border border-border map-isolation">
       <MapContainer
@@ -194,26 +193,13 @@ export default function FarmMap({
           );
         })}
 
-        {/* Trajectory segments — colored by work_status */}
-        {segments.map((seg, i) => (
-          <Polyline
-            key={`seg-${i}`}
-            positions={seg.points}
-            pathOptions={{
-              color: seg.color,
-              weight: 3,
-              opacity: 0.85,
-            }}
-          />
-        ))}
-
         {/* Trajectory points — small dots with popups */}
         {trajectoryPoints.length > 0 &&
           trajectoryPoints.map((pt, i) => {
             const isFirst = i === 0;
             const isLast = i === trajectoryPoints.length - 1;
-            // Only show markers for first, last, and every Nth point
-            if (!isFirst && !isLast && i % 5 !== 0) return null;
+            // 只显示起点、终点以及每第 3 个点，避免过密连成线
+            if (!isFirst && !isLast && i % 3 !== 0) return null;
 
             const color = STATUS_COLORS[pt.work_status] || STATUS_COLORS.idle;
 
@@ -264,43 +250,6 @@ export default function FarmMap({
       </MapContainer>
     </div>
   );
-}
-
-/** Build colored segments from trajectory points */
-function buildSegments(points: TrajectoryPoint[]) {
-  if (points.length < 2) return [];
-
-  const segments: { points: [number, number][]; color: string }[] = [];
-  let currentStatus = points[0].work_status;
-  let currentPoints: [number, number][] = [
-    [points[0].latitude, points[0].longitude],
-  ];
-
-  for (let i = 1; i < points.length; i++) {
-    const pt = points[i];
-    if (pt.work_status !== currentStatus) {
-      // End current segment, start new one
-      currentPoints.push([pt.latitude, pt.longitude]);
-      segments.push({
-        points: currentPoints,
-        color: STATUS_COLORS[currentStatus] || STATUS_COLORS.idle,
-      });
-      currentStatus = pt.work_status;
-      currentPoints = [[pt.latitude, pt.longitude]];
-    } else {
-      currentPoints.push([pt.latitude, pt.longitude]);
-    }
-  }
-
-  // Push last segment
-  if (currentPoints.length > 1) {
-    segments.push({
-      points: currentPoints,
-      color: STATUS_COLORS[currentStatus] || STATUS_COLORS.idle,
-    });
-  }
-
-  return segments;
 }
 
 function formatTime(iso: string): string {
