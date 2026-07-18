@@ -62,10 +62,12 @@ AgroAgentOS 已具备农场与地块管理、天气风险规则、农业知识�
 评估过三种路径：
 
 1. **只增强 Chat**：改动最少，但仍像 RAG 问答机器人。
-2. **直接改写 AIOps 接口**：可以复用 LangGraph，但会继续混合诊断、业务和历史兼容逻辑。
-3. **复用运行时，新增 Farm Agent 应用层**：保留现有接口兼容，提取通用 SSE 执行能力，新增农场业务模型、工具、Skill 和前端驾驶舱。
+2. **直接改写 AIOps 链路**：复用 LangGraph 节点和 SSE 能力，接受内部破坏性重命名，一次性清理诊断语义和 SRE 遗留。
+3. **并行新增 Farm Agent 应用层**：保留旧 AIOps 兼容层，另外提取通用 SSE 执行能力；迁移风险较低，但长期存在两套命名和额外抽象。
 
-采用第三种。该方案不重写 LangGraph，也不复制整套执行流。
+采用第二种。当前 AIOps 链路实际上已经使用农业 Skill 和农业 Planner，继续保留运维命名、SRE 提示词和兼容包装没有产品价值。实施时直接将这条链路重构为 Farm Agent：保留 LangGraph 的节点算法和运行能力，但替换旧路由、服务、schema、报告文案、兜底 Skill 和二级 Agent。旧 `/api/v1/aiops/*` 不再保留运行时兼容入口。
+
+该选择接受内部破坏性变更，以减少重复抽象和遗留概念。历史数据库中已有 `source=aiops` 的记录继续可读，不迁移、不删除；新运行记录统一写入 `source=farm_agent`。
 
 ## 4. 总体架构
 
@@ -78,9 +80,9 @@ FarmAgent API / FarmTask API
 FarmAgentService
         ├─ 校验当前用户与农场归属
         ├─ 设置 FarmRunContext
-        └─ 调用通用 AgentStreamService
+        └─ 执行 LangGraph、转换 SSE 并持久化运行记录
                     ▼
-           LangGraph Agent Runtime
+             Farm Agent Graph
     SkillRouter → Planner → Executor → Replanner
                     │
                     ├─ 农场数据分析 Agent
@@ -198,7 +200,7 @@ proposal_ids
 
 现有 `selected_skill`、`plan`、`past_steps`、`iteration`、`tried_skills`、`transition_history` 和权限模式继续使用。
 
-新增通用 `AgentStreamService`，从现有 `aiops_service` 提取以下能力：
+将现有 `aiops_service.py` 直接重构并重命名为 `farm_agent_service.py`，保留并农业化以下可靠能力：
 
 - 图执行与取消；
 - stream sink 合并；
@@ -208,7 +210,9 @@ proposal_ids
 - AgentRun 持久化；
 - 并发限制与预算事件。
 
-`aiops_service.py` 保留为兼容包装；Farm Agent 传入业务初始状态和农业事件文案。`build_aiops_graph()` 增加通用别名 `build_agent_graph()`，旧调用继续可用。
+`build_aiops_graph()` 直接重命名为 `build_farm_agent_graph()`，同步更新 `app/agents/__init__.py`、`fork_runner.py` 和所有调用方，不保留旧函数别名。原 `aiops_service.py`、`api/v1/aiops.py` 和 `schemas/aiops.py` 在引用迁移完成后删除，避免运行时继续出现两套名称。
+
+`schemas/aiops.py` 中的内容按职责拆分：Farm Agent 请求和 SSE 事件进入 `schemas/farm_agent.py`；仍被历史诊断记录接口使用的通用记录 schema 进入 `schemas/diagnosis.py`。
 
 ## 8. 农业工具
 
@@ -279,7 +283,9 @@ proposal_ids
 - 不确定性与待确认项；
 - 复查时间。
 
-兼容 AIOps 路由可以保留旧事件名称，但 Farm Agent 不得输出“服务器故障”“SRE 根因”等无关文案。最终测试对此做明确断言。
+所有运行时事件、报告标题和 fallback 文案直接改为农业语义，不保留旧 AIOps 事件名称。Farm Agent 不得输出“服务器故障”“SRE 根因”等无关文案，最终测试对此做明确断言。
+
+SkillRegistry 的强制兜底从 `generic_oncall` 改为现有 `agriculture_qa`，删除 `generic_oncall/SKILL.md`，同步修正 Router、Planner、ToolFilter、Harness 和 Skill 文档中的硬编码。现有 SRE 型二级 Agent 定义直接替换为农场数据分析、农技研究和农事规划 Agent。
 
 ## 11. API
 
@@ -307,6 +313,14 @@ report
 complete
 error
 ```
+
+运行结束后的可观测时间线使用新接口：
+
+```http
+GET /api/v1/farm-agent/runs/{run_id}/timeline
+```
+
+该接口从 AgentRun 和 transition history 返回真实运行节点、工具调用摘要、耗时与最终提案，不再使用旧 `/aiops/timeline/{session_id}` 的模拟节点列表。
 
 ### 11.2 提案
 
@@ -411,6 +425,9 @@ React Query 管理提案与任务等服务端状态；SSE 实时状态由页面 
 - Skill 工具白名单和 ToolMeta 完整；
 - Replanner 超步数时收敛；
 - Farm Agent 最终报告不包含 SRE 或服务器故障文案；
+- 新 Farm Agent 路由可用，旧 `/api/v1/aiops/*` 路由返回 404；
+- 运行时代码不再引用 `aiops_service`、`build_aiops_graph` 或 `generic_oncall`；
+- 历史查询仍能读取旧 `source=aiops` 记录，新运行只写 `source=farm_agent`；
 - SSE 在成功、工具失败、图失败和客户端取消时均正确结束。
 
 ### 15.2 前端验证
@@ -455,12 +472,10 @@ npm run build
 ### 16.1 新增后端文件
 
 ```text
-app/api/v1/farm_agent.py
 app/api/v1/farm_tasks.py
 app/models/farm_agent.py
 app/schemas/farm_agent.py
-app/services/agent_stream_service.py
-app/services/farm_agent_service.py
+app/schemas/diagnosis.py
 app/services/farm_snapshot_service.py
 app/services/farm_risk_service.py
 app/services/farm_proposal_service.py
@@ -474,28 +489,66 @@ scripts/seed_competition_demo.py
 app/data/demo_rainstorm_scenario.json
 ```
 
-### 16.2 修改后端文件
+### 16.2 直接重命名或替换的后端文件
+
+```text
+app/api/v1/aiops.py             → app/api/v1/farm_agent.py
+app/services/aiops_service.py   → app/services/farm_agent_service.py
+app/agents/graph.py 中：
+  build_aiops_graph             → build_farm_agent_graph
+app/schemas/aiops.py 拆分为：
+  app/schemas/farm_agent.py
+  app/schemas/diagnosis.py
+```
+
+旧 `/api/v1/aiops/diagnose` 和 `/api/v1/aiops/timeline/*` 路由删除，不提供别名。Farm Agent 提供新的巡检和运行时间线接口。
+
+### 16.3 删除的遗留文件
+
+```text
+app/api/v1/aiops.py
+app/services/aiops_service.py
+app/schemas/aiops.py
+app/skills/definitions/generic_oncall/SKILL.md
+```
+
+删除发生在新引用全部接通并通过测试之后。已有数据库历史记录不删除。
+
+### 16.4 修改后端文件
 
 ```text
 app/main.py
 app/models/__init__.py
+app/agents/__init__.py
 app/agents/state.py
 app/agents/graph.py
+app/agents/fork_runner.py
 app/agents/skill_router.py
+app/agents/stream_sink.py
 app/agents/subagents/__init__.py
 app/agents/replanner.py
 app/runtime/agent_harness.py
+app/runtime/tool_filter.py
+app/runtime/tool_runner.py
 app/tools/mcp_loader.py
 app/tools/meta.py
-app/services/aiops_service.py
+app/skills/registry.py
+app/skills/README.md
+app/api/v1/diagnosis.py
+app/api/v1/history.py
+app/api/v1/webhook.py
 app/core/sqlite.py
 app/config.py
 .env.example
+docs/architecture.md
+docs/skill_development_guide.md
 ```
 
 只有在新增演示模式配置时才修改 `app/config.py` 和 `.env.example`。不增加新第三方依赖。
 
-### 16.3 新增前端文件
+Webhook 不得继续调用不存在的 AIOps 服务。只有当 webhook 载荷能够通过现有密钥校验并解析到合法 `farm_id` 时，才允许触发 Farm Agent；无法确定农场归属的载荷只记录，不启动智能体。
+
+### 16.5 新增前端文件
 
 ```text
 frontend-react/src/pages/FarmAgent.tsx
@@ -510,7 +563,7 @@ frontend-react/src/components/farm-agent/FarmTaskBoard.tsx
 frontend-react/src/components/farm-agent/TaskVerificationCard.tsx
 ```
 
-### 16.4 修改前端文件
+### 16.6 修改前端文件
 
 ```text
 frontend-react/src/App.tsx
@@ -525,8 +578,8 @@ frontend-react/src/components/layout/AppLayout.tsx
 
 1. 建立提案、任务和 AgentRun 数据结构，完成迁移与服务层测试。
 2. 建立安全 FarmRunContext、农场快照和确定性风险工具。
-3. 新增 Farm Skill、农业二级 Agent 和提示词一致性修正。
-4. 提取通用 SSE 执行服务，提供巡检与提案 API。
+3. 将 AIOps Graph、Service、Router、Schema 和兜底 Skill 直接重构为 Farm Agent 语义。
+4. 接通 Farm Agent SSE、巡检、运行时间线与提案 API。
 5. 实现任务状态机、执行证据和 AI 复核。
 6. 实现 AI 农场驾驶舱和工作台入口。
 7. 增加演示 seed、异常兜底、集成冒烟与全量验证。
@@ -543,12 +596,13 @@ frontend-react/src/components/layout/AppLayout.tsx
 | 现场网络不稳定 | 提供明确标识的演示输入 fixture |
 | 范围失控 | 不做库存、财务、组织和完整权限系统 |
 | 照片验收能力被夸大 | 一期只把照片作为人工证据；YOLO 仅用于病虫害识别 |
-| 旧 AIOps 文案污染 | Farm Agent 使用农业事件配置，并增加回归断言 |
-| SSE 重构引入回归 | 保留兼容包装，分别测试旧入口和 Farm Agent 入口 |
+| 旧 AIOps 文案污染 | 删除旧运行入口和兼容别名，对报告、事件和 fallback 增加农业语义断言 |
+| 破坏性重命名遗漏引用 | 全仓检索 `aiops`、`generic_oncall` 和 `build_aiops_graph`，新旧路由行为加入回归检查 |
+| 历史记录来源中断 | 旧 `source=aiops` 只读保留，新数据写 `source=farm_agent`，查询同时接受两者 |
 
 ## 19. 最终决策
 
-比赛版采用“复用现有 LangGraph 运行时，新增 Farm Agent 应用层”的方案。一期核心闭环固定为：
+比赛版采用“直接将遗留 AIOps 链路重构为 Farm Agent”的方案，不保留旧运行时兼容入口。一期核心闭环固定为：
 
 > AI 农场巡检 → 有证据的行动提案 → 人工批准 → 任务执行 → AI 轨迹复核。
 
