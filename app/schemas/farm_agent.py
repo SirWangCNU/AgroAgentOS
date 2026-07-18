@@ -2,8 +2,21 @@
 
 from datetime import datetime
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+
+from app.schemas.trajectory import TrajectoryFileInfo
+
+_HTTP_URL_ADAPTER = TypeAdapter(AnyHttpUrl)
 
 Severity = Literal["low", "medium", "high", "critical"]
 ProposalStatus = Literal["pending", "approved", "rejected"]
@@ -148,6 +161,29 @@ class TaskSubmitRequest(BaseModel):
     trajectory_file_ids: list[int]
     attachment_urls: list[str]
 
+    @field_validator("attachment_urls")
+    @classmethod
+    def require_http_attachment_urls(cls, urls: list[str]) -> list[str]:
+        """附件只接受带主机名的 HTTP(S) URL."""
+
+        for url in urls:
+            try:
+                parsed = urlsplit(url)
+                if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+                    raise ValueError("附件 URL 必须使用 HTTP(S) 且包含主机名")
+                _HTTP_URL_ADAPTER.validate_python(url)
+            except (ValidationError, ValueError) as exc:
+                raise ValueError("附件 URL 格式无效") from exc
+        return urls
+
+
+class TaskVerificationDraft(BaseModel):
+    """AI 对已提交任务生成、等待人工决定的复核草稿."""
+
+    verdict: VerificationVerdict
+    note: str = Field(..., min_length=1)
+    evidence_refs: list[str] = Field(default_factory=list)
+
 
 class TaskDecisionRequest(BaseModel):
     """人工完成或退回任务时的说明."""
@@ -177,6 +213,21 @@ class TaskResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class TaskEvidenceBundle(BaseModel):
+    """供任务复核使用的目标、执行记录和关联证据."""
+
+    task_id: str
+    farm_id: int
+    field_id: int | None = None
+    title: str
+    instructions: str
+    acceptance_criteria: list[str]
+    status: TaskStatus
+    execution: dict[str, Any]
+    trajectory_files: list[TrajectoryFileInfo] = Field(default_factory=list)
+    attachment_urls: list[str] = Field(default_factory=list)
 
 
 class AgentRunTimelineResponse(BaseModel):
