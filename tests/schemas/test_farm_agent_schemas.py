@@ -8,6 +8,7 @@ from app.schemas.diagnosis import (
 )
 from app.schemas.farm_agent import (
     FarmEvidence,
+    ProposalApprovalRequest,
     ProposalDraft,
     ProposalStatus,
     ProposedAction,
@@ -130,6 +131,23 @@ def test_high_confidence_proposal_requires_non_inference_evidence(
             confidence=0.9,
             evidence=[inferred_evidence],
             actions=[proposed_action],
+        )
+
+
+def test_proposal_approval_rejects_empty_actions() -> None:
+    with pytest.raises(ValidationError):
+        ProposalApprovalRequest(actions=[], decision_note="不得无任务批准")
+
+
+def test_proposal_approval_rejects_duplicate_action_keys(
+    proposed_action: ProposedAction,
+) -> None:
+    duplicate = proposed_action.model_copy(update={"title": "重复行动"})
+
+    with pytest.raises(ValidationError):
+        ProposalApprovalRequest(
+            actions=[proposed_action, duplicate],
+            decision_note="不得静默合并",
         )
 
 

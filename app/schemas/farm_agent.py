@@ -124,8 +124,15 @@ class FarmAgentEvent(BaseModel):
 class ProposalApprovalRequest(BaseModel):
     """人工批准提案时最终确认的行动列表."""
 
-    actions: list[ProposedAction]
+    actions: list[ProposedAction] = Field(..., min_length=1)
     decision_note: str
+
+    @model_validator(mode="after")
+    def require_unique_action_keys(self) -> "ProposalApprovalRequest":
+        action_keys = [action.action_key for action in self.actions]
+        if len(action_keys) != len(set(action_keys)):
+            raise ValueError("审批 actions 的 action_key 不得重复")
+        return self
 
 
 class ProposalRejectRequest(BaseModel):

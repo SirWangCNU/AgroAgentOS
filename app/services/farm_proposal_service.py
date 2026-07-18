@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import NoReturn
@@ -10,9 +11,9 @@ from typing import NoReturn
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.sqlite import sqlite_manager
+from app.core.sqlite import AgentRun, sqlite_manager
 from app.exceptions import AppException, ForbiddenError
-from app.models.farm import Farm
+from app.models.farm import Farm, Field
 from app.models.farm_agent import FarmActionProposal, FarmTask
 from app.schemas.farm_agent import (
     ProposalApprovalRequest,
@@ -22,17 +23,41 @@ from app.schemas.farm_agent import (
     ProposedAction,
 )
 
+_PROPOSAL_UNIQUE_CONSTRAINT = "uq_proposal_run_risk"
+_PROPOSAL_UNIQUE_SQLITE_COLUMNS = (
+    "farm_action_proposals.run_id",
+    "farm_action_proposals.risk_fingerprint",
+)
+
+
+def _is_unique_constraint_violation(
+    error: IntegrityError,
+    *,
+    constraint_name: str,
+    sqlite_columns: tuple[str, ...],
+) -> bool:
+    message = str(error.orig).lower()
+    sqlite_signature = (
+        "unique constraint failed: " + ", ".join(sqlite_columns)
+    ).lower()
+    if message.strip() == sqlite_signature:
+        return True
+    mysql_key_match = re.search(
+        r"\bfor key\s+[`'\"]([^`'\"]+)[`'\"]",
+        message,
+    )
+    if "duplicate entry" not in message or mysql_key_match is None:
+        return False
+    mysql_key_name = mysql_key_match.group(1).rsplit(".", maxsplit=1)[-1]
+    return mysql_key_name == constraint_name.lower()
+
 
 def _build_risk_fingerprint(*, farm_id: int, risk_key: str) -> str:
     return hashlib.sha256(f"{farm_id}:{risk_key}".encode()).hexdigest()
 
 
-def _raise_not_found() -> NoReturn:
-    raise AppException(
-        status_code=404,
-        code="NOT_FOUND",
-        message="提案不存在",
-    )
+def _raise_forbidden() -> NoReturn:
+    raise ForbiddenError(message="无权访问目标资源")
 
 
 def _raise_invalid_transition() -> NoReturn:
@@ -44,15 +69,13 @@ def _raise_invalid_transition() -> NoReturn:
 
 
 def _require_owned_farm(session: Session, *, farm_id: int, user_id: int) -> Farm:
-    farm = session.query(Farm).filter(Farm.id == farm_id).first()
+    farm = (
+        session.query(Farm)
+        .filter(Farm.id == farm_id, Farm.user_id == user_id)
+        .first()
+    )
     if farm is None:
-        raise AppException(
-            status_code=404,
-            code="NOT_FOUND",
-            message="农场不存在",
-        )
-    if farm.user_id != user_id:
-        raise ForbiddenError(message="无权访问目标农场")
+        _raise_forbidden()
     return farm
 
 
@@ -64,13 +87,62 @@ def _require_owned_proposal(
 ) -> FarmActionProposal:
     proposal = (
         session.query(FarmActionProposal)
-        .filter(FarmActionProposal.proposal_id == proposal_id)
+        .join(Farm, Farm.id == FarmActionProposal.farm_id)
+        .filter(
+            FarmActionProposal.proposal_id == proposal_id,
+            Farm.user_id == user_id,
+        )
         .first()
     )
     if proposal is None:
-        _raise_not_found()
-    _require_owned_farm(session, farm_id=proposal.farm_id, user_id=user_id)
+        _raise_forbidden()
     return proposal
+
+
+def _require_owned_run(
+    session: Session,
+    *,
+    run_id: str,
+    farm_id: int,
+    user_id: int,
+) -> None:
+    run_exists = (
+        session.query(AgentRun.id)
+        .filter(
+            AgentRun.run_id == run_id,
+            AgentRun.farm_id == farm_id,
+            AgentRun.user_id == user_id,
+        )
+        .first()
+    )
+    if run_exists is None:
+        _raise_forbidden()
+
+
+def _require_action_fields(
+    session: Session,
+    *,
+    farm_id: int,
+    actions: list[ProposedAction],
+) -> None:
+    requested_field_ids = {
+        action.field_id for action in actions if action.field_id is not None
+    }
+    if not requested_field_ids:
+        return
+    owned_field_ids = {
+        field_id
+        for (field_id,) in (
+            session.query(Field.id)
+            .filter(
+                Field.farm_id == farm_id,
+                Field.id.in_(requested_field_ids),
+            )
+            .all()
+        )
+    }
+    if owned_field_ids != requested_field_ids:
+        _raise_forbidden()
 
 
 def _detach_proposal(session: Session, proposal: FarmActionProposal) -> None:
@@ -120,20 +192,18 @@ def _task_from_action(
     return task
 
 
-def _approve_pending(
+def _create_missing_tasks(
     session: Session,
     *,
     proposal: FarmActionProposal,
     request: ProposalApprovalRequest,
-) -> tuple[list[FarmTask], set[str], set[str]]:
+) -> list[FarmTask]:
     existing_tasks = _load_tasks(session, proposal_id=proposal.proposal_id)
     tasks_by_action = {
         task.action_key: task
         for task in existing_tasks
         if task.action_key is not None
     }
-    preexisting_action_keys = set(tasks_by_action)
-    attempted_action_keys: set[str] = set()
 
     for action in request.actions:
         if action.action_key in tasks_by_action:
@@ -142,12 +212,32 @@ def _approve_pending(
         session.add(task)
         tasks_by_action[action.action_key] = task
         existing_tasks.append(task)
-        attempted_action_keys.add(action.action_key)
+    return existing_tasks
 
-    proposal.status = "approved"
-    proposal.decision_note = request.decision_note
-    proposal.decided_at = datetime.now(timezone.utc)
-    return existing_tasks, preexisting_action_keys, attempted_action_keys
+
+def _compare_and_set_decision(
+    session: Session,
+    *,
+    proposal_id: str,
+    status: ProposalStatus,
+    decision_note: str,
+) -> bool:
+    affected_rows = (
+        session.query(FarmActionProposal)
+        .filter(
+            FarmActionProposal.proposal_id == proposal_id,
+            FarmActionProposal.status == "pending",
+        )
+        .update(
+            {
+                FarmActionProposal.status: status,
+                FarmActionProposal.decision_note: decision_note,
+                FarmActionProposal.decided_at: datetime.now(timezone.utc),
+            },
+            synchronize_session=False,
+        )
+    )
+    return affected_rows == 1
 
 
 def create_pending_proposal(
@@ -165,6 +255,12 @@ def create_pending_proposal(
     )
     with sqlite_manager.session() as session:
         _require_owned_farm(session, farm_id=farm_id, user_id=user_id)
+        _require_owned_run(
+            session,
+            run_id=run_id,
+            farm_id=farm_id,
+            user_id=user_id,
+        )
         existing = (
             session.query(FarmActionProposal)
             .filter(
@@ -198,7 +294,13 @@ def create_pending_proposal(
         session.add(proposal)
         try:
             session.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
+            if not _is_unique_constraint_violation(
+                exc,
+                constraint_name=_PROPOSAL_UNIQUE_CONSTRAINT,
+                sqlite_columns=_PROPOSAL_UNIQUE_SQLITE_COLUMNS,
+            ):
+                raise
             session.rollback()
             existing = (
                 session.query(FarmActionProposal)
@@ -266,15 +368,17 @@ def approve(
             return _detach_approval_result(session, proposal, tasks)
         if proposal.status != "pending":
             _raise_invalid_transition()
-
-        try:
-            tasks, preexisting_action_keys, attempted_action_keys = _approve_pending(
-                session,
-                proposal=proposal,
-                request=request,
-            )
-            session.flush()
-        except IntegrityError:
+        _require_action_fields(
+            session,
+            farm_id=proposal.farm_id,
+            actions=request.actions,
+        )
+        if not _compare_and_set_decision(
+            session,
+            proposal_id=proposal.proposal_id,
+            status="approved",
+            decision_note=request.decision_note,
+        ):
             session.rollback()
             proposal = _require_owned_proposal(
                 session,
@@ -284,27 +388,16 @@ def approve(
             if proposal.status == "approved":
                 tasks = _load_tasks(session, proposal_id=proposal.proposal_id)
                 return _detach_approval_result(session, proposal, tasks)
-            if proposal.status != "pending":
-                _raise_invalid_transition()
+            _raise_invalid_transition()
 
-            current_tasks = _load_tasks(session, proposal_id=proposal.proposal_id)
-            current_action_keys = {
-                task.action_key
-                for task in current_tasks
-                if task.action_key is not None
-            }
-            raced_action_keys = (
-                current_action_keys - preexisting_action_keys
-            ) & attempted_action_keys
-            if not raced_action_keys:
-                raise
-            tasks, _, _ = _approve_pending(
-                session,
-                proposal=proposal,
-                request=request,
-            )
-            session.flush()
-
+        session.expire(proposal)
+        session.refresh(proposal)
+        tasks = _create_missing_tasks(
+            session,
+            proposal=proposal,
+            request=request,
+        )
+        session.flush()
         return _detach_approval_result(session, proposal, tasks)
 
 
@@ -327,10 +420,24 @@ def reject(
             return proposal
         if proposal.status != "pending":
             _raise_invalid_transition()
+        if not _compare_and_set_decision(
+            session,
+            proposal_id=proposal.proposal_id,
+            status="rejected",
+            decision_note=request.decision_note,
+        ):
+            session.rollback()
+            proposal = _require_owned_proposal(
+                session,
+                proposal_id=proposal_id,
+                user_id=user_id,
+            )
+            if proposal.status == "rejected":
+                _detach_proposal(session, proposal)
+                return proposal
+            _raise_invalid_transition()
 
-        proposal.status = "rejected"
-        proposal.decision_note = request.decision_note
-        proposal.decided_at = datetime.now(timezone.utc)
-        session.flush()
+        session.expire(proposal)
+        session.refresh(proposal)
         _detach_proposal(session, proposal)
         return proposal
