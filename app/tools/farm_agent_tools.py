@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
 
 from langchain_core.tools import tool
@@ -59,7 +60,8 @@ async def inspect_farm_weather_risks(
     """Inspect deterministic weather risks for the trusted farm over 1 to 7 days."""
 
     context = require_farm_run_context()
-    snapshot = farm_snapshot_service.get_snapshot(
+    snapshot = await asyncio.to_thread(
+        farm_snapshot_service.get_snapshot,
         farm_id=context.farm_id,
         user_id=context.user_id,
     )
@@ -112,15 +114,15 @@ def get_pending_farm_tasks(
         farm_id=context.farm_id,
         status="pending",
     )
-    filtered = [
+    matching = [
         task
         for task in tasks
         if (field_id is None or task.field_id == field_id)
         and (task_type is None or task.task_type == task_type)
-    ][:limit]
+    ]
     result = PendingFarmTasksResult(
-        tasks=[TaskResponse.model_validate(task) for task in filtered],
-        total=len(filtered),
+        tasks=[TaskResponse.model_validate(task) for task in matching[:limit]],
+        total=len(matching),
     )
     return result.model_dump(mode="json")
 
