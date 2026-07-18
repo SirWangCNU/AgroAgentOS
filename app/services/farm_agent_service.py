@@ -192,6 +192,7 @@ async def _stream_run(
     input_tokens = output_tokens = total_tokens = 0
     tool_calls = total_steps = 0
     runner_task: asyncio.Task[None] | None = None
+    sink_token = None
     status = "failed"
     outcome: dict[str, Any] = {}
 
@@ -204,11 +205,7 @@ async def _stream_run(
         query=query,
         context_snapshot=business_context,
     )
-    yield _event(run_id, "start", "run_started", "Farm Agent 已启动", run_type=context.run_type)
-    yield _event(run_id, "context_loaded", "context_loaded", "业务上下文已加载", farm_id=context.farm_id)
-
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=2048)
-    sink_token = set_sink(queue)
     sentinel: dict[str, Any] = {"__done__": True}
 
     async def run_graph() -> None:
@@ -236,6 +233,10 @@ async def _stream_run(
             await queue.put(sentinel)
 
     try:
+        sink_token = set_sink(queue)
+        yield _event(run_id, "start", "run_started", "Farm Agent 已启动", run_type=context.run_type)
+        yield _event(run_id, "context_loaded", "context_loaded", "业务上下文已加载", farm_id=context.farm_id)
+
         with bind_farm_run_context(context):
             runner_task = asyncio.create_task(run_graph())
             graph_failed = False
@@ -249,7 +250,8 @@ async def _stream_run(
                 if "__error__" in item:
                     graph_failed = True
                     exc = item["__error__"]
-                    logger.exception("Farm Agent graph 执行失败: {}", exc)
+                    logger.error("Farm Agent graph 执行失败: {}", type(exc).__name__)
+                    outcome = {"error_type": type(exc).__name__, "proposal_ids": proposal_ids}
                     yield _event(run_id, "error", "run_failed", "Farm Agent 执行失败", error_type=type(exc).__name__)
                     continue
                 if "__node__" in item:
@@ -282,24 +284,23 @@ async def _stream_run(
                     payload["duration_ms"] = int(payload.pop("elapsed_ms", 0) or 0)
                 yield _event(run_id, event_type, event_type, **payload)
 
-            status = "failed" if graph_failed else "completed"
-            if context.run_type == "inspection" and not proposal_ids:
-                proposal_ids = await _offload(_load_proposal_ids, run_id=run_id)
-            outcome = {"proposal_ids": proposal_ids}
-            if context.task_id:
-                outcome["task_id"] = context.task_id
-                evidence = await _offload(
-                    farm_task_service.get_task_evidence,
-                    user_id=context.user_id,
-                    task_id=context.task_id,
-                )
-                outcome["task_status"] = evidence.status
-                outcome["task_verdict"] = await _offload(
-                    _load_task_verdict,
-                    task_id=context.task_id,
-                )
+            if not graph_failed:
+                if context.run_type == "inspection" and not proposal_ids:
+                    proposal_ids = await _offload(_load_proposal_ids, run_id=run_id)
+                outcome = {"proposal_ids": proposal_ids}
+                if context.task_id:
+                    outcome["task_id"] = context.task_id
+                    evidence = await _offload(
+                        farm_task_service.get_task_evidence,
+                        user_id=context.user_id,
+                        task_id=context.task_id,
+                    )
+                    outcome["task_status"] = evidence.status
+                    outcome["task_verdict"] = await _offload(
+                        _load_task_verdict,
+                        task_id=context.task_id,
+                    )
 
-            if status == "completed":
                 stats = HarnessUsageStats(
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
@@ -320,13 +321,29 @@ async def _stream_run(
                         session_id=run_id,
                         skill=selected_skill,
                     )
+                status = "completed"
                 yield _event(run_id, "complete", "run_completed", "Farm Agent 流程完成", outcome=outcome)
-    except asyncio.CancelledError:
-        status = "cancelled"
-        outcome = {"cancelled": True, "proposal_ids": proposal_ids}
+    except (asyncio.CancelledError, GeneratorExit):
+        if status != "completed":
+            status = "cancelled"
+            outcome = {"cancelled": True, "proposal_ids": proposal_ids}
         if runner_task is not None and not runner_task.done():
             runner_task.cancel()
         raise
+    except Exception as exc:
+        status = "failed"
+        outcome = {
+            "error_type": type(exc).__name__,
+            "proposal_ids": proposal_ids,
+        }
+        logger.error("Farm Agent 后处理失败: {}", type(exc).__name__)
+        yield _event(
+            run_id,
+            "error",
+            "run_failed",
+            "Farm Agent 执行失败",
+            error_type=type(exc).__name__,
+        )
     finally:
         if runner_task is not None and not runner_task.done():
             runner_task.cancel()
@@ -334,7 +351,8 @@ async def _stream_run(
                 await runner_task
             except (asyncio.CancelledError, Exception):
                 pass
-        reset_sink(sink_token)
+        if sink_token is not None:
+            reset_sink(sink_token)
         elapsed_ms = int((time.perf_counter() - run_started) * 1000)
         await _offload(
             _persist_run_finish,
@@ -401,25 +419,29 @@ async def stream_task_verification(
 ) -> AsyncIterator[dict[str, Any]]:
     """校验任务所有权并流式生成复核草稿，永不直接完成任务。"""
 
-    evidence = await _offload(
-        farm_task_service.get_task_evidence,
-        user_id=user_id,
-        task_id=task_id,
-    )
-    run_id = uuid.uuid4().hex
-    context = FarmRunContext(
-        user_id=user_id,
-        farm_id=evidence.farm_id,
-        run_id=run_id,
-        run_type="task_verification",
-        task_id=task_id,
-    )
-    async for event in _stream_run(
-        context=context,
-        query=f"复核农场任务 {task_id}",
-        business_context={"task_evidence": evidence.model_dump(mode="json")},
-    ):
-        yield event
+    if _agent_semaphore.locked():
+        yield _event("", "error", "concurrency_limited", "当前 Farm Agent 任务较多，请稍后重试")
+        return
+    async with _agent_semaphore:
+        evidence = await _offload(
+            farm_task_service.get_task_evidence,
+            user_id=user_id,
+            task_id=task_id,
+        )
+        run_id = uuid.uuid4().hex
+        context = FarmRunContext(
+            user_id=user_id,
+            farm_id=evidence.farm_id,
+            run_id=run_id,
+            run_type="task_verification",
+            task_id=task_id,
+        )
+        async for event in _stream_run(
+            context=context,
+            query=f"复核农场任务 {task_id}",
+            business_context={"task_evidence": evidence.model_dump(mode="json")},
+        ):
+            yield event
 
 
 __all__ = [
