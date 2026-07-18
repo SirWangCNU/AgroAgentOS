@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, NoReturn
+from typing import NoReturn
 
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,11 @@ from app.models.farm_agent import FarmTask
 from app.models.trajectory import TrajectoryFile
 from app.schemas.farm_agent import (
     TaskEvidenceBundle,
+    TaskExecution,
+    TaskExecutionAction,
+    TaskExecutionAuditEntry,
     TaskStatus,
+    TaskSubmissionEvidence,
     TaskSubmitRequest,
     TaskVerificationDraft,
 )
@@ -114,13 +118,18 @@ def _detach_task(session: Session, task: FarmTask) -> FarmTask:
     return task
 
 
-def _audit_entry(*, action: str, note: str, timestamp: datetime) -> dict[str, str]:
-    return {
-        "actor": "human",
-        "action": action,
-        "note": note,
-        "timestamp": timestamp.isoformat(),
-    }
+def _audit_entry(
+    *,
+    action: TaskExecutionAction,
+    note: str,
+    timestamp: datetime,
+) -> TaskExecutionAuditEntry:
+    return TaskExecutionAuditEntry(
+        actor="human",
+        action=action,
+        note=note,
+        timestamp=timestamp,
+    )
 
 
 def _transition(
@@ -128,38 +137,75 @@ def _transition(
     *,
     task: FarmTask,
     target_status: TaskStatus,
-    action: str,
+    action: TaskExecutionAction,
     note: str,
-    execution_changes: dict[str, Any] | None = None,
+    submission: TaskSubmissionEvidence | None = None,
+    completion_note: str | None = None,
+    return_reason: str | None = None,
+    cancellation_reason: str | None = None,
+    expected_agent_verdict_json: str | None = None,
 ) -> FarmTask:
     """用来源状态 CAS 完成人工转换并追加审计记录。"""
 
     source_status: TaskStatus = task.status
     _require_allowed_transition(source_status, target_status)
     now = datetime.now(timezone.utc)
-    execution = dict(task.execution)
-    if execution_changes:
-        execution.update(execution_changes)
-    existing_audit = execution.get("audit")
-    audit = list(existing_audit) if isinstance(existing_audit, list) else []
-    audit.append(_audit_entry(action=action, note=note, timestamp=now))
-    execution["audit"] = audit
-    execution_json = json.dumps(execution, ensure_ascii=False)
+    previous_execution = TaskExecution.model_validate(task.execution)
+    execution = TaskExecution(
+        note=(submission.note if submission is not None else previous_execution.note),
+        trajectory_file_ids=(
+            list(submission.trajectory_file_ids)
+            if submission is not None
+            else list(previous_execution.trajectory_file_ids)
+        ),
+        attachment_urls=(
+            list(submission.attachment_urls)
+            if submission is not None
+            else list(previous_execution.attachment_urls)
+        ),
+        audit=[
+            *previous_execution.audit,
+            _audit_entry(action=action, note=note, timestamp=now),
+        ],
+        completion_note=(
+            completion_note
+            if completion_note is not None
+            else previous_execution.completion_note
+        ),
+        return_reason=(
+            return_reason
+            if return_reason is not None
+            else previous_execution.return_reason
+        ),
+        cancellation_reason=(
+            cancellation_reason
+            if cancellation_reason is not None
+            else previous_execution.cancellation_reason
+        ),
+    )
+    execution_json = json.dumps(
+        execution.model_dump(mode="json", exclude_defaults=True),
+        ensure_ascii=False,
+    )
 
-    affected_rows = (
+    transition_query = (
         session.query(FarmTask)
         .filter(
             FarmTask.task_id == task.task_id,
             FarmTask.status == source_status,
         )
-        .update(
-            {
-                FarmTask.status: target_status,
-                FarmTask.execution_json: execution_json,
-                FarmTask.updated_at: now,
-            },
-            synchronize_session=False,
+    )
+    if expected_agent_verdict_json is not None:
+        transition_query = transition_query.filter(
+            FarmTask.agent_verdict_json == expected_agent_verdict_json
         )
+    affected_rows = transition_query.update(
+        {
+            FarmTask.status: target_status,
+            FarmTask.execution_json: execution_json,
+            FarmTask.updated_at: now,
+        },
+        synchronize_session=False,
     )
     if affected_rows != 1:
         _raise_invalid_transition()
@@ -241,11 +287,7 @@ def submit(
             target_status="submitted",
             action="submit",
             note=request.note,
-            execution_changes={
-                "note": request.note,
-                "trajectory_file_ids": list(request.trajectory_file_ids),
-                "attachment_urls": list(request.attachment_urls),
-            },
+            submission=request,
         )
 
 
@@ -254,23 +296,11 @@ def get_task_evidence(*, user_id: int, task_id: str) -> TaskEvidenceBundle:
 
     with sqlite_manager.session() as session:
         task = _require_owned_task(session, task_id=task_id, user_id=user_id)
-        execution = dict(task.execution)
-        raw_trajectory_ids = execution.get("trajectory_file_ids", [])
-        trajectory_file_ids = (
-            [item for item in raw_trajectory_ids if isinstance(item, int)]
-            if isinstance(raw_trajectory_ids, list)
-            else []
-        )
+        execution = TaskExecution.model_validate(task.execution)
         trajectories = _load_task_trajectories(
             session,
             farm_id=task.farm_id,
-            trajectory_file_ids=trajectory_file_ids,
-        )
-        raw_attachment_urls = execution.get("attachment_urls", [])
-        attachment_urls = (
-            [item for item in raw_attachment_urls if isinstance(item, str)]
-            if isinstance(raw_attachment_urls, list)
-            else []
+            trajectory_file_ids=execution.trajectory_file_ids,
         )
         return TaskEvidenceBundle(
             task_id=task.task_id,
@@ -285,7 +315,7 @@ def get_task_evidence(*, user_id: int, task_id: str) -> TaskEvidenceBundle:
                 TrajectoryFileInfo.model_validate(trajectory)
                 for trajectory in trajectories
             ],
-            attachment_urls=attachment_urls,
+            attachment_urls=execution.attachment_urls,
         )
 
 
@@ -345,7 +375,8 @@ def complete(*, user_id: int, task_id: str, note: str) -> FarmTask:
             target_status="completed",
             action="complete",
             note=note,
-            execution_changes={"completion_note": note},
+            completion_note=note,
+            expected_agent_verdict_json=task.agent_verdict_json,
         )
 
 
@@ -366,7 +397,7 @@ def return_task(*, user_id: int, task_id: str, note: str) -> FarmTask:
             target_status="returned",
             action="return",
             note=note,
-            execution_changes={"return_reason": note},
+            return_reason=note,
         )
 
 
@@ -381,5 +412,5 @@ def cancel(*, user_id: int, task_id: str, note: str) -> FarmTask:
             target_status="cancelled",
             action="cancel",
             note=note,
-            execution_changes={"cancellation_reason": note},
+            cancellation_reason=note,
         )

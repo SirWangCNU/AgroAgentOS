@@ -19,7 +19,11 @@ from app.models.trajectory import TrajectoryFile
 from app.models.user import User
 from app.schemas.farm_agent import (
     TaskEvidenceBundle,
+    TaskExecution,
+    TaskExecutionAction,
+    TaskExecutionAuditEntry,
     TaskStatus,
+    TaskSubmissionEvidence,
     TaskSubmitRequest,
     TaskVerificationDraft,
 )
@@ -41,6 +45,13 @@ EXPECTED_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     "returned": {"in_progress", "cancelled"},
     "completed": set(),
     "cancelled": set(),
+}
+MATRIX_ACTION_BY_TARGET: dict[TaskStatus, TaskExecutionAction] = {
+    "in_progress": "start",
+    "submitted": "submit",
+    "completed": "complete",
+    "returned": "return",
+    "cancelled": "cancel",
 }
 
 
@@ -197,6 +208,47 @@ TRANSITION_CASES = [
 ]
 
 
+def _perform_allowed_service_transition(
+    *,
+    user_id: int,
+    task_id: str,
+    target: TaskStatus,
+    trajectory_file_id: int,
+) -> None:
+    if target == "in_progress":
+        farm_task_service.start(user_id=user_id, task_id=task_id)
+    elif target == "submitted":
+        farm_task_service.submit(
+            user_id=user_id,
+            task_id=task_id,
+            request=TaskSubmitRequest(
+                note="既有提交证据",
+                trajectory_file_ids=[trajectory_file_id],
+                attachment_urls=["https://example.com/existing.jpg"],
+            ),
+        )
+    elif target == "completed":
+        farm_task_service.complete(
+            user_id=user_id,
+            task_id=task_id,
+            note="矩阵验证",
+        )
+    elif target == "returned":
+        farm_task_service.return_task(
+            user_id=user_id,
+            task_id=task_id,
+            note="矩阵验证",
+        )
+    elif target == "cancelled":
+        farm_task_service.cancel(
+            user_id=user_id,
+            task_id=task_id,
+            note="矩阵验证",
+        )
+    else:
+        raise AssertionError(f"未配置合法目标状态: {target}")
+
+
 @pytest.mark.parametrize(
     ("source", "target", "allowed"),
     TRANSITION_CASES,
@@ -209,21 +261,63 @@ def test_transition_matrix_has_exact_allowed_edges_and_409_complement(
 ) -> None:
     seeded = _seed_tasks(task_database)
     task_id = str(seeded["task_id"])
-    _set_task_state(task_database, task_id=task_id, status=source)
+    previous_execution = {
+        "note": "既有提交证据",
+        "trajectory_file_ids": [int(seeded["trajectory_id"])],
+        "attachment_urls": ["https://example.com/existing.jpg"],
+        "audit": [],
+    }
+    _set_task_state(
+        task_database,
+        task_id=task_id,
+        status=source,
+        execution=previous_execution,
+        verdict=(
+            {"verdict": "pass", "note": "矩阵完成前置草稿"}
+            if target == "completed"
+            else None
+        ),
+    )
+    action = MATRIX_ACTION_BY_TARGET.get(target, "start")
 
     if allowed:
-        with sqlite_manager.session() as session:
-            task = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
-            transitioned = farm_task_service._transition(
-                session,
-                task=task,
-                target_status=target,
-                action=f"matrix:{source}->{target}",
-                note="矩阵验证",
-            )
-        assert transitioned.status == target
-        assert transitioned.execution["audit"][-1]["actor"] == "human"
+        _perform_allowed_service_transition(
+            user_id=int(seeded["owner_id"]),
+            task_id=task_id,
+            target=target,
+            trajectory_file_id=int(seeded["trajectory_id"]),
+        )
         assert target in farm_task_service.ALLOWED_TRANSITIONS[source]
+        with task_database() as session:
+            persisted = (
+                session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+            )
+            execution = TaskExecution.model_validate(persisted.execution)
+            assert persisted.status == target
+            assert execution.note == "既有提交证据"
+            assert execution.trajectory_file_ids == [seeded["trajectory_id"]]
+            assert execution.attachment_urls == [
+                "https://example.com/existing.jpg"
+            ]
+            assert len(execution.audit) == 1
+            audit_entry = execution.audit[0]
+            assert audit_entry.actor == "human"
+            assert audit_entry.action == action
+            expected_note = (
+                ""
+                if target == "in_progress"
+                else "既有提交证据"
+                if target == "submitted"
+                else "矩阵验证"
+            )
+            assert audit_entry.note == expected_note
+            assert isinstance(audit_entry.timestamp, datetime)
+            assert set(persisted.execution["audit"][0]) == {
+                "actor",
+                "action",
+                "note",
+                "timestamp",
+            }
         return
 
     with pytest.raises(AppException) as exc_info:
@@ -233,7 +327,7 @@ def test_transition_matrix_has_exact_allowed_edges_and_409_complement(
                 session,
                 task=task,
                 target_status=target,
-                action=f"matrix:{source}->{target}",
+                action=action,
                 note="矩阵验证",
             )
 
@@ -242,7 +336,7 @@ def test_transition_matrix_has_exact_allowed_edges_and_409_complement(
     with task_database() as session:
         persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
         assert persisted.status == source
-        assert persisted.execution == {}
+        assert persisted.execution == previous_execution
 
 
 def test_start_submit_complete_preserves_evidence_and_appends_human_audit(
@@ -400,6 +494,52 @@ def test_submit_schema_rejects_non_http_attachment_urls(url: str) -> None:
         TaskSubmitRequest(note="", trajectory_file_ids=[], attachment_urls=[url])
 
 
+def test_task_execution_contract_is_typed_and_accepts_legacy_empty_json() -> None:
+    submission = TaskSubmissionEvidence(
+        note="已完成",
+        trajectory_file_ids=[7],
+        attachment_urls=["https://example.com/evidence.jpg"],
+    )
+    empty_execution = TaskExecution.model_validate({})
+
+    assert submission.trajectory_file_ids == [7]
+    assert empty_execution.note == ""
+    assert empty_execution.trajectory_file_ids == []
+    assert empty_execution.attachment_urls == []
+    assert empty_execution.audit == []
+    assert empty_execution.completion_note is None
+    assert empty_execution.return_reason is None
+    assert empty_execution.cancellation_reason is None
+    assert TaskEvidenceBundle.model_fields["execution"].annotation is TaskExecution
+
+
+def test_task_execution_audit_requires_human_actor_and_known_action() -> None:
+    valid = TaskExecutionAuditEntry(
+        actor="human",
+        action="submit",
+        note="提交",
+        timestamp="2026-07-18T08:00:00+00:00",
+    )
+
+    assert valid.actor == "human"
+    assert valid.action == "submit"
+    assert isinstance(valid.timestamp, datetime)
+    with pytest.raises(ValidationError):
+        TaskExecutionAuditEntry(
+            actor="agent",
+            action="submit",
+            note="越界 actor",
+            timestamp="2026-07-18T08:00:00+00:00",
+        )
+    with pytest.raises(ValidationError):
+        TaskExecutionAuditEntry(
+            actor="human",
+            action="approve",
+            note="未知动作",
+            timestamp="2026-07-18T08:00:00+00:00",
+        )
+
+
 @pytest.mark.parametrize(
     "trajectory_key",
     ["other_farm_trajectory_id", "foreign_trajectory_id", "missing"],
@@ -459,7 +599,11 @@ def test_get_task_evidence_returns_task_goal_and_owned_trajectory_metadata(
     assert bundle.task_id == seeded["task_id"]
     assert bundle.instructions == "清理堵塞点并提交证据"
     assert bundle.acceptance_criteria == ["排水畅通", "提交执行证据"]
-    assert bundle.execution == execution
+    assert isinstance(bundle.execution, TaskExecution)
+    assert bundle.execution.note == execution["note"]
+    assert bundle.execution.trajectory_file_ids == execution["trajectory_file_ids"]
+    assert bundle.execution.attachment_urls == execution["attachment_urls"]
+    assert bundle.execution.audit == []
     assert [trajectory.id for trajectory in bundle.trajectory_files] == [
         seeded["trajectory_id"]
     ]
@@ -731,3 +875,67 @@ def test_compare_and_set_prevents_double_transition_and_keeps_winner_audit(
         persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
         assert persisted.status == "in_progress"
         assert persisted.execution["audit"][0]["action"] == "winner"
+
+
+def test_complete_cas_loses_when_verification_draft_changes_after_read(
+    task_file_database: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seeded = _seed_tasks(task_file_database)
+    task_id = str(seeded["task_id"])
+    _set_task_state(
+        task_file_database,
+        task_id=task_id,
+        status="submitted",
+        verdict={"verdict": "pass", "note": "初始通过草稿"},
+    )
+    original_update = Query.update
+    injected: list[bool] = []
+
+    def update_after_verdict_replacement(
+        query: Query[object],
+        values: object,
+        *args: object,
+        **kwargs: object,
+    ) -> int:
+        if not injected:
+            injected.append(True)
+            replacement = TaskVerificationDraft(
+                verdict="needs_evidence",
+                note="并发复核发现证据不足",
+            )
+            with task_file_database() as competing_session:
+                affected = original_update(
+                    competing_session.query(FarmTask).filter(
+                        FarmTask.task_id == task_id,
+                        FarmTask.status == "submitted",
+                    ),
+                    {
+                        FarmTask.agent_verdict_json: json.dumps(
+                            replacement.model_dump(mode="json"),
+                            ensure_ascii=False,
+                        ),
+                        FarmTask.updated_at: datetime.now(timezone.utc),
+                    },
+                    synchronize_session=False,
+                )
+                assert affected == 1
+                competing_session.commit()
+        return original_update(query, values, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "update", update_after_verdict_replacement)
+
+    with pytest.raises(AppException) as exc_info:
+        farm_task_service.complete(
+            user_id=int(seeded["owner_id"]),
+            task_id=task_id,
+            note="不得使用过期草稿完成",
+        )
+
+    assert injected == [True]
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == "INVALID_TASK_TRANSITION"
+    with task_file_database() as session:
+        persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        assert persisted.status == "submitted"
+        assert persisted.agent_verdict["verdict"] == "needs_evidence"

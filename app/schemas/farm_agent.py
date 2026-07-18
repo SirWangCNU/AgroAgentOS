@@ -31,6 +31,7 @@ TaskStatus = Literal[
 VerificationVerdict = Literal["pass", "needs_evidence", "rework", "manual_review"]
 EvidenceFactKind = Literal["measured", "rule", "inference"]
 TaskPriority = Literal["normal", "high", "urgent"]
+TaskExecutionAction = Literal["start", "submit", "complete", "return", "cancel"]
 FarmAgentEventType = Literal[
     "start",
     "context_loaded",
@@ -154,12 +155,21 @@ class ProposalRejectRequest(BaseModel):
     decision_note: str
 
 
-class TaskSubmitRequest(BaseModel):
-    """作业人员提交的任务执行证据."""
+class TaskExecutionAuditEntry(BaseModel):
+    """一次显式人工任务状态转换的审计记录."""
 
+    actor: Literal["human"]
+    action: TaskExecutionAction
     note: str
-    trajectory_file_ids: list[int]
-    attachment_urls: list[str]
+    timestamp: datetime
+
+
+class TaskSubmissionEvidence(BaseModel):
+    """作业人员提交并持久化到 execution JSON 的证据字段."""
+
+    note: str = ""
+    trajectory_file_ids: list[int] = Field(default_factory=list)
+    attachment_urls: list[str] = Field(default_factory=list)
 
     @field_validator("attachment_urls")
     @classmethod
@@ -175,6 +185,19 @@ class TaskSubmitRequest(BaseModel):
             except (ValidationError, ValueError) as exc:
                 raise ValueError("附件 URL 格式无效") from exc
         return urls
+
+
+class TaskExecution(TaskSubmissionEvidence):
+    """FarmTask.execution_json 的完整类型化结构."""
+
+    audit: list[TaskExecutionAuditEntry] = Field(default_factory=list)
+    completion_note: str | None = None
+    return_reason: str | None = None
+    cancellation_reason: str | None = None
+
+
+class TaskSubmitRequest(TaskSubmissionEvidence):
+    """作业人员提交的任务执行证据."""
 
 
 class TaskVerificationDraft(BaseModel):
@@ -207,7 +230,7 @@ class TaskResponse(BaseModel):
     priority: TaskPriority
     status: TaskStatus
     due_at: datetime | None = None
-    execution: dict[str, Any]
+    execution: TaskExecution
     agent_verdict: dict[str, Any]
     created_at: datetime
     updated_at: datetime
@@ -225,7 +248,7 @@ class TaskEvidenceBundle(BaseModel):
     instructions: str
     acceptance_criteria: list[str]
     status: TaskStatus
-    execution: dict[str, Any]
+    execution: TaskExecution
     trajectory_files: list[TrajectoryFileInfo] = Field(default_factory=list)
     attachment_urls: list[str] = Field(default_factory=list)
 
