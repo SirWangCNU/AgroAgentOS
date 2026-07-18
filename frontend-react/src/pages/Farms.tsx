@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Tractor,
@@ -13,6 +14,7 @@ import {
   Upload,
   BarChart3,
   Loader2,
+  Radar,
 } from "lucide-react";
 import {
   getFarms,
@@ -158,6 +160,14 @@ export default function Farms() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        <Link
+                          to={`/workspace/farm-agent?farmId=${farm.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/20"
+                          aria-label={`对 ${farm.name} 启动 AI 巡检`}
+                        >
+                          <Radar className="h-3 w-3" /> AI 巡检
+                        </Link>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

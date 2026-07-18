@@ -13,6 +13,7 @@ import MarketPrice from "./pages/MarketPrice";
 import VideoGen from "./pages/VideoGen";
 import Users from "./pages/Users";
 import Profile from "./pages/Profile";
+import FarmAgent from "./pages/FarmAgent";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="/workspace" element={<Dashboard />} />
             <Route path="/workspace/weather" element={<Weather />} />
             <Route path="/workspace/farms" element={<Farms />} />
+            <Route path="/workspace/farm-agent" element={<FarmAgent />} />
             <Route path="/workspace/knowledge" element={<Knowledge />} />
             <Route path="/workspace/marketing" element={<Marketing />} />
             <Route path="/workspace/pest" element={<PestDiagnosis />} />

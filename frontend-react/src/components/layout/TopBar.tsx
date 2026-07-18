@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Film,
   UserCircle,
+  Radar,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
@@ -23,6 +24,7 @@ import WeatherBadge from "./WeatherBadge";
 
 const WORKSPACE_ITEMS = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/workspace" },
+  { icon: Radar, label: "AI 农场驾驶舱", path: "/workspace/farm-agent" },
   { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
   { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
   { icon: BookOpen, label: "智能体技能和知识库", path: "/workspace/knowledge" },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, CloudRain, Loader2, Radar, Sparkles, Tractor } from "lucide-react";
 import { getFarms } from "../api/farms";
@@ -20,6 +20,7 @@ function proposalRisk(proposal: Awaited<ReturnType<typeof listFarmProposals>>[nu
 }
 
 export default function FarmAgent() {
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
   const abortRef = useRef<AbortController | null>(null);
@@ -28,7 +29,9 @@ export default function FarmAgent() {
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const { runStatus, activeRunId, events, risks: inspectionRisks, degraded, dataGaps, startRun, appendEvent, finishRun, failRun, reset, error } = useFarmAgentStore();
   const { data: farms = [], isLoading: farmsLoading } = useQuery({ queryKey: ["farms"], queryFn: getFarms });
-  const farmId = selectedFarmId ?? farms[0]?.id ?? null;
+  const queryFarmId = Number(searchParams.get("farmId"));
+  const linkedFarmId = Number.isInteger(queryFarmId) && farms.some((farm) => farm.id === queryFarmId) ? queryFarmId : null;
+  const farmId = selectedFarmId ?? linkedFarmId ?? farms[0]?.id ?? null;
   const selectedFarm = farms.find((farm) => farm.id === farmId) ?? null;
   const { data: proposals = [] } = useQuery({ queryKey: ["farm-agent-proposals", farmId], queryFn: () => listFarmProposals({ farm_id: farmId ?? undefined }), enabled: farmId !== null });
   const { data: tasks = [] } = useQuery({ queryKey: ["farm-agent-tasks", farmId], queryFn: () => listFarmTasks({ farm_id: farmId ?? undefined }), enabled: farmId !== null });

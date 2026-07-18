@@ -15,12 +15,20 @@ import {
   ArrowRight,
   TrendingUp,
   Film,
+  Radar,
+  ShieldAlert,
+  ClipboardList,
+  ListTodo,
+  Clock3,
 } from "lucide-react";
 import { useAuthStore } from "../stores/auth";
 import { useHealthStore } from "../stores/health";
 import { useConversationStore } from "../stores/conversation";
 import { getWeather } from "../api/weather";
 import StatCard from "../components/ui/StatCard";
+import { listFarmProposals } from "../api/farmAgent";
+import { listFarmTasks } from "../api/farmTasks";
+import { useFarmAgentStore } from "../stores/farmAgent";
 
 const TOOLS = [
   {
@@ -95,14 +103,29 @@ export default function Dashboard() {
   const health = useHealthStore((s) => s.health);
   const skills = useHealthStore((s) => s.skills);
   const conversations = useConversationStore((s) => s.conversations);
+  const lastRunStatus = useFarmAgentStore((s) => s.runStatus);
 
   const { data: weather } = useQuery({
     queryKey: ["weather", "dashboard"],
     queryFn: () => getWeather("北京"),
     staleTime: 5 * 60 * 1000,
   });
+  const { data: proposals = [] } = useQuery({
+    queryKey: ["farm-agent-proposals", "dashboard"],
+    queryFn: () => listFarmProposals({}),
+  });
+  const { data: farmTasks = [] } = useQuery({
+    queryKey: ["farm-agent-tasks", "dashboard"],
+    queryFn: () => listFarmTasks({}),
+  });
 
   const recentConversations = conversations.slice(0, 4);
+  const today = new Date().toDateString();
+  const todayRisks = proposals.filter((proposal) => proposal.created_at && new Date(proposal.created_at).toDateString() === today);
+  const pendingProposalCount = proposals.filter((proposal) => proposal.status === "pending").length;
+  const activeTaskCount = farmTasks.filter((task) => task.status === "in_progress" || task.status === "submitted").length;
+  const highRiskCount = todayRisks.filter((proposal) => proposal.severity === "high" || proposal.severity === "critical").length;
+  const runStatusLabel = { idle: "尚未巡检", running: "巡检进行中", completed: "最近巡检完成", failed: "最近巡检异常" }[lastRunStatus];
 
   return (
     <div className="flex-1 overflow-auto">
@@ -118,7 +141,29 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Status cards */}
+        <section className="mb-6 overflow-hidden rounded-3xl border border-[#28503f] bg-[#173d30] p-5 text-white shadow-[0_20px_55px_-38px_rgba(15,60,43,.9)] sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.26em] text-[#9ac9ad]">AI farm operations</p>
+              <h2 className="mt-2 text-xl font-semibold">今日农场智能决策台</h2>
+              <p className="mt-1 text-sm text-[#c9ddd0]">巡检风险、人工审批和现场任务在一个闭环中协同。</p>
+            </div>
+            <button onClick={() => navigate("/workspace/farm-agent")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f5b84b] px-4 py-3 text-sm font-bold text-[#34250f] hover:bg-[#ffca69]">
+              <Radar className="h-4 w-4" />开始 AI 综合巡检
+            </button>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {[
+              { icon: ShieldAlert, label: "今日 AI 风险", value: `${todayRisks.length} 项`, sub: `${highRiskCount} 项高风险` },
+              { icon: ClipboardList, label: "待确认提案", value: `${pendingProposalCount} 项`, sub: "等待人工决策" },
+              { icon: ListTodo, label: "进行中任务", value: `${activeTaskCount} 项`, sub: "含待复核任务" },
+              { icon: Clock3, label: "最近一次巡检", value: runStatusLabel, sub: lastRunStatus === "running" ? "Agent 正在执行" : "可进入驾驶舱查看" },
+            ].map((item) => <div key={item.label} className="rounded-2xl border border-white/10 bg-white/7 p-3.5"><item.icon className="h-4 w-4 text-[#f3c66f]" /><p className="mt-3 text-[10px] uppercase tracking-wider text-[#94b5a2]">{item.label}</p><p className="mt-1 text-base font-semibold">{item.value}</p><p className="mt-1 text-[10px] text-[#a9c1b1]">{item.sub}</p></div>)}
+          </div>
+        </section>
+
+        {/* Secondary system health cards */}
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">系统运行状态</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatCard
             icon={Activity}
