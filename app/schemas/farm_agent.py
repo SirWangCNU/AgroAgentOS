@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
+    ConfigDict,
     Field,
     TypeAdapter,
     ValidationError,
@@ -163,6 +164,8 @@ class TaskExecutionAuditEntry(BaseModel):
     note: str
     timestamp: datetime
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class TaskSubmissionEvidence(BaseModel):
     """作业人员提交并持久化到 execution JSON 的证据字段."""
@@ -170,6 +173,8 @@ class TaskSubmissionEvidence(BaseModel):
     note: str = ""
     trajectory_file_ids: list[int] = Field(default_factory=list)
     attachment_urls: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("attachment_urls")
     @classmethod

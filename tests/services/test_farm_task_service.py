@@ -8,7 +8,8 @@ from typing import Callable, Iterator
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, update
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Query, Session, sessionmaker
 
 from app.core.sqlite import Base, sqlite_manager
@@ -939,3 +940,140 @@ def test_complete_cas_loses_when_verification_draft_changes_after_read(
         persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
         assert persisted.status == "submitted"
         assert persisted.agent_verdict["verdict"] == "needs_evidence"
+
+
+def test_complete_cas_loses_on_case_only_verdict_snapshot_replacement(
+    task_file_database: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seeded = _seed_tasks(task_file_database)
+    task_id = str(seeded["task_id"])
+    original_snapshot = '{"verdict":"pass","note":"same"}'
+    replacement_snapshot = '{"verdict":"Pass","note":"same"}'
+    with task_file_database() as session:
+        task = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        task.status = "submitted"
+        task.agent_verdict_json = original_snapshot
+        session.commit()
+    original_update = Query.update
+    injected: list[bool] = []
+
+    def update_after_case_only_replacement(
+        query: Query[object],
+        values: object,
+        *args: object,
+        **kwargs: object,
+    ) -> int:
+        if not injected:
+            injected.append(True)
+            with task_file_database() as competing_session:
+                affected = original_update(
+                    competing_session.query(FarmTask).filter(
+                        FarmTask.task_id == task_id,
+                        FarmTask.status == "submitted",
+                    ),
+                    {
+                        FarmTask.agent_verdict_json: replacement_snapshot,
+                        FarmTask.updated_at: datetime.now(timezone.utc),
+                    },
+                    synchronize_session=False,
+                )
+                assert affected == 1
+                competing_session.commit()
+        return original_update(query, values, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "update", update_after_case_only_replacement)
+
+    with pytest.raises(AppException) as exc_info:
+        farm_task_service.complete(
+            user_id=int(seeded["owner_id"]),
+            task_id=task_id,
+            note="不得使用大小写已变化的快照",
+        )
+
+    assert injected == [True]
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == "INVALID_TASK_TRANSITION"
+    with task_file_database() as session:
+        persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        assert persisted.status == "submitted"
+        assert persisted.agent_verdict_json == replacement_snapshot
+
+
+def test_verdict_snapshot_predicate_compiles_to_mysql_binary_equality() -> None:
+    snapshot = '{"verdict":"pass","note":"Same"}'
+    statement = (
+        update(FarmTask)
+        .where(farm_task_service._exact_verdict_snapshot_predicate(snapshot))
+        .values(status="completed")
+    )
+
+    compiled = str(
+        statement.compile(
+            dialect=mysql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    assert "CAST(farm_tasks.agent_verdict_json AS BINARY)" in compiled
+    assert f"CAST('{snapshot}' AS BINARY)" in compiled
+    assert f"farm_tasks.agent_verdict_json = '{snapshot}'" not in compiled
+
+
+def test_transition_rejects_unknown_stored_execution_without_data_loss(
+    task_database: sessionmaker[Session],
+) -> None:
+    seeded = _seed_tasks(task_database)
+    task_id = str(seeded["task_id"])
+    raw_execution = json.dumps(
+        {
+            "note": "既有证据",
+            "trajectory_file_ids": [int(seeded["trajectory_id"])],
+            "attachment_urls": [],
+            "audit": [],
+            "legacy_evidence": {"source": "legacy-import"},
+        },
+        ensure_ascii=False,
+    )
+    with task_database() as session:
+        task = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        task.execution_json = raw_execution
+        session.commit()
+
+    with pytest.raises(AppException) as exc_info:
+        farm_task_service.start(
+            user_id=int(seeded["owner_id"]),
+            task_id=task_id,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.code == "INVALID_TASK_EXECUTION_DATA"
+    with task_database() as session:
+        persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        assert persisted.status == "pending"
+        assert persisted.execution_json == raw_execution
+
+
+def test_transition_rejects_malformed_stored_execution_without_data_loss(
+    task_database: sessionmaker[Session],
+) -> None:
+    seeded = _seed_tasks(task_database)
+    task_id = str(seeded["task_id"])
+    raw_execution = "{malformed"
+    with task_database() as session:
+        task = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        task.execution_json = raw_execution
+        session.commit()
+
+    with pytest.raises(AppException) as exc_info:
+        farm_task_service.start(
+            user_id=int(seeded["owner_id"]),
+            task_id=task_id,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.code == "INVALID_TASK_EXECUTION_DATA"
+    with task_database() as session:
+        persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        assert persisted.status == "pending"
+        assert persisted.execution_json == raw_execution

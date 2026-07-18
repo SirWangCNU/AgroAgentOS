@@ -6,10 +6,13 @@ import json
 from datetime import datetime, timezone
 from typing import NoReturn
 
+from pydantic import ValidationError
+from sqlalchemy import LargeBinary, cast, literal
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.sqlite import sqlite_manager
-from app.exceptions import AppException, ForbiddenError
+from app.exceptions import AppException, ForbiddenError, ServiceError
 from app.models.farm import Farm, Field
 from app.models.farm_agent import FarmTask
 from app.models.trajectory import TrajectoryFile
@@ -132,6 +135,25 @@ def _audit_entry(
     )
 
 
+def _load_task_execution(task: FarmTask) -> TaskExecution:
+    try:
+        return TaskExecution.model_validate_json(task.execution_json or "{}")
+    except ValidationError as exc:
+        raise ServiceError(
+            code="INVALID_TASK_EXECUTION_DATA",
+            message="任务执行数据格式无效",
+        ) from exc
+
+
+def _exact_verdict_snapshot_predicate(snapshot: str) -> ColumnElement[bool]:
+    """用二进制 cast 绕过数据库文本 collation，比较原始 verdict 快照。"""
+
+    return cast(FarmTask.agent_verdict_json, LargeBinary) == cast(
+        literal(snapshot),
+        LargeBinary,
+    )
+
+
 def _transition(
     session: Session,
     *,
@@ -150,7 +172,7 @@ def _transition(
     source_status: TaskStatus = task.status
     _require_allowed_transition(source_status, target_status)
     now = datetime.now(timezone.utc)
-    previous_execution = TaskExecution.model_validate(task.execution)
+    previous_execution = _load_task_execution(task)
     execution = TaskExecution(
         note=(submission.note if submission is not None else previous_execution.note),
         trajectory_file_ids=(
@@ -197,7 +219,7 @@ def _transition(
     )
     if expected_agent_verdict_json is not None:
         transition_query = transition_query.filter(
-            FarmTask.agent_verdict_json == expected_agent_verdict_json
+            _exact_verdict_snapshot_predicate(expected_agent_verdict_json)
         )
     affected_rows = transition_query.update(
         {
@@ -296,7 +318,7 @@ def get_task_evidence(*, user_id: int, task_id: str) -> TaskEvidenceBundle:
 
     with sqlite_manager.session() as session:
         task = _require_owned_task(session, task_id=task_id, user_id=user_id)
-        execution = TaskExecution.model_validate(task.execution)
+        execution = _load_task_execution(task)
         trajectories = _load_task_trajectories(
             session,
             farm_id=task.farm_id,
