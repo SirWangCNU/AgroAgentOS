@@ -6,10 +6,6 @@ const api = {
   // ===== 认证 =====
   getUserInfo: () => request({ url: '/auth/me', method: 'GET' }),
 
-  // 微信绑定 Web 账号：小程序端提交绑定码
-  wxBindConfirm: (bindCode) =>
-    request({ url: '/auth/wx-bind/confirm', method: 'POST', data: { bind_code: bindCode } }),
-
   // ===== 聊天（流式在 sse.js） =====
   createSession: (title = '') => request({ url: '/sessions', method: 'POST', data: { title } }),
   listSessions: () => request({ url: '/sessions', method: 'GET' }),

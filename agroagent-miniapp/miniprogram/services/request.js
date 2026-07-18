@@ -26,9 +26,14 @@ function request(opt) {
         if (res.statusCode === 401) {
           storage.remove('token');
           storage.remove('userInfo');
-          getApp().globalData.token = '';
-          getApp().globalData.userInfo = null;
+          const app = getApp();
+          if (app && app.globalData) {
+            app.globalData.token = '';
+            app.globalData.userInfo = null;
+          }
           if (showError) wx.showToast({ title: '登录已过期', icon: 'none' });
+          // 跳回登录页
+          wx.reLaunch({ url: '/pages/login/index' });
           reject(body);
           return;
         }

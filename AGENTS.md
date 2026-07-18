@@ -2,6 +2,12 @@
 
 FastAPI + LangGraph multi-agent agriculture platform. Python 3.11+ backend, React 19 + Vite frontend.
 
+## 编码规范（强制）
+
+人类开发者和 AI 编码助手在编写或修改代码前，必须阅读并遵守 [`docs/DEVELOPMENT_STANDARDS.md`](docs/DEVELOPMENT_STANDARDS.md)。
+
+AI 必须先检查现有实现、相邻测试和 `git status`，再以最小范围修改代码；必须遵守项目分层、类型、错误处理和测试规则。禁止覆盖用户改动、顺手重构无关代码、提交敏感信息、绕过类型或迁移、吞掉异常、删除或弱化测试。完成后必须运行与改动相关的验证，并如实报告结果。
+
 ## Commands
 
 ### Backend

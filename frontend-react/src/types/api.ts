@@ -27,7 +27,14 @@ export interface UserInfo extends User {
 
 export interface LoginResponse {
   access_token: string;
+  token_type: string;
   user: User;
+}
+
+export interface CaptchaChallenge {
+  captcha_token: string;
+  image_svg: string;
+  expires_in: number;
 }
 
 export interface HealthData {

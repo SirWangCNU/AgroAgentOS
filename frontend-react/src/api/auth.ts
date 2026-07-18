@@ -1,13 +1,31 @@
 import { authFetch } from "./client";
-import type { ApiResponse, LoginResponse, User, UserInfo } from "../types/api";
+import type {
+  ApiResponse,
+  CaptchaChallenge,
+  LoginResponse,
+  User,
+  UserInfo,
+} from "../types/api";
+
+export async function getCaptcha(): Promise<CaptchaChallenge> {
+  const resp = await authFetch<ApiResponse<CaptchaChallenge>>("/auth/captcha");
+  return resp.data;
+}
 
 export async function login(
   username: string,
-  password: string
+  password: string,
+  captchaToken: string,
+  captchaAnswer: string
 ): Promise<LoginResponse> {
   const resp = await authFetch<ApiResponse<LoginResponse>>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({
+      username,
+      password,
+      captcha_token: captchaToken,
+      captcha_answer: captchaAnswer,
+    }),
   });
   return resp.data;
 }

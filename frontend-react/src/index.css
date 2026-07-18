@@ -137,3 +137,46 @@ body {
 .map-isolation .leaflet-bottom {
   z-index: 1;
 }
+
+@keyframes login-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes login-form-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.login-portal-card {
+  animation: login-card-rise 520ms ease-out both;
+}
+
+.login-form-enter {
+  animation: login-form-rise 620ms ease-out 90ms both;
+}
+
+.login-float-card {
+  animation: login-float 4.6s ease-in-out infinite;
+}

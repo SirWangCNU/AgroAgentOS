@@ -365,7 +365,7 @@ if ($Stop) {
         }
     }
     $openWebSearchStopPort = Get-PortFromUrl -Url (Get-EnvValue -Name "OPEN_WEBSEARCH_BASE_URL" -DefaultValue "http://127.0.0.1:3210") -DefaultPort 3210
-    5173,8006,9800,$openWebSearchStopPort | ForEach-Object {
+    3000,8006,9800,$openWebSearchStopPort | ForEach-Object {
         Stop-PortProcess -Port $_
     }
     Write-Host "[stop] done" -ForegroundColor Green
@@ -455,7 +455,7 @@ Start-PythonServer -Name "websearch_server" -Script "$ProjectRoot\mcp_servers\we
 
 # Start frontend Vite dev server
 if (-not $NoFrontend) {
-    $FrontendPort = 5173
+    $FrontendPort = 3000
     # Also check if Vite is running on a nearby port (it auto-selects if 5173 is busy)
     $viteAlreadyRunning = $false
     if (Test-TcpPort -HostName "127.0.0.1" -Port $FrontendPort) {

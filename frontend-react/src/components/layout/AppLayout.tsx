@@ -63,15 +63,15 @@ export default function AppLayout() {
             onClick={toggleSidebar}
           />
           {/* Sidebar panel */}
-          <div className="fixed left-0 top-12 bottom-0 z-40">
+          <div className="fixed left-0 top-14 bottom-0 z-40">
             <ConversationSidebar />
           </div>
         </>
       )}
 
       {/* Main area — always full width */}
-      <div className="flex flex-col h-full pt-12">
-        <main className="flex-1 overflow-hidden flex flex-col">
+      <div className="flex flex-col h-full pt-14">
+        <main className="flex-1 overflow-hidden flex flex-col bg-[#f3f7fb]">
           <Outlet />
         </main>
       </div>

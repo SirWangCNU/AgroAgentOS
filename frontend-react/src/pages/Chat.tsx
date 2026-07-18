@@ -304,10 +304,6 @@ export default function Chat() {
     setStreaming(false);
   };
 
-  const handleQuickAction = (text: string) => {
-    handleSend(text);
-  };
-
   // Show loading state only when fetching messages for a conversation that
   // isn't even in the store yet (e.g. cold start, list still loading).
   // If AppLayout eagerly preloaded conversations, we already have a stub
@@ -347,20 +343,23 @@ export default function Chat() {
   // Show welcome screen if no messages
   if (!messages.length) {
     return (
-      <>
-        <WelcomeScreen onQuickAction={handleQuickAction} />
-        <div className="pb-6">
-          <ChatInput
-            onSend={handleSend}
-            streaming={isStreaming}
-            disabled={isStreaming}
-            webSearch={webSearch}
-            onWebSearchChange={setWebSearch}
-            mcpTools={mcpTools}
-            onMcpToolsChange={setMcpTools}
-          />
+      <div className="flex flex-1 overflow-y-auto bg-[#f7f8f6]">
+        <div className="mx-auto flex min-h-full w-full max-w-[816px] flex-col justify-center px-6 pb-[12vh] pt-10 sm:px-8">
+          <WelcomeScreen />
+          <div className="mt-10 w-full">
+            <ChatInput
+              onSend={handleSend}
+              streaming={isStreaming}
+              disabled={isStreaming}
+              webSearch={webSearch}
+              onWebSearchChange={setWebSearch}
+              mcpTools={mcpTools}
+              onMcpToolsChange={setMcpTools}
+              mode="welcome"
+            />
+          </div>
         </div>
-      </>
+      </div>
     );
   }
 
