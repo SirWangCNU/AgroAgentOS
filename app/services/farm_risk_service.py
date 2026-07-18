@@ -18,6 +18,9 @@ from app.tools.weather_risk import classify_drainage_rainfall
 
 _DEPTH_STD_THRESHOLD = 5.0
 _MINIMUM_COVERAGE_RATIO = 0.8
+# 逐日预报只能作为首个预报日代理，不能支撑滚动未来 24 小时的高置信度判断。
+FIRST_FORECAST_DAY_PROXY_CONFIDENCE = 0.75
+_FIRST_FORECAST_DAY_PROXY_BASIS = "first_calendar_day_proxy"
 
 
 class WeatherProvider(Protocol):
@@ -70,6 +73,11 @@ def _append_unique(items: list[str], value: str) -> None:
         items.append(value)
 
 
+def _is_mock_or_fallback_source(source: str) -> bool:
+    normalized_source = source.strip().lower()
+    return any(marker in normalized_source for marker in ("mock", "fallback"))
+
+
 def _build_weather_risk(
     forecast: WeatherForecastResult,
     *,
@@ -78,8 +86,9 @@ def _build_weather_risk(
     if not forecast.daily:
         return None
 
-    precipitation_24h_mm = forecast.daily[0].precipitation_mm
-    severity = classify_drainage_rainfall(precipitation_24h_mm)
+    first_forecast_day = forecast.daily[0]
+    precipitation_proxy_mm = first_forecast_day.precipitation_mm
+    severity = classify_drainage_rainfall(precipitation_proxy_mm)
     if severity is None:
         return None
 
@@ -87,21 +96,23 @@ def _build_weather_risk(
     return FarmRisk(
         risk_key="weather.rainstorm_drainage",
         severity=severity,
-        confidence=0.95,
+        confidence=FIRST_FORECAST_DAY_PROXY_CONFIDENCE,
         evidence=[
             FarmEvidence(
                 source_type="weather_forecast",
-                source_id=f"{forecast.source}:{forecast.daily[0].date}",
+                source_id=f"{forecast.source}:{first_forecast_day.date}",
                 summary=(
-                    f"未来 24 小时预计降雨 {precipitation_24h_mm:.1f}mm，"
+                    f"首个预报日 {first_forecast_day.date}（日历日代理）预计降雨 "
+                    f"{precipitation_proxy_mm:.1f}mm，"
                     f"达到排水风险阈值 {threshold_summary}"
                 ),
                 observed_at=observed_at,
                 fact_kind="rule",
                 payload={
-                    "precipitation_24h_mm": precipitation_24h_mm,
+                    "forecast_basis": _FIRST_FORECAST_DAY_PROXY_BASIS,
+                    "precipitation_first_forecast_day_mm": precipitation_proxy_mm,
                     "rule": threshold_summary,
-                    "forecast_date": forecast.daily[0].date,
+                    "forecast_date": first_forecast_day.date,
                 },
             )
         ],
@@ -216,7 +227,18 @@ async def inspect_farm(
             warnings.append("天气预报不可用，已跳过气象风险判断")
             logger.warning("农场天气预报不可用，风险巡检已降级: {}", type(exc).__name__)
         else:
-            if not forecast.daily:
+            if _is_mock_or_fallback_source(forecast.source):
+                degraded = True
+                _append_unique(data_gaps, "weather_forecast_mock_fallback")
+                warnings.append(
+                    f"天气预报来源 {forecast.source!r} 为 mock/fallback，"
+                    "已跳过气象风险判断"
+                )
+                logger.warning(
+                    "天气预报来源为 mock/fallback，风险巡检已降级: {}",
+                    forecast.source,
+                )
+            elif not forecast.daily:
                 degraded = True
                 _append_unique(data_gaps, "weather_forecast_unavailable")
                 warnings.append("天气预报为空，已跳过气象风险判断")

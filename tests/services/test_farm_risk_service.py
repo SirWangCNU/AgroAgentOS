@@ -76,8 +76,9 @@ def _snapshot(
 
 
 class StaticWeatherProvider:
-    def __init__(self, precipitation_mm: float) -> None:
+    def __init__(self, precipitation_mm: float, *, source: str = "test") -> None:
         self.precipitation_mm = precipitation_mm
+        self.source = source
         self.calls: list[tuple[str, int]] = []
 
     async def get_forecast_with_alerts(
@@ -97,7 +98,7 @@ class StaticWeatherProvider:
                     condition="暴雨",
                 )
             ],
-            source="test",
+            source=self.source,
         )
 
 
@@ -111,7 +112,7 @@ class StaticWeatherProvider:
         (80.0, "critical"),
     ],
 )
-async def test_inspect_farm_applies_exact_24_hour_rain_thresholds(
+async def test_inspect_farm_applies_thresholds_to_first_calendar_day_proxy(
     precipitation_mm: float,
     expected_severity: str | None,
 ) -> None:
@@ -127,10 +128,33 @@ async def test_inspect_farm_applies_exact_24_hour_rain_thresholds(
         assert len(weather_risks) == 1
         risk = weather_risks[0]
         assert risk.severity == expected_severity
-        assert risk.confidence >= 0.8
+        assert risk.confidence == 0.75
         assert risk.evidence
         assert risk.suggested_actions
-        assert risk.evidence[0].payload["precipitation_24h_mm"] == precipitation_mm
+        evidence = risk.evidence[0]
+        assert "首个预报日" in evidence.summary
+        assert "未来 24 小时" not in evidence.summary
+        assert evidence.payload["forecast_basis"] == "first_calendar_day_proxy"
+        assert evidence.payload["precipitation_first_forecast_day_mm"] == precipitation_mm
+        assert "precipitation_24h_mm" not in evidence.payload
+
+
+@pytest.mark.asyncio
+async def test_mock_forecast_is_degraded_and_never_emits_weather_risk() -> None:
+    result = await inspect_farm(
+        _snapshot(),
+        weather_provider=StaticWeatherProvider(100.0, source="mock"),
+    )
+
+    assert result.degraded is True
+    assert "weather_forecast_mock_fallback" in result.data_gaps
+    assert any("mock" in warning.lower() for warning in result.warnings)
+    assert not any(risk.risk_key.startswith("weather.") for risk in result.risks)
+    assert not any(
+        evidence.source_type == "weather_forecast" and risk.confidence >= 0.8
+        for risk in result.risks
+        for evidence in risk.evidence
+    )
 
 
 @pytest.mark.asyncio
@@ -158,6 +182,19 @@ async def test_inspect_farm_emits_structured_trajectory_quality_evidence(
     assert risk.evidence
     assert risk.suggested_actions
     assert set(risk.evidence[0].payload["triggered_rules"]) == expected_reasons
+
+
+@pytest.mark.asyncio
+async def test_trajectory_quality_exact_boundaries_do_not_trigger() -> None:
+    result = await inspect_farm(
+        _snapshot(work_area_mu=8.0, depth_std=5.0),
+        weather_provider=StaticWeatherProvider(0),
+    )
+
+    assert not any(
+        risk.risk_key.startswith("trajectory.work_quality")
+        for risk in result.risks
+    )
 
 
 class FailingWeatherProvider:

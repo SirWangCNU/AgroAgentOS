@@ -22,13 +22,13 @@ DRAINAGE_CRITICAL_THRESHOLD_MM = 80.0
 
 
 def classify_drainage_rainfall(
-    precipitation_24h_mm: float,
+    precipitation_proxy_mm: float,
 ) -> Literal["high", "critical"] | None:
-    """按未来 24 小时累计降雨量判定排水风险。"""
+    """按调用方提供的降雨量代理值判定排水风险等级。"""
 
-    if precipitation_24h_mm >= DRAINAGE_CRITICAL_THRESHOLD_MM:
+    if precipitation_proxy_mm >= DRAINAGE_CRITICAL_THRESHOLD_MM:
         return "critical"
-    if precipitation_24h_mm >= RAINSTORM_ALERT_THRESHOLD_MM:
+    if precipitation_proxy_mm >= RAINSTORM_ALERT_THRESHOLD_MM:
         return "high"
     return None
 

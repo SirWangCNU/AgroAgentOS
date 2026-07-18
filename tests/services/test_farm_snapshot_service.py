@@ -180,6 +180,60 @@ def test_get_snapshot_returns_only_owned_detached_business_data(
     assert snapshot.model_dump()["farm"]["name"] == seeded["owned_farm_name"]
 
 
+def test_get_snapshot_limits_recent_trajectories_per_field(
+    snapshot_database: sessionmaker[Session],
+) -> None:
+    seeded = _seed_snapshot_data(snapshot_database)
+    with snapshot_database() as session:
+        second_field = Field(
+            farm_id=int(seeded["owned_farm_id"]),
+            name="A2 地块",
+            area_mu=15.0,
+            current_crop="玉米",
+            growth_stage="拔节期",
+            boundary_json='{"type":"Polygon","coordinates":[]}',
+        )
+        session.add(second_field)
+        session.flush()
+        second_field_id = second_field.id
+        now = datetime(2026, 7, 18, 9, 0, 0)
+        session.add_all(
+            [
+                TrajectoryFile(
+                    field_id=second_field_id,
+                    filename=f"second-{index}.xlsx",
+                    created_at=now - timedelta(minutes=index),
+                )
+                for index in range(4)
+            ]
+        )
+        session.commit()
+
+    snapshot = farm_snapshot_service.get_snapshot(
+        farm_id=int(seeded["owned_farm_id"]),
+        user_id=int(seeded["owner_id"]),
+    )
+
+    filenames_by_field = {
+        field_id: [
+            trajectory.filename
+            for trajectory in snapshot.recent_trajectory_files
+            if trajectory.field_id == field_id
+        ]
+        for field_id in (int(seeded["owned_field_id"]), second_field_id)
+    }
+    assert filenames_by_field[int(seeded["owned_field_id"])] == [
+        "owned-0.xlsx",
+        "owned-1.xlsx",
+        "owned-2.xlsx",
+    ]
+    assert filenames_by_field[second_field_id] == [
+        "second-0.xlsx",
+        "second-1.xlsx",
+        "second-2.xlsx",
+    ]
+
+
 def test_get_snapshot_rejects_cross_user_access_without_leaking_farm_name(
     snapshot_database: sessionmaker[Session],
 ) -> None:
