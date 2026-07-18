@@ -5,7 +5,7 @@
 
 设计:
   - 持久化存储，永久保留历史记录
-  - 记录来源: "chat" (RAG Copilot) 或 "aiops" (智能诊断)
+  - 新写入来源: farm_agent/chat/monitoring；历史 aiops 记录保持可读
   - 单条回答截断到 12KB, 防极端情况撑爆数据库
   - 使用 SQLiteManager 进行数据操作
   - 单条记录最大 12KB
@@ -20,6 +20,10 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.history_source import (
+    HistoryWriteSource,
+    validate_history_write_source,
+)
 from app.core.sqlite import sqlite_manager
 from app.core.vector_store import get_vector_store
 from app.utils.splitter import split_markdown
@@ -31,13 +35,14 @@ async def add_record(
     *,
     question: str,
     answer: str = "",
-    source: str = "chat",
+    source: HistoryWriteSource = "chat",
     session_id: str = "",
     skill: str = "",
     sources: list[str] | None = None,
     extra: dict[str, Any] | None = None,
 ) -> str | None:
     """写入一条历史记录, 返回 record_id (失败返回 None)."""
+    source = validate_history_write_source(source)
     if not question:
         return None
 

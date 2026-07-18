@@ -1,7 +1,11 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from app.schemas.diagnosis import DiagnosisRecordRequest, RecordResponse
+from app.schemas.diagnosis import (
+    ConversationRecordRequest,
+    DiagnosisRecordRequest,
+    RecordResponse,
+)
 from app.schemas.farm_agent import (
     FarmEvidence,
     ProposalDraft,
@@ -143,3 +147,17 @@ def test_diagnosis_write_source_excludes_legacy_aiops_value() -> None:
         source="aiops",
     )
     assert historical_record.source == "aiops"
+
+
+def test_conversation_write_source_excludes_legacy_aiops_value() -> None:
+    assert ConversationRecordRequest(
+        session_id="session-001",
+        user_message="巡检结果如何",
+    ).source == "chat"
+
+    with pytest.raises(ValidationError):
+        ConversationRecordRequest(
+            session_id="session-001",
+            user_message="旧运维写入",
+            source="aiops",
+        )

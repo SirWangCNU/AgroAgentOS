@@ -41,6 +41,10 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
+from app.core.history_source import (
+    HistoryWriteSource,
+    validate_history_write_source,
+)
 
 Base = declarative_base()
 
@@ -444,12 +448,13 @@ class SQLiteManager:
         record_id: str,
         question: str,
         answer: str = "",
-        source: str = "chat",
+        source: HistoryWriteSource = "chat",
         session_id: str = "",
         skill: str = "",
         sources: list[str] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> HistoryRecord:
+        source = validate_history_write_source(source)
         with self.session() as sess:
             record = HistoryRecord(
                 record_id=record_id,

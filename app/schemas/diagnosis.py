@@ -1,8 +1,8 @@
 """诊断与对话历史记录的数据契约."""
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
+
+from app.core.history_source import HistoryWriteSource
 
 
 class DiagnosisRecordRequest(BaseModel):
@@ -15,7 +15,7 @@ class DiagnosisRecordRequest(BaseModel):
         max_length=2000,
     )
     answer: str = Field(default="", description="诊断结果或回答")
-    source: Literal["farm_agent", "chat", "monitoring"] = Field(
+    source: HistoryWriteSource = Field(
         default="farm_agent",
         description="来源 (farm_agent/chat/monitoring)",
     )
@@ -48,7 +48,7 @@ class ConversationRecordRequest(BaseModel):
         max_length=2000,
     )
     assistant_response: str = Field(default="", description="助手回复")
-    source: str = Field(default="chat", description="来源")
+    source: HistoryWriteSource = Field(default="chat", description="来源")
     skill: str = Field(default="", description="技能名称")
 
     model_config = {

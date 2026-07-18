@@ -25,6 +25,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool, QueuePool
 
 from app.config import settings
+from app.core.history_source import (
+    HistoryWriteSource,
+    validate_history_write_source,
+)
 
 # 复用 sqlite.py 中定义的 ORM 模型和 Base
 from app.core.sqlite import (
@@ -256,13 +260,14 @@ class DatabaseManager:
         record_id: str,
         question: str,
         answer: str = "",
-        source: str = "chat",
+        source: HistoryWriteSource = "chat",
         session_id: str = "",
         skill: str = "",
         sources: list[str] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> HistoryRecord:
         """保存历史记录."""
+        source = validate_history_write_source(source)
         with self.session() as sess:
             record = HistoryRecord(
                 record_id=record_id,

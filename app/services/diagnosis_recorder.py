@@ -24,6 +24,10 @@ from typing import Any, Optional
 
 from loguru import logger
 
+from app.core.history_source import (
+    HistoryWriteSource,
+    validate_history_write_source,
+)
 from app.core.sqlite import sqlite_manager, HistoryRecord
 
 
@@ -49,7 +53,7 @@ class DiagnosisRecorder:
         *,
         question: str,
         answer: str = "",
-        source: str = "aiops",
+        source: HistoryWriteSource = "farm_agent",
         session_id: str = "",
         skill: str = "",
         sources: list[str] | None = None,
@@ -60,7 +64,7 @@ class DiagnosisRecorder:
         Args:
             question: 用户问题或诊断查询
             answer: 诊断结果或回答
-            source: 来源 (aiops/chat/monitoring)
+            source: 来源 (farm_agent/chat/monitoring)
             session_id: 会话 ID
             skill: 使用的技能名称
             sources: 参考来源列表
@@ -69,6 +73,7 @@ class DiagnosisRecorder:
         Returns:
             record_id: 成功返回记录 ID，失败返回 None
         """
+        source = validate_history_write_source(source)
         if not question:
             logger.warning("[recorder] question 为空，跳过记录")
             return None
@@ -100,7 +105,7 @@ class DiagnosisRecorder:
         session_id: str,
         user_message: str,
         assistant_response: str,
-        source: str = "chat",
+        source: HistoryWriteSource = "chat",
         skill: str = "",
         extra: dict[str, Any] | None = None,
     ) -> str | None:
@@ -117,6 +122,7 @@ class DiagnosisRecorder:
         Returns:
             record_id: 成功返回记录 ID，失败返回 None
         """
+        source = validate_history_write_source(source)
         if not user_message:
             logger.warning("[recorder] user_message 为空，跳过记录")
             return None
