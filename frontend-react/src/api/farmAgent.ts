@@ -24,6 +24,9 @@ const FARM_AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([
   "report",
   "complete",
   "error",
+  "step_token",
+  "usage",
+  "progress",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -37,15 +40,20 @@ function isFarmAgentEventType(value: unknown): value is FarmAgentEventType {
 export function parseFarmAgentEvent(value: Record<string, unknown>): FarmAgentEvent {
   const type = value.type;
   if (
-    typeof value.event_id !== "string" ||
     !isFarmAgentEventType(type) ||
     typeof value.run_id !== "string" ||
     typeof value.stage !== "string"
   ) {
     throw new Error("Farm Agent 返回了无效的 SSE 事件");
   }
+  const eventId = typeof value.event_id === "string"
+    ? value.event_id
+    : type === "error"
+      ? `${value.run_id || "stream"}:${value.stage}:error`
+      : null;
+  if (eventId === null) throw new Error("Farm Agent SSE 事件缺少 event_id");
   return {
-    event_id: value.event_id,
+    event_id: eventId,
     type,
     run_id: value.run_id,
     stage: value.stage,

@@ -26,8 +26,12 @@ export type FarmAgentEventType =
   | "proposal_created"
   | "report"
   | "complete"
-  | "error";
+  | "error"
+  | "step_token"
+  | "usage"
+  | "progress";
 export type FarmAgentRunStatus = "idle" | "running" | "completed" | "failed";
+export type AgentRunStatus = "running" | "completed" | "failed" | "cancelled";
 
 export interface FarmEvidence {
   source_type: string;
@@ -133,7 +137,7 @@ export interface AgentRunTimeline {
   run_id: string;
   farm_id: number | null;
   run_type: "inspection" | "task_verification" | null;
-  status: string | null;
+  status: AgentRunStatus | null;
   events: FarmAgentEvent[];
   total_steps: number;
   total_tool_calls: number;

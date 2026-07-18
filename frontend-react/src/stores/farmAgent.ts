@@ -37,10 +37,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function eventProposalIds(event: FarmAgentEvent): string[] {
   const proposalId = event.data.proposal_id;
   const proposalIds = event.data.proposal_ids;
+  const outcome = isRecord(event.data.outcome) ? event.data.outcome : {};
+  const outcomeProposalIds = outcome.proposal_ids;
   return [
     ...(typeof proposalId === "string" ? [proposalId] : []),
     ...(Array.isArray(proposalIds)
       ? proposalIds.filter((value): value is string => typeof value === "string")
+      : []),
+    ...(Array.isArray(outcomeProposalIds)
+      ? outcomeProposalIds.filter((value): value is string => typeof value === "string")
       : []),
   ];
 }
