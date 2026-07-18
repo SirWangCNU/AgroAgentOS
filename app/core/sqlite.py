@@ -24,7 +24,18 @@ from pathlib import Path
 from typing import Any, Generator
 
 from loguru import logger
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine, event, func
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    event,
+    func,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -223,6 +234,14 @@ class AgentRun(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     run_id = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    farm_id = Column(
+        Integer,
+        ForeignKey("farms.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    run_type = Column(String(32), nullable=True, index=True)
     session_id = Column(String(128), nullable=True, index=True)
     query = Column(Text, nullable=True)
     selected_skill = Column(String(128), nullable=True, index=True)
@@ -236,6 +255,8 @@ class AgentRun(Base):
     model_used = Column(String(128), nullable=True)
     reroute_count = Column(Integer, nullable=True, default=0)
     transitions_json = Column(Text, nullable=True)  # Full transition_history as JSON
+    context_snapshot_json = Column(Text, nullable=True)
+    outcome_json = Column(Text, nullable=True)
     report_preview = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=func.now())
 
@@ -250,6 +271,38 @@ class AgentRun(Base):
 
     def set_transitions(self, data: list[dict[str, Any]]) -> None:
         self.transitions_json = json.dumps(data, ensure_ascii=False, default=str)
+
+    @property
+    def context_snapshot(self) -> dict[str, Any]:
+        if not self.context_snapshot_json:
+            return {}
+        try:
+            value = json.loads(self.context_snapshot_json)
+            if not isinstance(value, dict):
+                raise ValueError("JSON value is not an object")
+            return value
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            logger.warning("解析 context_snapshot_json 失败，返回空对象: {}", exc)
+            return {}
+
+    def set_context_snapshot(self, data: dict[str, Any]) -> None:
+        self.context_snapshot_json = json.dumps(data, ensure_ascii=False, default=str)
+
+    @property
+    def outcome(self) -> dict[str, Any]:
+        if not self.outcome_json:
+            return {}
+        try:
+            value = json.loads(self.outcome_json)
+            if not isinstance(value, dict):
+                raise ValueError("JSON value is not an object")
+            return value
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            logger.warning("解析 outcome_json 失败，返回空对象: {}", exc)
+            return {}
+
+    def set_outcome(self, data: dict[str, Any]) -> None:
+        self.outcome_json = json.dumps(data, ensure_ascii=False, default=str)
 
 
 class SQLiteManager:

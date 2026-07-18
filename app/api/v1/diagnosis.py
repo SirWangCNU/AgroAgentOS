@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.aiops import (
+from app.schemas.diagnosis import (
     ConversationRecordRequest,
     DiagnosisRecordRequest,
     RecordListResponse,
