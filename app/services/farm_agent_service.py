@@ -11,6 +11,7 @@ from typing import Any, AsyncIterator, Callable, TypeVar
 from loguru import logger
 
 from app.agents import build_farm_agent_graph
+from app.config import settings
 from app.agents.stream_sink import get_sink, reset_sink, set_sink
 from app.core.sqlite import AgentRun, sqlite_manager
 from app.models.farm_agent import FarmActionProposal, FarmTask
@@ -20,6 +21,7 @@ from app.runtime.farm_run_context import (
     bind_farm_run_context,
 )
 from app.schemas.farm_agent import FarmInspectionRequest
+from app.exceptions import AppException
 from app.services import (
     farm_risk_service,
     farm_snapshot_service,
@@ -29,6 +31,20 @@ from app.services import (
 _T = TypeVar("_T")
 _graph = None
 _agent_semaphore = asyncio.Semaphore(get_agent_harness().agent_max_concurrency())
+
+
+def _select_inspection_weather_provider(
+    request: FarmInspectionRequest,
+) -> farm_risk_service.WeatherProvider:
+    if request.demo_scenario is None:
+        return farm_risk_service.WeatherServiceProvider()
+    if not settings.competition_demo_enabled:
+        raise AppException(
+            status_code=403,
+            code="COMPETITION_DEMO_DISABLED",
+            message="比赛演示场景未启用",
+        )
+    return farm_risk_service.CompetitionDemoRainstormWeatherProvider()
 
 
 def _get_graph():
@@ -389,7 +405,7 @@ async def stream_inspection(
         )
         inspection = await farm_risk_service.inspect_farm(
             snapshot,
-            weather_provider=farm_risk_service.WeatherServiceProvider(),
+            weather_provider=_select_inspection_weather_provider(request),
         )
         business_context = {
             "snapshot": snapshot.model_dump(mode="json"),

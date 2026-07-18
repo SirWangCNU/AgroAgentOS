@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="调试模式")
     host: str = Field(default="0.0.0.0", description="监听地址")
     port: int = Field(default=9800, description="监听端口")
+    competition_demo_enabled: bool = Field(
+        default=False,
+        description="是否允许请求显式启用版本化比赛演示场景",
+    )
 
     # ==================== DashScope LLM ====================
     dashscope_api_key: str = Field(default="", description="DashScope API Key")

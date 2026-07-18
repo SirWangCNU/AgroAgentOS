@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
 from typing import Protocol
 
 from loguru import logger
@@ -11,7 +14,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.exceptions import AppException
 from app.schemas.farm_agent import FarmEvidence, Severity
-from app.schemas.weather import WeatherForecastResult
+from app.schemas.weather import (
+    DailyForecastDetail,
+    WeatherAlert,
+    WeatherForecastResult,
+)
 from app.services import weather_service
 from app.services.farm_snapshot_service import FarmSnapshot
 from app.tools.weather_risk import classify_drainage_rainfall
@@ -45,6 +52,59 @@ class WeatherServiceProvider:
         return await weather_service.get_weather_service().get_forecast_with_alerts(
             location,
             days=days,
+        )
+
+
+class _DemoWeatherSpec(BaseModel):
+    rainfall_24h_mm: float = Field(..., ge=0)
+    observed_at: datetime
+
+
+class _DemoRainstormFixture(BaseModel):
+    scenario_id: str
+    label: str
+    weather: _DemoWeatherSpec
+
+
+@lru_cache(maxsize=1)
+def _load_demo_rainstorm_fixture() -> _DemoRainstormFixture:
+    fixture_path = Path(__file__).resolve().parents[1] / "data" / "demo_rainstorm_scenario.json"
+    return _DemoRainstormFixture.model_validate_json(
+        fixture_path.read_text(encoding="utf-8")
+    )
+
+
+class CompetitionDemoRainstormWeatherProvider:
+    """只在显式比赛演示请求中读取版本化的确定性天气。"""
+
+    async def get_forecast_with_alerts(
+        self,
+        location: str,
+        days: int = 2,
+    ) -> WeatherForecastResult:
+        fixture = await asyncio.to_thread(_load_demo_rainstorm_fixture)
+        observed_date = fixture.weather.observed_at.date().isoformat()
+        return WeatherForecastResult(
+            location=location,
+            daily=[
+                DailyForecastDetail(
+                    date=observed_date,
+                    min_temp=24.0,
+                    max_temp=29.0,
+                    precipitation_mm=fixture.weather.rainfall_24h_mm,
+                    condition="暴雨",
+                    wind_level=5,
+                )
+            ],
+            alerts=[
+                WeatherAlert(
+                    alert_type="暴雨",
+                    date=observed_date,
+                    severity="高",
+                    advice="检查排水沟并安排降雨期间巡查",
+                )
+            ],
+            source=f"competition-demo:{fixture.scenario_id}",
         )
 
 
