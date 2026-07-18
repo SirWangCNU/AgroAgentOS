@@ -1077,3 +1077,28 @@ def test_transition_rejects_malformed_stored_execution_without_data_loss(
         persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
         assert persisted.status == "pending"
         assert persisted.execution_json == raw_execution
+
+
+def test_transition_rejects_empty_stored_execution_without_data_loss(
+    task_database: sessionmaker[Session],
+) -> None:
+    seeded = _seed_tasks(task_database)
+    task_id = str(seeded["task_id"])
+    raw_execution = ""
+    with task_database() as session:
+        task = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        task.execution_json = raw_execution
+        session.commit()
+
+    with pytest.raises(AppException) as exc_info:
+        farm_task_service.start(
+            user_id=int(seeded["owner_id"]),
+            task_id=task_id,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.code == "INVALID_TASK_EXECUTION_DATA"
+    with task_database() as session:
+        persisted = session.query(FarmTask).filter(FarmTask.task_id == task_id).one()
+        assert persisted.status == "pending"
+        assert persisted.execution_json == raw_execution

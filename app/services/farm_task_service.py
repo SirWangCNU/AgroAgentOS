@@ -137,7 +137,10 @@ def _audit_entry(
 
 def _load_task_execution(task: FarmTask) -> TaskExecution:
     try:
-        return TaskExecution.model_validate_json(task.execution_json or "{}")
+        raw_execution = task.execution_json
+        return TaskExecution.model_validate_json(
+            "{}" if raw_execution is None else raw_execution
+        )
     except ValidationError as exc:
         raise ServiceError(
             code="INVALID_TASK_EXECUTION_DATA",
