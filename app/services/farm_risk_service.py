@@ -127,11 +127,15 @@ def _build_trajectory_risks(
     snapshot: FarmSnapshot,
     *,
     observed_at: datetime,
+    field_id: int | None = None,
+    limit: int | None = None,
 ) -> list[FarmRisk]:
     fields_by_id = {field.id: field for field in snapshot.fields}
     risks: list[FarmRisk] = []
 
     for trajectory in snapshot.recent_trajectory_files:
+        if field_id is not None and trajectory.field_id != field_id:
+            continue
         field = fields_by_id.get(trajectory.field_id)
         if field is None:
             continue
@@ -183,13 +187,37 @@ def _build_trajectory_risks(
                 suggested_actions=suggested_actions,
             )
         )
+        if limit is not None and len(risks) >= limit:
+            break
     return risks
+
+
+def inspect_field_work_quality(
+    snapshot: FarmSnapshot,
+    *,
+    field_id: int | None = None,
+    limit: int = 20,
+) -> FarmInspectionResult:
+    """Return deterministic trajectory-quality findings without network access."""
+
+    inspected_at = datetime.now(timezone.utc)
+    return FarmInspectionResult(
+        risks=_build_trajectory_risks(
+            snapshot,
+            observed_at=inspected_at,
+            field_id=field_id,
+            limit=limit,
+        ),
+        data_gaps=list(snapshot.data_gaps),
+        inspected_at=inspected_at,
+    )
 
 
 async def inspect_farm(
     snapshot: FarmSnapshot,
     *,
     weather_provider: WeatherProvider,
+    days: int = 2,
 ) -> FarmInspectionResult:
     """用确定性规则生成风险和证据，LLM 不参与阈值判定。"""
 
@@ -207,7 +235,7 @@ async def inspect_farm(
         try:
             forecast = await weather_provider.get_forecast_with_alerts(
                 snapshot.farm.location,
-                days=2,
+                days=days,
             )
         except SQLAlchemyError:
             raise

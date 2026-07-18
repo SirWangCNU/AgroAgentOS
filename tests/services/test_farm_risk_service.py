@@ -11,6 +11,7 @@ from app.exceptions import AppException
 from app.schemas.weather import DailyForecastDetail, WeatherForecastResult
 from app.services.farm_risk_service import (
     WeatherServiceProvider,
+    inspect_field_work_quality,
     inspect_farm,
 )
 from app.services.farm_snapshot_service import FarmSnapshot
@@ -137,6 +138,31 @@ async def test_inspect_farm_applies_thresholds_to_first_calendar_day_proxy(
         assert evidence.payload["forecast_basis"] == "first_calendar_day_proxy"
         assert evidence.payload["precipitation_first_forecast_day_mm"] == precipitation_mm
         assert "precipitation_24h_mm" not in evidence.payload
+
+
+@pytest.mark.asyncio
+async def test_inspect_farm_forwards_requested_forecast_days() -> None:
+    provider = StaticWeatherProvider(0)
+
+    await inspect_farm(_snapshot(), weather_provider=provider, days=7)
+
+    assert provider.calls == [("山东寿光", 7)]
+
+
+def test_inspect_field_work_quality_is_deterministic_and_field_scoped() -> None:
+    result = inspect_field_work_quality(_snapshot(depth_std=5.1), field_id=11, limit=5)
+
+    assert len(result.risks) == 1
+    assert result.risks[0].risk_key.startswith("trajectory.work_quality:11:")
+    assert result.degraded is False
+    assert result.warnings == []
+
+    other_field = inspect_field_work_quality(
+        _snapshot(depth_std=5.1),
+        field_id=999,
+        limit=5,
+    )
+    assert other_field.risks == []
 
 
 @pytest.mark.asyncio

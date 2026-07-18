@@ -4,7 +4,7 @@
   - read_only: 是否只读 (不修改任何外部状态)
   - concurrency_safe: 是否可与同类工具同时并发执行 (一般 read_only=True 才安全)
   - destructive: 是否破坏性 (重启 / 删除 / 不可逆)
-  - side_effect: none / external / filesystem / network
+  - side_effect: none / external / filesystem / network / database
   - risk_level: low / medium / high
   - max_result_chars: 工具输出截断阈值 (避免一坨 20KB 日志直接喂 LLM)
   - search_hint: 给未来的 ToolSearch 二级动态发现用
@@ -23,7 +23,7 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
 
-SideEffect = Literal["none", "external", "filesystem", "network"]
+SideEffect = Literal["none", "external", "filesystem", "network", "database"]
 RiskLevel = Literal["low", "medium", "high"]
 
 
@@ -54,7 +54,7 @@ class ToolMeta(BaseModel):
     )
     side_effect: SideEffect = Field(
         default="none",
-        description="副作用类别: none / external / filesystem / network.",
+        description="副作用类别: none / external / filesystem / network / database.",
     )
     is_notification: bool = Field(
         default=False,
@@ -187,6 +187,53 @@ TOOL_META: Dict[str, ToolMeta] = {
         max_result_chars=8000,
         risk_level="low",
         search_hint="analysis 预测 建议 销售 走势",
+    ),
+
+    # ===== Controlled Farm Agent tools =====
+    "get_farm_snapshot": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        risk_level="low",
+        search_hint="farm snapshot fields crops trusted context",
+    ),
+    "inspect_farm_weather_risks": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        side_effect="network",
+        risk_level="medium",
+        search_hint="farm weather risks rain forecast drainage",
+    ),
+    "get_field_work_quality": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        risk_level="low",
+        search_hint="field trajectory work quality coverage depth",
+    ),
+    "get_pending_farm_tasks": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        risk_level="low",
+        search_hint="farm pending tasks duplicate actions",
+    ),
+    "get_task_evidence": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        risk_level="low",
+        search_hint="farm task evidence trajectory attachments",
+    ),
+    "create_action_proposal": ToolMeta(
+        read_only=False,
+        concurrency_safe=False,
+        side_effect="database",
+        risk_level="medium",
+        search_hint="farm action proposal pending human approval",
+    ),
+    "save_task_verification_draft": ToolMeta(
+        read_only=False,
+        concurrency_safe=False,
+        side_effect="database",
+        risk_level="medium",
+        search_hint="farm task verification draft human decision",
     ),
 
     # ===== Lazy MCP 元工具 =====
