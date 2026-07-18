@@ -26,9 +26,8 @@ import { useHealthStore } from "../stores/health";
 import { useConversationStore } from "../stores/conversation";
 import { getWeather } from "../api/weather";
 import StatCard from "../components/ui/StatCard";
-import { listFarmProposals } from "../api/farmAgent";
+import { getLatestInspectionRun, listFarmProposals } from "../api/farmAgent";
 import { listFarmTasks } from "../api/farmTasks";
-import { useFarmAgentStore } from "../stores/farmAgent";
 
 const TOOLS = [
   {
@@ -103,7 +102,6 @@ export default function Dashboard() {
   const health = useHealthStore((s) => s.health);
   const skills = useHealthStore((s) => s.skills);
   const conversations = useConversationStore((s) => s.conversations);
-  const lastRunStatus = useFarmAgentStore((s) => s.runStatus);
 
   const { data: weather } = useQuery({
     queryKey: ["weather", "dashboard"],
@@ -118,6 +116,10 @@ export default function Dashboard() {
     queryKey: ["farm-agent-tasks", "dashboard"],
     queryFn: () => listFarmTasks({}),
   });
+  const { data: latestInspection = null } = useQuery({
+    queryKey: ["farm-agent-latest-inspection", "dashboard"],
+    queryFn: () => getLatestInspectionRun(),
+  });
 
   const recentConversations = conversations.slice(0, 4);
   const today = new Date().toDateString();
@@ -125,7 +127,14 @@ export default function Dashboard() {
   const pendingProposalCount = proposals.filter((proposal) => proposal.status === "pending").length;
   const activeTaskCount = farmTasks.filter((task) => task.status === "in_progress" || task.status === "submitted").length;
   const highRiskCount = todayRisks.filter((proposal) => proposal.severity === "high" || proposal.severity === "critical").length;
-  const runStatusLabel = { idle: "尚未巡检", running: "巡检进行中", completed: "最近巡检完成", failed: "最近巡检异常" }[lastRunStatus];
+  const runStatusLabel = latestInspection === null
+    ? "尚未巡检"
+    : {
+        running: "巡检进行中",
+        completed: "最近巡检完成",
+        failed: "最近巡检异常",
+        cancelled: "最近巡检已取消",
+      }[latestInspection.status ?? "failed"];
 
   return (
     <div className="flex-1 overflow-auto">
@@ -157,7 +166,7 @@ export default function Dashboard() {
               { icon: ShieldAlert, label: "今日 AI 风险", value: `${todayRisks.length} 项`, sub: `${highRiskCount} 项高风险` },
               { icon: ClipboardList, label: "待确认提案", value: `${pendingProposalCount} 项`, sub: "等待人工决策" },
               { icon: ListTodo, label: "进行中任务", value: `${activeTaskCount} 项`, sub: "含待复核任务" },
-              { icon: Clock3, label: "最近一次巡检", value: runStatusLabel, sub: lastRunStatus === "running" ? "Agent 正在执行" : "可进入驾驶舱查看" },
+              { icon: Clock3, label: "最近一次巡检", value: runStatusLabel, sub: latestInspection?.status === "running" ? "Agent 正在执行" : latestInspection?.created_at ? new Date(latestInspection.created_at).toLocaleString("zh-CN") : "可进入驾驶舱查看" },
             ].map((item) => <div key={item.label} className="rounded-2xl border border-white/10 bg-white/7 p-3.5"><item.icon className="h-4 w-4 text-[#f3c66f]" /><p className="mt-3 text-[10px] uppercase tracking-wider text-[#94b5a2]">{item.label}</p><p className="mt-1 text-base font-semibold">{item.value}</p><p className="mt-1 text-[10px] text-[#a9c1b1]">{item.sub}</p></div>)}
           </div>
         </section>

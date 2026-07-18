@@ -180,7 +180,7 @@ class Settings(BaseSettings):
             "证据不足时 (past_steps < 该值) 即使 LLM 想切也会被阻止."
         ),
     )
-    agent_max_concurrency: int = Field(default=2, description="AIOps Agent 最大并发诊断数")
+    agent_max_concurrency: int = Field(default=2, description="Farm Agent 最大并发运行数")
     rag_max_concurrency: int = Field(default=5, description="RAG Chat 最大并发请求数")
     guardrails_block_high_risk_tools: bool = Field(
         default=True,

@@ -92,6 +92,16 @@ export async function getFarmRunTimeline(runId: string): Promise<AgentRunTimelin
   return response.data;
 }
 
+export async function getLatestInspectionRun(
+  farmId?: number,
+): Promise<AgentRunTimeline | null> {
+  const query = farmId === undefined ? "" : `?farm_id=${encodeURIComponent(String(farmId))}`;
+  const response = await authFetch<ApiResponse<AgentRunTimeline | null>>(
+    `/farm-agent/runs/latest${query}`,
+  );
+  return response.data;
+}
+
 export async function listFarmProposals(
   filters: ProposalFilters = {},
 ): Promise<FarmActionProposal[]> {

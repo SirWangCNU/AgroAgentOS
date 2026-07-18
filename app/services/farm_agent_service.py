@@ -128,7 +128,7 @@ def _persist_run_finish(
         run.output_tokens = output_tokens
         run.total_tokens = total_tokens
         run.total_ms = total_ms
-        run.model_used = get_agent_harness().agent_executor_model() or ""
+        run.model_used = get_agent_harness().executor_model() or ""
 
 
 def _load_proposal_ids(run_id: str) -> list[str]:
@@ -281,11 +281,20 @@ async def _stream_run(
                     for node_name, raw_output in item["__node__"].items():
                         node_output = raw_output or {}
                         selected_skill = node_output.get("selected_skill", selected_skill)
-                        proposal_ids.extend(
+                        new_proposal_ids = [
                             proposal_id
                             for proposal_id in node_output.get("proposal_ids", [])
                             if proposal_id not in proposal_ids
-                        )
+                        ]
+                        proposal_ids.extend(new_proposal_ids)
+                        for proposal_id in new_proposal_ids:
+                            yield _event(
+                                run_id,
+                                "proposal_created",
+                                "proposal_created",
+                                "行动提案已生成，等待人工审批",
+                                proposal_id=proposal_id,
+                            )
                         node_transitions = node_output.get("transition_history", [])
                         transitions.extend(node_transitions)
                         if node_name == "executor" and node_output.get("past_steps"):

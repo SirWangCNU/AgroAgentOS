@@ -234,9 +234,9 @@ async def stream_chat(
         f"(hybrid={settings.rag_hybrid_enabled}, rerank={settings.rag_rerank_enabled})"
     )
 
-    # ---------- 注入最近 AIOps 诊断报告 (跨 session, 走 Redis) ----------
+    # ---------- 注入最近 Farm Agent 报告 (跨 session, 走 Redis) ----------
     # 不依赖联网开关, 让 "刚才那个 vmmem 是什么" 这种指代追问也能找到答案.
-    # 只取 1 份, 单份截断 1200 字 (报告头 TL;DR 已足够); 想看更早请去 AIOps 页面.
+    # 只取 1 份, 单份截断 1200 字；更早记录可在农场驾驶舱查看.
     try:
         recent_reports = await chat_memory.get_recent_diagnosis_reports(limit=1)
     except Exception as e:

@@ -34,7 +34,7 @@ def _meta_key(session_id: str) -> str:
     return f"rag:chat:{_session_digest(session_id)}:meta"
 
 
-# AIOps 诊断报告共享缓存 (跨 session, 给 RAG Chat 联网判断用)
+# Farm Agent 报告共享缓存 (跨 session, 给 RAG Chat 联网判断用)
 _DIAGNOSIS_REPORTS_KEY = "rag:diagnosis:reports"
 _DIAGNOSIS_REPORTS_MAX = 5
 _DIAGNOSIS_REPORT_MAX_CHARS = 8000
@@ -210,10 +210,10 @@ async def load_session(session_id: str) -> dict[str, Any]:
 
 
 async def append_diagnosis_report(report: str, *, session_id: str | None = None) -> None:
-    """AIOps 诊断生成的最终报告写到共享 list, 供 RAG Chat 联网判断使用.
+    """Farm Agent 生成的最终报告写到共享 list, 供 RAG Chat 联网判断使用.
 
     设计:
-      - 跨 RAG Chat session 共享 (key 不带 session_id), 因为 AIOps 诊断的
+      - 跨 RAG Chat session 共享 (key 不带 session_id), 因为农场巡检报告的
         session_id 与 RAG Chat 的 'web-chat' 不同, 用全局 list 最简单.
       - 只保留最近 N 份, 避免无限增长.
       - 单份报告内容截断到 8KB, 防止极端情况撑爆 Redis.
@@ -237,7 +237,7 @@ async def append_diagnosis_report(report: str, *, session_id: str | None = None)
 
 
 async def get_recent_diagnosis_reports(limit: int = 3) -> list[dict[str, Any]]:
-    """RAG Chat 联网判断时读取最近若干份 AIOps 诊断报告 (按时间倒序).
+    """RAG Chat 联网判断时读取最近若干份 Farm Agent 报告 (按时间倒序).
 
     Returns:
         list[{"ts": iso, "session_id": str, "report": str}]

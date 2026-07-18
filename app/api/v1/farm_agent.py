@@ -67,6 +67,22 @@ async def stream_inspection(
 
 
 @router.get(
+    "/runs/latest",
+    response_model=ApiResponse[AgentRunTimelineResponse | None],
+    summary="读取最近一次真实巡检运行",
+)
+async def get_latest_inspection_run(
+    farm_id: int | None = Query(default=None, gt=0),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[AgentRunTimelineResponse | None]:
+    run = await farm_run_query_service.get_latest_inspection_run(
+        user_id=current_user.id,
+        farm_id=farm_id,
+    )
+    return ApiResponse.success(data=run)
+
+
+@router.get(
     "/runs/{run_id}/timeline",
     response_model=ApiResponse[AgentRunTimelineResponse],
     summary="读取真实运行时间线",

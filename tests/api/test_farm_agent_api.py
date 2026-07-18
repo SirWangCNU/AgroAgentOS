@@ -137,6 +137,28 @@ def test_timeline_and_proposals_use_current_user(monkeypatch):
     assert proposals.json()["data"][0]["proposal_id"] == "proposal-1"
 
 
+def test_latest_inspection_run_uses_current_user_and_optional_farm(monkeypatch):
+    captured = []
+
+    async def fake_latest(*, user_id, farm_id):
+        captured.append((user_id, farm_id))
+        return AgentRunTimelineResponse(
+            run_id="latest-run",
+            farm_id=farm_id,
+            run_type="inspection",
+            status="completed",
+        )
+
+    monkeypatch.setattr(farm_agent.farm_run_query_service, "get_latest_inspection_run", fake_latest)
+    response = TestClient(_app(authenticated=True)).get(
+        "/api/v1/farm-agent/runs/latest?farm_id=11"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["run_id"] == "latest-run"
+    assert captured == [(7, 11)]
+
+
 def test_approve_is_idempotent_at_api_boundary(monkeypatch):
     proposal = _proposal().model_copy(update={"status": "approved"})
     task = {
