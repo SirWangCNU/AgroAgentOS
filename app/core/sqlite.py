@@ -286,7 +286,7 @@ class AgentRun(Base):
             return {}
 
     def set_context_snapshot(self, data: dict[str, Any]) -> None:
-        self.context_snapshot_json = json.dumps(data, ensure_ascii=False, default=str)
+        self.context_snapshot_json = json.dumps(data, ensure_ascii=False)
 
     @property
     def outcome(self) -> dict[str, Any]:
@@ -302,7 +302,7 @@ class AgentRun(Base):
             return {}
 
     def set_outcome(self, data: dict[str, Any]) -> None:
-        self.outcome_json = json.dumps(data, ensure_ascii=False, default=str)
+        self.outcome_json = json.dumps(data, ensure_ascii=False)
 
 
 class SQLiteManager:

@@ -1,6 +1,7 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from app.schemas.diagnosis import DiagnosisRecordRequest, RecordResponse
 from app.schemas.farm_agent import (
     FarmEvidence,
     ProposalDraft,
@@ -126,3 +127,19 @@ def test_high_confidence_proposal_requires_non_inference_evidence(
             evidence=[inferred_evidence],
             actions=[proposed_action],
         )
+
+
+def test_diagnosis_write_source_excludes_legacy_aiops_value() -> None:
+    assert DiagnosisRecordRequest(question="巡检农场").source == "farm_agent"
+    assert DiagnosisRecordRequest(question="对话", source="chat").source == "chat"
+    assert DiagnosisRecordRequest(question="监测", source="monitoring").source == "monitoring"
+
+    with pytest.raises(ValidationError):
+        DiagnosisRecordRequest(question="旧运维写入", source="aiops")
+
+    historical_record = RecordResponse(
+        id="record-aiops-001",
+        question="历史运维记录",
+        source="aiops",
+    )
+    assert historical_record.source == "aiops"

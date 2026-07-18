@@ -1,8 +1,10 @@
 import json
 
+import pytest
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 
+import app.models.farm_agent as farm_agent_models
 from app.core.sqlite import AgentRun, Base
 from app.models.farm import Farm, Field
 from app.models.farm_agent import FarmActionProposal, FarmTask
@@ -109,6 +111,59 @@ def test_farm_workflow_json_setters_preserve_chinese_text() -> None:
     json.loads(proposal.evidence_json)
 
 
+@pytest.mark.parametrize(
+    ("model", "setter_name", "value"),
+    [
+        (FarmActionProposal(), "set_evidence", [{"unsupported": object()}]),
+        (FarmActionProposal(), "set_actions", [{"unsupported": object()}]),
+        (FarmTask(), "set_acceptance_criteria", [object()]),
+        (FarmTask(), "set_execution", {"unsupported": object()}),
+        (FarmTask(), "set_agent_verdict", {"unsupported": object()}),
+        (AgentRun(), "set_context_snapshot", {"unsupported": object()}),
+        (AgentRun(), "set_outcome", {"unsupported": object()}),
+    ],
+)
+def test_new_json_setters_propagate_serialization_errors(
+    model: object,
+    setter_name: str,
+    value: object,
+) -> None:
+    with pytest.raises(TypeError):
+        getattr(model, setter_name)(value)
+
+
+def test_json_getters_warn_and_return_stable_types_for_invalid_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    warning_messages: list[str] = []
+
+    def record_warning(message: str, *args: object) -> None:
+        warning_messages.append(message.format(*args))
+
+    monkeypatch.setattr(farm_agent_models.logger, "warning", record_warning)
+    proposal = FarmActionProposal(
+        evidence_json="{invalid",
+        actions_json='{"unexpected": "object"}',
+    )
+    task = FarmTask(
+        acceptance_criteria_json='{"unexpected": "object"}',
+        execution_json="[]",
+        agent_verdict_json="{invalid",
+    )
+    run = AgentRun(context_snapshot_json="[]", outcome_json="{invalid")
+
+    assert proposal.evidence == []
+    assert proposal.actions == []
+    assert task.acceptance_criteria == []
+    assert task.execution == {}
+    assert task.agent_verdict == {}
+    assert run.context_snapshot == {}
+    assert run.outcome == {}
+    assert len(warning_messages) == 7
+    assert any("evidence_json" in message for message in warning_messages)
+    assert any("context_snapshot_json" in message for message in warning_messages)
+
+
 def test_external_workflow_identifiers_are_unique() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -116,3 +171,8 @@ def test_external_workflow_identifiers_are_unique() -> None:
     assert ("proposal_id",) in _unique_column_sets(engine, "farm_action_proposals")
     assert ("task_id",) in _unique_column_sets(engine, "farm_tasks")
     assert ("run_id",) in _unique_column_sets(engine, "agent_runs")
+    assert ("run_id", "risk_fingerprint") in _unique_column_sets(
+        engine,
+        "farm_action_proposals",
+    )
+    assert ("proposal_id", "action_key") in _unique_column_sets(engine, "farm_tasks")

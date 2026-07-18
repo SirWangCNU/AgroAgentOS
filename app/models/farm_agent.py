@@ -88,14 +88,14 @@ class FarmActionProposal(Base):
         return _load_json_list(self.evidence_json, field_name="evidence_json")
 
     def set_evidence(self, data: list[dict[str, Any]]) -> None:
-        self.evidence_json = json.dumps(data, ensure_ascii=False, default=str)
+        self.evidence_json = json.dumps(data, ensure_ascii=False)
 
     @property
     def actions(self) -> list[dict[str, Any]]:
         return _load_json_list(self.actions_json, field_name="actions_json")
 
     def set_actions(self, data: list[dict[str, Any]]) -> None:
-        self.actions_json = json.dumps(data, ensure_ascii=False, default=str)
+        self.actions_json = json.dumps(data, ensure_ascii=False)
 
 
 class FarmTask(Base):
@@ -149,18 +149,18 @@ class FarmTask(Base):
         )
 
     def set_acceptance_criteria(self, data: list[str]) -> None:
-        self.acceptance_criteria_json = json.dumps(data, ensure_ascii=False, default=str)
+        self.acceptance_criteria_json = json.dumps(data, ensure_ascii=False)
 
     @property
     def execution(self) -> dict[str, Any]:
         return _load_json_dict(self.execution_json, field_name="execution_json")
 
     def set_execution(self, data: dict[str, Any]) -> None:
-        self.execution_json = json.dumps(data, ensure_ascii=False, default=str)
+        self.execution_json = json.dumps(data, ensure_ascii=False)
 
     @property
     def agent_verdict(self) -> dict[str, Any]:
         return _load_json_dict(self.agent_verdict_json, field_name="agent_verdict_json")
 
     def set_agent_verdict(self, data: dict[str, Any]) -> None:
-        self.agent_verdict_json = json.dumps(data, ensure_ascii=False, default=str)
+        self.agent_verdict_json = json.dumps(data, ensure_ascii=False)

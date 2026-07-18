@@ -1,5 +1,7 @@
 """诊断与对话历史记录的数据契约."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -13,9 +15,9 @@ class DiagnosisRecordRequest(BaseModel):
         max_length=2000,
     )
     answer: str = Field(default="", description="诊断结果或回答")
-    source: str = Field(
+    source: Literal["farm_agent", "chat", "monitoring"] = Field(
         default="farm_agent",
-        description="来源 (farm_agent/chat/monitoring/aiops)",
+        description="来源 (farm_agent/chat/monitoring)",
     )
     session_id: str = Field(default="", description="会话 ID")
     skill: str = Field(default="", description="使用的技能名称")
