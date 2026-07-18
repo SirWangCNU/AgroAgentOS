@@ -25,8 +25,6 @@ from app.core.history_source import (
     validate_history_write_source,
 )
 from app.core.sqlite import sqlite_manager
-from app.core.vector_store import get_vector_store
-from app.utils.splitter import split_markdown
 
 _MAX_ANSWER_CHARS = 12000
 
@@ -76,6 +74,10 @@ async def upload_record_to_kb(record_id: str) -> bool:
         True if uploaded successfully, False otherwise.
     """
     try:
+        # 向量库依赖只在显式上传时加载，普通历史查询不应依赖 RAG 运行环境。
+        from app.core.vector_store import get_vector_store
+        from app.utils.splitter import split_markdown
+
         record = sqlite_manager.get_history_record(record_id)
         if not record:
             logger.warning(f"[history] 记录不存在 record_id={record_id}")

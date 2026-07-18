@@ -7,7 +7,7 @@ POST /api/v1/history/{id}/upload-kb - 上传记录到知识库
 DELETE /api/v1/history            - 清空历史记录
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 
@@ -21,9 +21,9 @@ router = APIRouter(prefix="/history", tags=["history"])
 async def list_history(
     page: int = 1,
     page_size: int = 20,
-    source: str | None = None,
+    source: Literal["farm_agent", "aiops", "chat", "monitoring"] | None = None,
 ) -> ApiResponse:
-    """分页查询历史记录，默认按时间倒序."""
+    """分页查询历史记录；aiops 仅作为历史来源保留读取能力."""
     if page < 1:
         return ApiResponse.error(code="INVALID_PARAM", message="page 必须 >= 1")
     if page_size < 1 or page_size > 100:
@@ -86,7 +86,7 @@ async def clear_history(source: str | None = None) -> ApiResponse:
     """清空历史记录，默认清空全部来源.
 
     Query:
-        source: 可选，按来源筛选清空 (chat/aiops)
+        source: 可选，按来源筛选清空
     """
     count = await history_service.clear_records(source=source)
     return ApiResponse.success(data={"deleted_count": count})
