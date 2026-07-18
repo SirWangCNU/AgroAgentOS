@@ -11,7 +11,7 @@ Plan-Execute 模式下, 状态在三个节点 (Planner/Executor/Replanner) 之�
 """
 
 import operator
-from typing import Annotated, List, Tuple, TypedDict
+from typing import Any, Annotated, List, Literal, Tuple, TypedDict
 
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict as TE_TypedDict
@@ -69,6 +69,13 @@ class PlanExecuteState(TypedDict, total=False):
     # 当用户问题需要多个领域知识时，Router 可以选择多个协同技能
     collaboration_skills: List[str]                        # 协同技能列表 (除主技能外的辅助技能)
     collaboration_context: str                             # 协同技能的检索结果汇总
+    # ===== Farm Agent 业务运行上下文 =====
+    user_id: int
+    farm_id: int
+    run_id: str
+    run_type: Literal["inspection", "task_verification"]
+    business_context: dict[str, Any]
+    proposal_ids: Annotated[list[str], operator.add]
 
 
 # ============================================================

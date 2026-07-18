@@ -2,20 +2,20 @@
 
 LangGraph graph.astream() 只产出节点级事件, Executor 内部 LLM 的 token 级流式
 没有官方出口. 这里用 ContextVar + asyncio.Queue 把 token 从 tool_runner
-外送给 aiops_service, 让前端能看到 Executor 正在生成文字, 减少空白等待.
+外送给 Farm Agent service, 让前端能看到 Executor 正在生成文字, 减少空白等待.
 
 用法:
-  - aiops_service 在启动 graph.astream 前调 set_sink(queue), 然后把 graph.astream
+  - Farm Agent service 在启动 graph.astream 前调 set_sink(queue), 然后把 graph.astream
     包成 Task (Task 自动复制当前 context, 所以 tool_runner 里 get_sink() 拿得到).
   - tool_runner 每次流式输出调 await emit({...}).
-  - aiops_service 主循环 merge 自己的 "node event" 和 queue 里的 "token event",
+  - Farm Agent service 主循环 merge 自己的 "node event" 和 queue 里的 "token event",
     统一 yield 给 SSE.
 """
 
 from __future__ import annotations
 
 import asyncio
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Any, Dict, Optional
 
 _sink_var: ContextVar[Optional["asyncio.Queue[Dict[str, Any]]"]] = ContextVar(
@@ -24,8 +24,18 @@ _sink_var: ContextVar[Optional["asyncio.Queue[Dict[str, Any]]"]] = ContextVar(
 _step_var: ContextVar[int] = ContextVar("executor_current_step", default=0)
 
 
-def set_sink(queue: "asyncio.Queue[Dict[str, Any]]") -> None:
-    _sink_var.set(queue)
+def set_sink(
+    queue: "asyncio.Queue[Dict[str, Any]] | None",
+) -> Token[Optional["asyncio.Queue[Dict[str, Any]]"]]:
+    return _sink_var.set(queue)
+
+
+def reset_sink(token: Token[Optional["asyncio.Queue[Dict[str, Any]]"]]) -> None:
+    _sink_var.reset(token)
+
+
+def get_sink() -> Optional["asyncio.Queue[Dict[str, Any]]"]:
+    return _sink_var.get()
 
 
 def set_step(iteration: int) -> None:
@@ -41,7 +51,7 @@ _emit_count = 0
 
 
 async def emit(event: Dict[str, Any]) -> None:
-    """把事件推到 aiops_service 的中转队列. 队列不存在或满了, 静默丢弃."""
+    """把事件推到 Farm Agent 的中转队列. 队列不存在或满了, 静默丢弃."""
     global _miss_count, _emit_count
     from loguru import logger  # 放函数内避免循环 import
 

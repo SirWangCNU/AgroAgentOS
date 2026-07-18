@@ -102,8 +102,24 @@ def route_after_skill(state: PlanExecuteState) -> Literal["planner", "fork_skill
     return "planner"
 
 
-def build_aiops_graph():
-    """构建 AIOps 多智能体 graph.
+async def farm_skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
+    """Farm 工作流使用固定 Skill，普通农业问答仍交给通用路由器。"""
+
+    run_type = state.get("run_type")
+    forced_skill = {
+        "inspection": "farm_inspection",
+        "task_verification": "farm_task_verification",
+    }.get(run_type)
+    if forced_skill:
+        return {
+            "selected_skill": forced_skill,
+            "skill_reason": f"Farm Agent {run_type} workflow",
+        }
+    return await skill_router_node(state)
+
+
+def build_farm_agent_graph():
+    """构建 Farm Agent 多智能体 graph.
 
     Returns:
         编译后的 CompiledStateGraph, 可以 .ainvoke() / .astream() 调用
@@ -111,11 +127,11 @@ def build_aiops_graph():
     workflow = StateGraph(PlanExecuteState)
 
     # 节点
-    workflow.add_node("skill_router", skill_router_node)
+    workflow.add_node("skill_router", farm_skill_router_node)
     workflow.add_node("planner", plan_node)
     workflow.add_node("executor", execute_node)
     workflow.add_node("replanner", replan_node)
-    # §4: fork 模式独立子图入口节点 (内部会再 build_aiops_graph 跑子图)
+    # §4: fork 模式独立子图入口节点
     workflow.add_node("fork_skill", fork_skill_node)
 
     # 边
@@ -146,5 +162,5 @@ def build_aiops_graph():
     )
 
     compiled = workflow.compile()
-    logger.info("[Graph] AIOps graph 已编译完成 (skill_router + plan-execute-replan)")
+    logger.info("[Graph] Farm Agent graph 已编译完成 (skill_router + plan-execute-replan)")
     return compiled
