@@ -174,7 +174,7 @@ def _build_router_fallback_result(user_input: str) -> PlanExecuteState:
     collab_skills = _detect_collaboration_skills(user_input)
     return {
         "selected_skill": GENERIC_SKILL_NAME,
-        "skill_reason": "Router LLM 调用失败后, 规则兜底放行到 generic_oncall",
+        "skill_reason": "Router LLM 调用失败后, 规则兜底放行到 agriculture_qa",
         "collaboration_skills": collab_skills,
     }
 
@@ -190,7 +190,7 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
 
     non_generic = [n for n in available if n != GENERIC_SKILL_NAME]
     if not non_generic:
-        logger.info("[Router] 仅有兜底 Skill, 直接选择 generic_oncall")
+        logger.info("[Router] 仅有兜底 Skill, 直接选择 agriculture_qa")
         return {
             "selected_skill": GENERIC_SKILL_NAME,
             "skill_reason": "no specific skill defined, fallback to generic",

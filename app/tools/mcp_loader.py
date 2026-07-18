@@ -87,7 +87,7 @@ def get_all_tools() -> List[BaseTool]:
     # 延迟 import 避免循环 (meta -> tools.__init__ -> mcp_loader)
     from app.tools.meta import warn_unregistered_tools
 
-    # §5: subagent delegate 工具 (delegate_to_evidence_collector 等)
+    # §5: 农业 subagent delegate 工具
     # 延迟 import: subagents.runner 内部依赖 mcp_loader, 避免循环
     from app.agents.subagents.runner import get_subagent_tools
 

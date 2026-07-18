@@ -43,9 +43,9 @@ _RAG_TOOL_EXCLUDE = {
     "get_current_time",       # 没必要
     "mcp_search_tools",       # Lazy MCP 元工具
     "mcp_execute_tool",
-    "delegate_to_evidence_collector",   # 诊断专用 subagent
-    "delegate_to_kb_researcher",
-    "delegate_to_report_writer",
+    "delegate_to_farm_data_analyst",   # 农场工作流专用 subagent
+    "delegate_to_agronomy_researcher",
+    "delegate_to_farm_work_planner",
 }
 
 

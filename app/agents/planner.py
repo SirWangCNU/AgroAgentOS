@@ -32,7 +32,7 @@ async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
     skill_name = state.get("selected_skill", "")
     collaboration_skills = state.get("collaboration_skills", [])
 
-    # 取选定 Skill, 找不到时回退到 generic_oncall (registry 保证 fallback 存在)
+    # 取选定 Skill, 找不到时回退到 agriculture_qa (registry 保证 fallback 存在)
     registry = get_skill_registry()
     skill = registry.get_or_generic(skill_name)
 

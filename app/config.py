@@ -232,7 +232,7 @@ class Settings(BaseSettings):
         description=(
             "最终报告合成使用的模型. 留空则走 dashscope_chat_model (推荐 pro). "
             "Replanner 用 flash 做快速决策, 决策 is_finished=true 后再用 report_model "
-            "单独写一份高质量的 5 段 SRE 报告, 质量 / 速度两头兼顾."
+            "单独写一份高质量的农业风险分析报告, 质量 / 速度两头兼顾."
         ),
     )
     agent_planner_model: str = Field(

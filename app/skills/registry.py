@@ -3,7 +3,7 @@
 设计:
   - 文件布局: app/skills/definitions/<skill_name>/SKILL.md
   - 进程级 lru_cache 单例 (启动时加载一次, 后续从内存取)
-  - 强制要求兜底 Skill `generic_oncall` 存在, 保证 Router 永远有 fallback
+  - 强制要求农业问答 Skill 存在, 保证 Router 永远有领域内 fallback
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.skills.models import Skill
 _DEFINITIONS_DIR = Path(__file__).parent / "definitions"
 
 # 兜底 Skill 名: Router 选不出来时使用
-GENERIC_SKILL_NAME = "generic_oncall"
+GENERIC_SKILL_NAME = "agriculture_qa"
 
 
 class SkillRegistry:
@@ -40,7 +40,7 @@ class SkillRegistry:
         return self._skills.get(name)
 
     def get_or_generic(self, name: Optional[str]) -> Skill:
-        """取指定 Skill, 不存在时回退到 generic_oncall.
+        """取指定 Skill, 不存在时回退到农业智能问答.
 
         Raises:
             RuntimeError: 兜底 Skill 也缺失 (规约错误)

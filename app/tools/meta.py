@@ -254,13 +254,27 @@ TOOL_META: Dict[str, ToolMeta] = {
     ),
 
     # ===== 二级 Agent (Subagent) delegate 工具 =====
-    "delegate_to_kb_researcher": ToolMeta(
+    "delegate_to_farm_data_analyst": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        risk_level="low",
+        max_result_chars=8000,
+        search_hint="farm field trajectory task facts 农场 地块 轨迹 任务事实",
+    ),
+    "delegate_to_agronomy_researcher": ToolMeta(
         read_only=True,
         concurrency_safe=True,
         side_effect="network",  # 内部可能联网
         risk_level="medium",
-        max_result_chars=6000,
-        search_hint="knowledge research 知识检索 农业知识",
+        max_result_chars=8000,
+        search_hint="agronomy weather crop stage knowledge uncertainty 农艺 天气 作物阶段",
+    ),
+    "delegate_to_farm_work_planner": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        risk_level="low",
+        max_result_chars=8000,
+        search_hint="farm action deadline acceptance planning 农事 行动 截止时间 验收条件",
     ),
 }
 
