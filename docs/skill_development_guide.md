@@ -62,7 +62,14 @@ search_knowledge_base
 save_task_verification_draft
 ```
 
-先核对任务证据和作业质量，再按需补充知识规则，最后保存验收草稿。`verdict` 只能是 `pass`、`fail` 或 `needs_review`。保存草稿不改变任务状态，最终审核由人工完成。
+先核对任务证据和作业质量，再按需补充知识规则，最后保存验收草稿。`verdict` 只能使用以下运行时枚举：
+
+- `pass`：证据表明任务满足验收条件。
+- `needs_evidence`：缺少关键证明，需要补交证据。
+- `rework`：证据表明任务不满足验收条件，需要返工。
+- `manual_review`：存在冲突、含糊或工具无法判断的情况，需要人工裁决。
+
+保存草稿不改变任务状态，最终审核由人工完成。
 
 ## Playbook 证据规范
 

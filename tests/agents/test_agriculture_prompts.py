@@ -13,7 +13,8 @@ from app.tools.meta import TOOL_META
 
 
 PROJECT_ROOT = Path(__file__).parents[2]
-PROMPT_BEARING_FILES = (
+TASK7_CHANGED_SURFACES = (
+    PROJECT_ROOT / "app" / "config.py",
     PROJECT_ROOT / "app" / "runtime" / "agent_harness.py",
     PROJECT_ROOT / "app" / "runtime" / "tool_filter.py",
     PROJECT_ROOT / "app" / "agents" / "skill_router.py",
@@ -21,31 +22,44 @@ PROMPT_BEARING_FILES = (
     PROJECT_ROOT / "app" / "agents" / "replanner.py",
     PROJECT_ROOT / "app" / "agents" / "subagents" / "__init__.py",
     PROJECT_ROOT / "app" / "agents" / "subagents" / "runner.py",
+    PROJECT_ROOT / "app" / "tools" / "meta.py",
+    PROJECT_ROOT / "app" / "services" / "rag_service.py",
     PROJECT_ROOT / "app" / "skills" / "registry.py",
     PROJECT_ROOT / "app" / "skills" / "README.md",
     PROJECT_ROOT / "docs" / "skill_development_guide.md",
 )
-FORBIDDEN_PATTERNS = (
-    r"aiops",
+LEGACY_TEXT_PATTERNS = (
     r"sre",
     r"server root cause",
     r"generic_oncall",
     r"故障诊断报告",
 )
+AIOPS_FREE_SURFACES = tuple(
+    path
+    for path in TASK7_CHANGED_SURFACES
+    if path
+    not in {
+        PROJECT_ROOT / "app" / "config.py",
+        PROJECT_ROOT / "app" / "services" / "rag_service.py",
+    }
+)
 
 
 def test_prompt_and_skill_surface_contains_no_legacy_operations_language() -> None:
-    files = list(PROMPT_BEARING_FILES)
-    files.extend(
+    skill_files = tuple(
         sorted((PROJECT_ROOT / "app" / "skills" / "definitions").glob("*/SKILL.md"))
     )
+    files = TASK7_CHANGED_SURFACES + skill_files
 
     violations: list[str] = []
     for path in files:
         text = path.read_text(encoding="utf-8")
-        for pattern in FORBIDDEN_PATTERNS:
+        for pattern in LEGACY_TEXT_PATTERNS:
             if re.search(pattern, text, flags=re.IGNORECASE):
                 violations.append(f"{path.relative_to(PROJECT_ROOT)}: {pattern}")
+    for path in AIOPS_FREE_SURFACES + skill_files:
+        if re.search(r"aiops", path.read_text(encoding="utf-8"), flags=re.IGNORECASE):
+            violations.append(f"{path.relative_to(PROJECT_ROOT)}: aiops")
 
     assert violations == []
 

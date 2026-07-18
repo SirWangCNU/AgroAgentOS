@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
 from app.runtime.tool_filter import filter_tools_for_skill
+from app.schemas.farm_agent import VerificationVerdict
 from app.skills.registry import GENERIC_SKILL_NAME, get_skill_registry
 from app.tools.mcp_loader import get_local_tools
 
 
 DEFINITIONS_DIR = Path(__file__).parents[2] / "app" / "skills" / "definitions"
+SKILL_GUIDE = Path(__file__).parents[2] / "docs" / "skill_development_guide.md"
+VERIFICATION_VERDICTS = {"pass", "needs_evidence", "rework", "manual_review"}
+FORBIDDEN_VERDICTS = {"fail", "needs_review"}
 
 
 def test_agriculture_qa_is_the_hard_fallback() -> None:
@@ -123,7 +129,24 @@ def test_task_verification_playbook_is_draft_only() -> None:
     assert all(label in playbook for label in ("实测事实", "规则依据", "分析推断"))
     assert all(f"`{kind}`" in playbook for kind in ("measured", "rule", "inference"))
     assert "verdict" in playbook
-    assert all(value in playbook for value in ("pass", "fail", "needs_review"))
+    documented_verdicts = set(
+        re.findall(r"^- `([^`]+)`：", playbook, flags=re.MULTILINE)
+    )
+    assert documented_verdicts == VERIFICATION_VERDICTS
+    assert set(get_args(VerificationVerdict)) == VERIFICATION_VERDICTS
+    assert all(value not in playbook for value in FORBIDDEN_VERDICTS)
     assert "没有证据不得给出高置信度结论" in playbook
     assert "保存草稿不改变任务状态" in playbook
     assert "最终审核" in playbook
+
+
+def test_skill_guide_documents_exact_task_verification_verdicts() -> None:
+    guide = SKILL_GUIDE.read_text(encoding="utf-8")
+    verification_section = guide.split("### `farm_task_verification`", maxsplit=1)[1]
+    verification_section = verification_section.split("## Playbook", maxsplit=1)[0]
+
+    documented_verdicts = set(
+        re.findall(r"^- `([^`]+)`：", verification_section, flags=re.MULTILINE)
+    )
+    assert documented_verdicts == VERIFICATION_VERDICTS
+    assert all(value not in verification_section for value in FORBIDDEN_VERDICTS)
