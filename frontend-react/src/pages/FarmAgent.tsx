@@ -26,7 +26,7 @@ export default function FarmAgent() {
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
-  const { runStatus, activeRunId, events, startRun, appendEvent, finishRun, failRun, error } = useFarmAgentStore();
+  const { runStatus, activeRunId, events, risks: inspectionRisks, degraded, dataGaps, startRun, appendEvent, finishRun, failRun, reset, error } = useFarmAgentStore();
   const { data: farms = [], isLoading: farmsLoading } = useQuery({ queryKey: ["farms"], queryFn: getFarms });
   const farmId = selectedFarmId ?? farms[0]?.id ?? null;
   const selectedFarm = farms.find((farm) => farm.id === farmId) ?? null;
@@ -34,7 +34,7 @@ export default function FarmAgent() {
   const { data: tasks = [] } = useQuery({ queryKey: ["farm-agent-tasks", farmId], queryFn: () => listFarmTasks({ farm_id: farmId ?? undefined }), enabled: farmId !== null });
   const { data: timeline } = useQuery({ queryKey: ["farm-agent-timeline", activeRunId], queryFn: () => getFarmRunTimeline(activeRunId ?? ""), enabled: activeRunId !== null && runStatus !== "running" });
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => () => { abortRef.current?.abort(); reset(); }, [reset]);
 
   const refreshWorkflow = async () => {
     await Promise.all([
@@ -55,7 +55,7 @@ export default function FarmAgent() {
       }
       finishRun(); await refreshWorkflow();
     } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      if (caught instanceof DOMException && caught.name === "AbortError") { reset(); return; }
       failRun(caught instanceof Error ? caught.message : "巡检执行失败");
     }
   };
@@ -77,7 +77,7 @@ export default function FarmAgent() {
     {farmsLoading ? <div className="py-16 text-center text-sm text-text-muted"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />加载农场…</div> : farms.length === 0 ? <div className="mt-5 rounded-2xl border border-dashed border-[#b8b09f] bg-[#faf8f1] py-16 text-center"><Tractor className="mx-auto h-8 w-8 text-[#837761]" /><h2 className="mt-3 font-semibold text-[#34453b]">先创建农场，再启动智能巡检</h2><Link to="/workspace/farms" className="mt-4 inline-block rounded-lg bg-[#1f6a4b] px-4 py-2 text-sm font-semibold text-white">前往农场管理</Link></div> : <>
       {error && <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1.15fr)_minmax(0,1fr)]">
-        <section><div className="mb-3 flex items-end justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#8b785c]">Farm situation</p><h2 className="mt-1 font-semibold text-[#2e4036]">{selectedFarm?.name} · 风险态势</h2></div><CloudRain className="h-5 w-5 text-[#9d6d2e]" /></div><div className="space-y-3">{proposals.length ? proposals.map((proposal) => <FarmRiskCard key={proposal.proposal_id} risk={proposalRisk(proposal)} />) : <div className="rounded-2xl border border-dashed border-[#d6cebf] bg-[#fbfaf5] px-4 py-12 text-center text-xs text-[#8c8375]">暂无结构化风险，启动巡检后生成证据。</div>}</div></section>
+        <section><div className="mb-3 flex items-end justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#8b785c]">Farm situation</p><h2 className="mt-1 font-semibold text-[#2e4036]">{selectedFarm?.name} · 风险态势</h2></div><CloudRain className="h-5 w-5 text-[#9d6d2e]" /></div><div className="space-y-3">{inspectionRisks.length ? inspectionRisks.map((risk) => <FarmRiskCard key={risk.risk_key} risk={risk} degraded={degraded} />) : proposals.length ? proposals.map((proposal) => <FarmRiskCard key={proposal.proposal_id} risk={proposalRisk(proposal)} />) : <div className="rounded-2xl border border-dashed border-[#d6cebf] bg-[#fbfaf5] px-4 py-12 text-center text-xs text-[#8c8375]">暂无结构化风险，启动巡检后生成证据。</div>}{dataGaps.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">数据缺口：{dataGaps.join("；")}</div>}</div></section>
         <AgentRunTimeline events={events.length ? events : timeline?.events ?? []} status={runStatus} />
         <section><div className="mb-3 flex items-end justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#8b785c]">Human decision</p><h2 className="mt-1 font-semibold text-[#2e4036]">待确认行动提案</h2></div><span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">{pendingProposals.length}</span></div><div className="space-y-3">{pendingProposals.map((proposal) => <ActionProposalCard key={proposal.proposal_id} proposal={proposal} busy={approval.isPending || rejection.isPending} onApprove={(actions, note) => approval.mutate({ proposalId: proposal.proposal_id, actions, note })} onReject={(note) => rejection.mutate({ proposalId: proposal.proposal_id, note })} />)}{pendingProposals.length === 0 && <div className="rounded-2xl border border-dashed border-[#d6cebf] bg-[#fbfaf5] px-4 py-12 text-center"><Bot className="mx-auto mb-2 h-6 w-6 text-[#8c8375]" /><p className="text-xs text-[#8c8375]">没有等待人工决策的提案。</p></div>}</div></section>
       </div>

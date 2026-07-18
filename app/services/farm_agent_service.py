@@ -251,7 +251,14 @@ async def _stream_run(
     try:
         sink_token = set_sink(queue)
         yield _event(run_id, "start", "run_started", "Farm Agent 已启动", run_type=context.run_type)
-        yield _event(run_id, "context_loaded", "context_loaded", "业务上下文已加载", farm_id=context.farm_id)
+        yield _event(
+            run_id,
+            "context_loaded",
+            "context_loaded",
+            "业务上下文已加载",
+            farm_id=context.farm_id,
+            inspection=business_context.get("inspection", {}),
+        )
 
         with bind_farm_run_context(context):
             runner_task = asyncio.create_task(run_graph())

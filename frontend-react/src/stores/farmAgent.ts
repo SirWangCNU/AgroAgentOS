@@ -10,6 +10,8 @@ interface FarmAgentState {
   activeRunId: string | null;
   events: FarmAgentEvent[];
   risks: FarmRisk[];
+  degraded: boolean;
+  dataGaps: string[];
   proposalIds: string[];
   report: string;
   error: string | null;
@@ -25,6 +27,8 @@ const initialState = {
   activeRunId: null,
   events: [],
   risks: [],
+  degraded: false,
+  dataGaps: [],
   proposalIds: [],
   report: "",
   error: null,
@@ -51,7 +55,8 @@ function eventProposalIds(event: FarmAgentEvent): string[] {
 }
 
 function eventRisks(event: FarmAgentEvent): FarmRisk[] {
-  const risks = event.data.risks;
+  const inspection = isRecord(event.data.inspection) ? event.data.inspection : {};
+  const risks = inspection.risks ?? event.data.risks;
   if (!Array.isArray(risks)) return [];
   return risks.filter((risk): risk is FarmRisk => {
     if (!isRecord(risk)) return false;
@@ -64,6 +69,16 @@ function eventRisks(event: FarmAgentEvent): FarmRisk[] {
   });
 }
 
+function eventInspectionMeta(event: FarmAgentEvent): { degraded: boolean; dataGaps: string[] } {
+  const inspection = isRecord(event.data.inspection) ? event.data.inspection : event.data;
+  return {
+    degraded: inspection.degraded === true,
+    dataGaps: Array.isArray(inspection.data_gaps)
+      ? inspection.data_gaps.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+}
+
 export const useFarmAgentStore = create<FarmAgentState>((set) => ({
   ...initialState,
 
@@ -73,11 +88,15 @@ export const useFarmAgentStore = create<FarmAgentState>((set) => ({
     set((state) => {
       if (state.events.some((item) => item.event_id === event.event_id)) return state;
       const newProposalIds = eventProposalIds(event);
+      const incomingRisks = eventRisks(event);
+      const inspectionMeta = eventInspectionMeta(event);
       const report = event.data.report;
       return {
         events: [...state.events, event],
         activeRunId: event.run_id || state.activeRunId,
-        risks: [...state.risks, ...eventRisks(event)],
+        risks: [...state.risks.filter((risk) => !incomingRisks.some((incoming) => incoming.risk_key === risk.risk_key)), ...incomingRisks],
+        degraded: state.degraded || inspectionMeta.degraded,
+        dataGaps: [...new Set([...state.dataGaps, ...inspectionMeta.dataGaps])],
         proposalIds: [...new Set([...state.proposalIds, ...newProposalIds])],
         report: typeof report === "string" ? report : state.report,
       };

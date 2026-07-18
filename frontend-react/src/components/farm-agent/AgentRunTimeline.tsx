@@ -29,15 +29,20 @@ function detailFor(event: FarmAgentEvent): string {
   if (event.type === "tool_call") {
     const name = event.data.name;
     const duration = event.data.duration_ms;
-    return [typeof name === "string" ? name : "受控工具", typeof duration === "number" ? `${duration} ms` : ""]
+    const status = event.data.status;
+    return [typeof name === "string" ? name : "受控工具", typeof status === "string" ? status : "", typeof duration === "number" ? `${duration} ms` : ""]
       .filter(Boolean)
       .join(" · ");
+  }
+  if ((event.type === "plan" || event.type === "replan") && Array.isArray(event.data.plan)) {
+    return event.data.plan.filter((item): item is string => typeof item === "string").join(" → ");
   }
   if (event.type === "skill_selected" && typeof event.data.skill === "string") return event.data.skill;
   return event.stage.replaceAll("_", " ");
 }
 
 export default function AgentRunTimeline({ events, status }: Props) {
+  const visibleEvents = events.filter((event) => !["step_token", "usage", "progress"].includes(event.type));
   return (
     <section aria-label="Agent 执行时间线" className="h-full rounded-2xl border border-[#244c3d] bg-[#102b23] text-[#edf5ed] shadow-[0_18px_50px_-28px_rgba(10,44,33,.8)]">
       <header className="flex items-center justify-between border-b border-white/10 px-5 py-4">
@@ -51,16 +56,16 @@ export default function AgentRunTimeline({ events, status }: Props) {
         </span>
       </header>
       <div className="max-h-[34rem] overflow-y-auto px-5 py-4">
-        {events.length === 0 ? (
+        {visibleEvents.length === 0 ? (
           <div className="flex min-h-48 flex-col items-center justify-center text-center text-[#8eaa99]">
             <CircleDot className="mb-3 h-7 w-7" />
             <p className="text-sm">启动巡检后，Skill、计划和工具调用会在这里实时展开。</p>
           </div>
         ) : (
           <ol className="relative space-y-1 before:absolute before:bottom-3 before:left-[13px] before:top-3 before:w-px before:bg-white/12">
-            {events.map((event, index) => {
+            {visibleEvents.map((event, index) => {
               const Icon = icons[event.type as keyof typeof icons] ?? CircleDot;
-              const isCurrent = status === "running" && index === events.length - 1;
+              const isCurrent = status === "running" && index === visibleEvents.length - 1;
               return (
                 <li key={event.event_id} className="relative flex gap-3 py-2.5">
                   <span className={`relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border ${event.type === "error" ? "border-red-400/60 bg-red-400/15 text-red-300" : isCurrent ? "border-[#f5b84b] bg-[#f5b84b]/15 text-[#ffd989]" : "border-[#477b62] bg-[#16392d] text-[#9bc9ad]"}`}>

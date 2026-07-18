@@ -54,6 +54,7 @@ async def test_inspection_stream_has_business_lifecycle(monkeypatch) -> None:
 
     types = [event["type"] for event in events]
     assert types[:4] == ["start", "context_loaded", "skill_selected", "plan"]
+    assert events[1]["data"]["inspection"] == {"risks": []}
     assert types[-2:] == ["report", "complete"]
     assert histories[0]["source"] == "farm_agent"
     assert persisted[0][0] == "start"
