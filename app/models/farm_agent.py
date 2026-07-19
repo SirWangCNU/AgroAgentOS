@@ -164,3 +164,66 @@ class FarmTask(Base):
 
     def set_agent_verdict(self, data: dict[str, Any]) -> None:
         self.agent_verdict_json = json.dumps(data, ensure_ascii=False)
+
+
+class FarmEvent(Base):
+    """农场事件流 - 农事操作的不可变事件记录.
+
+    整个联动的"中轴线"：任务完成时自动写入、人工巡田可录入、IoT 异常可触发。
+    下次 AI 巡检 snapshot 携带 recent_events，让 Agent 有"记忆"，
+    能引用"3 天前刚浇过水"等历史，避免重复决策。
+    """
+
+    __tablename__ = "farm_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    field_id = Column(
+        Integer,
+        ForeignKey("fields.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    season_id = Column(
+        Integer,
+        ForeignKey("crop_seasons.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    event_type = Column(String(32), nullable=False, index=True)
+    # seeding/fertilizing/irrigating/spraying/scouting/harvest/anomaly
+    event_time = Column(DateTime, nullable=False, default=func.now(), index=True)
+    operator = Column(String(128), nullable=False, default="")  # 人工/无人机ID/水阀ID/agent-run-xxx
+    inputs_json = Column(Text, nullable=False, default="[]")  # 投入品清单：[{material, rate_per_mu, total, unit}]
+    geo_payload_json = Column(Text, nullable=False, default="")  # GeoJSON 子区块（空间化作业记录）
+    source = Column(String(32), nullable=False, default="manual", index=True)
+    # manual/task_completion/iot_trigger/agent_run
+    related_task_id = Column(String(64), nullable=True, index=True)  # 关联 FarmTask.task_id（弱关联）
+    evidence_json = Column(Text, nullable=False, default="[]")  # 照片/视频/附件URL
+    note = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, nullable=False, default=func.now())
+
+    __table_args__ = (
+        # 同一任务同一事件类型去重，防止任务完成重试导致重复事件
+        UniqueConstraint("related_task_id", "event_type", name="uq_event_task_type"),
+    )
+
+    @property
+    def inputs(self) -> list[Any]:
+        return _load_json_list(self.inputs_json, field_name="inputs_json")
+
+    def set_inputs(self, data: list[Any]) -> None:
+        self.inputs_json = json.dumps(data, ensure_ascii=False)
+
+    @property
+    def evidence(self) -> list[Any]:
+        return _load_json_list(self.evidence_json, field_name="evidence_json")
+
+    def set_evidence(self, data: list[Any]) -> None:
+        self.evidence_json = json.dumps(data, ensure_ascii=False)
+
+    @property
+    def geo_payload(self) -> dict[str, Any]:
+        return _load_json_dict(self.geo_payload_json, field_name="geo_payload_json")
+
+    def set_geo_payload(self, data: dict[str, Any]) -> None:
+        self.geo_payload_json = json.dumps(data, ensure_ascii=False)

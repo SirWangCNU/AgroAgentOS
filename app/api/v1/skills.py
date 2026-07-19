@@ -27,6 +27,10 @@ class SkillSummary(BaseModel):
     triggers: List[str] = Field(default_factory=list, description="触发关键字")
     allowed_tools: List[str] = Field(default_factory=list, description="允许调用的工具白名单")
     risk_level: str = Field(..., description="风险等级: low / medium / high")
+    icon: str = Field(default="Sparkles", description="前端图标名")
+    category: str = Field(default="通用", description="场景分类")
+    tagline: str = Field(default="", description="一句话卖点")
+    examples: List[str] = Field(default_factory=list, description="示例问题列表")
 
 
 class SkillListData(BaseModel):
@@ -55,6 +59,10 @@ async def list_skills() -> ApiResponse[SkillListData]:
             triggers=s.triggers,
             allowed_tools=s.allowed_tools,
             risk_level=s.risk_level,
+            icon=s.icon,
+            category=s.category,
+            tagline=s.tagline,
+            examples=s.examples,
         )
         for s in registry.all()
     ]

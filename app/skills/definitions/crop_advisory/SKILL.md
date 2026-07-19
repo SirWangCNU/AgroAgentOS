@@ -1,11 +1,18 @@
 ---
-name: crop-advisory
+name: crop_advisory
 display_name: 种植顾问
 description: 根据作物种类、生长阶段、气候条件给出施肥、灌溉、播种、田间管理建议
 triggers: [施肥, 灌溉, 播种, 种植, 生长阶段, 浇水, 追肥, 底肥, 育苗, 插秧, 定苗, 间苗, 中耕, 除草, 复合肥, 有机肥, 氮肥, 磷肥, 钾肥, NPK, 需水量, 土壤墒情]
 allowed_tools: [search_knowledge_base, get_weather, get_current_time]
 risk_level: low
 context: inline
+icon: Sprout
+category: 生产管理
+tagline: 根据作物和天气给出施肥灌溉管理建议
+examples:
+  - 番茄结果期怎么施肥？
+  - 黄瓜幼苗期需要每天浇水吗？
+  - 水稻分蘖期的管理要点是什么？
 ---
 
 # 种植顾问

@@ -1,6 +1,6 @@
 """Farm Agent 巡检、提案、任务和运行时间线数据契约."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -121,7 +121,19 @@ class FarmInspectionRequest(BaseModel):
 
     farm_id: int = Field(..., gt=0)
     objective: str = Field(default="请对当前农场执行综合巡检", min_length=1)
-    demo_scenario: Literal["rainstorm"] | None = None
+    demo_scenario: (
+        Literal[
+            "rainstorm",
+            "pest_outbreak",
+            "nutrient_deficiency",
+            "drought",
+        ]
+        | None
+    ) = None
+    inject_scenario: bool = Field(
+        default=True,
+        description="巡检前是否自动注入 demo_scenario 对应的感知数据",
+    )
 
 
 class FarmAgentEvent(BaseModel):
@@ -274,3 +286,72 @@ class AgentRunTimelineResponse(BaseModel):
     outcome: dict[str, Any] = Field(default_factory=dict)
     proposal_ids: list[str] = Field(default_factory=list)
     created_at: datetime | None = None
+
+
+# ==================== B9 比赛演示感知/事件/茬次查询契约 ====================
+
+
+class SensorReadingResponse(BaseModel):
+    """感知读数响应（B9 新增）.
+
+    对应 app.models.farm.SensorReading，给前端 SensorPanel / Farms 时间线使用。
+    """
+
+    id: int
+    field_id: int
+    sensor_type: str
+    value_float: float | None = None
+    value: dict[str, Any] = Field(default_factory=dict)
+    unit: str = ""
+    observed_at: datetime
+    source: str
+    scenario_id: str | None = None
+    note: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FarmEventResponse(BaseModel):
+    """农场事件响应（B9 新增）.
+
+    对应 app.models.farm_agent.FarmEvent，给前端事件时间线使用。
+    """
+
+    id: int
+    field_id: int
+    season_id: int | None = None
+    event_type: str
+    event_time: datetime
+    operator: str
+    inputs: list[Any] = Field(default_factory=list)
+    source: str
+    related_task_id: str | None = None
+    note: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CropSeasonResponse(BaseModel):
+    """茬次响应（B9 新增）.
+
+    对应 app.models.farm.CropSeason，给前端 Farms 茬次卡片使用。
+    note/created_at/updated_at 在 ORM 层有 default，但内存构造对象时可能为 None，
+    所以这里都设为 Optional + 默认值，兼容测试和真实数据。
+    """
+
+    id: int
+    field_id: int
+    crop_name: str
+    variety: str = ""
+    season_code: str
+    start_date: date
+    expected_harvest: date | None = None
+    current_stage: str = ""
+    area_mu: float = 0.0
+    target_yield: str = ""
+    status: str = "planning"
+    note: str | None = ""
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)

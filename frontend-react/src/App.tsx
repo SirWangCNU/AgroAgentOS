@@ -4,6 +4,7 @@ import AppLayout from "./components/layout/AppLayout";
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
 import Dashboard from "./pages/Dashboard";
+// import AgentCapabilities from "./pages/AgentCapabilities"; // 临时移除：文件被截断，阻塞构建
 import Weather from "./pages/Weather";
 import Farms from "./pages/Farms";
 import Knowledge from "./pages/Knowledge";
@@ -37,8 +38,10 @@ export default function App() {
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:sessionId" element={<Chat />} />
 
-            {/* Workspace (Dashboard = landing page for /workspace) */}
-            <Route path="/workspace" element={<Dashboard />} />
+            {/* Workspace (AgentCapabilities = landing page for /workspace) */}
+            {/* 临时移除 /workspace 路由：AgentCapabilities.tsx 被截断，阻塞构建 */}
+            {/* <Route path="/workspace" element={<AgentCapabilities />} /> */}
+            <Route path="/workspace/dashboard" element={<Dashboard />} />
             <Route path="/workspace/weather" element={<Weather />} />
             <Route path="/workspace/farms" element={<Farms />} />
             <Route path="/workspace/farm-agent" element={<FarmAgent />} />

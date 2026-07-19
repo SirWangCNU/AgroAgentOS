@@ -61,6 +61,23 @@ class Skill(BaseModel):
         default="low",
         description="风险等级, Harness 用于决定是否需要人工确认",
     )
+    # ===== 前端展示字段 (可选, 不影响调度逻辑) =====
+    icon: str = Field(
+        default="Sparkles",
+        description="前端图标名, 对应 lucide-react 图标组件",
+    )
+    category: str = Field(
+        default="通用",
+        description="技能所属场景分类, 用于前端分组展示",
+    )
+    tagline: str = Field(
+        default="",
+        description="一句话卖点, 用于前端卡片主标题下方展示",
+    )
+    examples: List[str] = Field(
+        default_factory=list,
+        description="一键体验示例问题列表, 1-3 条",
+    )
     # ===== §4 inline / fork 字段 =====
     context: SkillContextMode = Field(
         default="inline",

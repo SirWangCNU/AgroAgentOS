@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { chatStream } from "../api/chat";
@@ -21,6 +21,7 @@ const _globalSendingRef = { current: false };
 export default function Chat() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Bug 修复: 记录已加载的 sessionId, 防止 useEffect 因 activeId 变化重复触发 loadMessages
@@ -28,6 +29,8 @@ export default function Chat() {
   // 重跑, 但此时 conv.find 仍找不到 (loadMessages 还在进行中), 会再次调用 loadMessages.
   // 这浪费网络请求, 且 isLoadingMessages 反复被设为 true, UI 卡在 "加载对话记录中..." 状态.
   const loadedSessionRef = useRef<Set<string>>(new Set());
+  // 一键体验: 从能力中心携带 initialMessage 进入 /chat 时只自动发送一次
+  const initialHandledRef = useRef(false);
 
   const {
     activeId,
@@ -298,6 +301,19 @@ export default function Chat() {
       setStreaming(false);
     }
   };
+
+  // 支持能力中心「一键体验」：携带 initialMessage 进入 /chat 时自动创建会话并发送
+  useEffect(() => {
+    const initialMessage = (location.state as { initialMessage?: string } | null)?.initialMessage;
+    if (!initialMessage) return;
+    if (initialHandledRef.current) return;
+    if (sessionId) return;
+    initialHandledRef.current = true;
+    // 清理 state，防止 handleSend 内部 navigate 后组件 remount 再次触发
+    window.history.replaceState({}, document.title, window.location.pathname);
+    handleSend(initialMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.initialMessage, sessionId]);
 
   const handleStop = () => {
     // AbortController could be added here in the future

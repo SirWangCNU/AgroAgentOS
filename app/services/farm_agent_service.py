@@ -23,6 +23,7 @@ from app.runtime.farm_run_context import (
 from app.schemas.farm_agent import FarmInspectionRequest
 from app.exceptions import AppException
 from app.services import (
+    demo_scenario_service,
     farm_risk_service,
     farm_snapshot_service,
     farm_task_service,
@@ -44,7 +45,11 @@ def _select_inspection_weather_provider(
             code="COMPETITION_DEMO_DISABLED",
             message="比赛演示场景未启用",
         )
-    return farm_risk_service.CompetitionDemoRainstormWeatherProvider()
+    # 只有 rainstorm 场景需要确定性暴雨天气来触发 weather.rainstorm_drainage 风险
+    # 其他场景（pest/nutrient/drought）的核心风险来自 sensor_readings，用真实天气即可
+    if request.demo_scenario == "rainstorm":
+        return farm_risk_service.CompetitionDemoRainstormWeatherProvider()
+    return farm_risk_service.WeatherServiceProvider()
 
 
 def _get_graph():
@@ -408,12 +413,47 @@ async def stream_inspection(
     user_id: int,
     request: FarmInspectionRequest,
 ) -> AsyncIterator[dict[str, Any]]:
-    """校验农场所有权并流式执行综合巡检。"""
+    """校验农场所有权并流式执行综合巡检。
+
+    当 request.demo_scenario 不为空且 inject_scenario=True 时，
+    巡检前自动注入对应场景的 sensor_readings 到 DB，让 snapshot 能读到最新感知数据。
+    """
 
     if _agent_semaphore.locked():
         yield _event("", "error", "concurrency_limited", "当前 Farm Agent 任务较多，请稍后重试")
         return
     async with _agent_semaphore:
+        # 比赛演示场景：注入感知数据到 DB，让 snapshot 能读到最新 sensor_readings
+        if request.demo_scenario is not None and request.inject_scenario:
+            try:
+                injection_report = await _offload(
+                    demo_scenario_service.inject_scenario_to_db,
+                    user_id=user_id,
+                    farm_id=request.farm_id,
+                    scenario_id=request.demo_scenario,
+                )
+                yield _event(
+                    "",
+                    "scenario_injected",
+                    "scenario_inject",
+                    (
+                        f"已注入场景 {request.demo_scenario}: "
+                        f"新增感知 {injection_report.created_sensors} 条 / "
+                        f"茬次新建 {injection_report.created_seasons} 个"
+                    ),
+                    scenario_id=request.demo_scenario,
+                    injection=injection_report.model_dump(mode="json"),
+                )
+            except AppException as exc:
+                yield _event(
+                    "",
+                    "error",
+                    "scenario_inject_failed",
+                    f"场景注入失败: {exc.message}",
+                    scenario_id=request.demo_scenario,
+                )
+                return
+
         snapshot = await _offload(
             farm_snapshot_service.get_snapshot,
             farm_id=request.farm_id,

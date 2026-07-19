@@ -17,13 +17,15 @@ import {
   Film,
   UserCircle,
   Radar,
+  Bot,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import WeatherBadge from "./WeatherBadge";
 
 const WORKSPACE_ITEMS = [
-  { icon: LayoutDashboard, label: "仪表盘", path: "/workspace" },
+  { icon: Bot, label: "智能体能力中心", path: "/workspace" },
+  { icon: LayoutDashboard, label: "数据仪表盘", path: "/workspace/dashboard" },
   { icon: Radar, label: "AI 农场驾驶舱", path: "/workspace/farm-agent" },
   { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
   { icon: Tractor, label: "农场管理", path: "/workspace/farms" },

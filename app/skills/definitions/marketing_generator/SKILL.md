@@ -6,6 +6,13 @@ triggers: [营销, 广告, 文案, 宣传, 销售, 推广, 标题, 脚本, 直�
 allowed_tools: [get_current_time]
 risk_level: low
 context: inline
+icon: Megaphone
+category: 市场经营
+tagline: 快速生成短视频脚本、朋友圈文案和直播话术
+examples:
+  - 为平谷大桃写一段抖音短视频脚本
+  - 帮我写一条朋友圈卖土鸡蛋的文案
+  - 生成一份草莓直播带货话术
 ---
 
 # 农产品营销助手

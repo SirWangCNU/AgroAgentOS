@@ -28,6 +28,7 @@ import { getWeather } from "../api/weather";
 import StatCard from "../components/ui/StatCard";
 import { getLatestInspectionRun, listFarmProposals } from "../api/farmAgent";
 import { listFarmTasks } from "../api/farmTasks";
+import HealthScoreCard from "../components/farm-agent/HealthScoreCard";
 
 const TOOLS = [
   {
@@ -143,10 +144,10 @@ export default function Dashboard() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
             <Sprout className="w-6 h-6 text-primary" />
-            工作台
+            数据仪表盘
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            管理您的农业工具和服务
+            查看系统运行状态、最近对话和快捷入口
           </p>
         </div>
 
@@ -170,6 +171,11 @@ export default function Dashboard() {
             ].map((item) => <div key={item.label} className="rounded-2xl border border-white/10 bg-white/7 p-3.5"><item.icon className="h-4 w-4 text-[#f3c66f]" /><p className="mt-3 text-[10px] uppercase tracking-wider text-[#94b5a2]">{item.label}</p><p className="mt-1 text-base font-semibold">{item.value}</p><p className="mt-1 text-[10px] text-[#a9c1b1]">{item.sub}</p></div>)}
           </div>
         </section>
+
+        {/* F4: 农场健康分（基于 pending 提案 + 逾期任务量化评分） */}
+        <div className="mb-6">
+          <HealthScoreCard proposals={proposals} tasks={farmTasks} />
+        </div>
 
         {/* Secondary system health cards */}
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">系统运行状态</h2>

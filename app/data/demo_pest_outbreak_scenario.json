@@ -1,16 +1,21 @@
 {
-  "scenario_id": "rainstorm-v1",
-  "label": "比赛演示数据",
+  "scenario_id": "pest_outbreak-v1",
+  "label": "虫害爆发（玉米草地贪夜蛾）",
   "farm": {
     "external_key": "demo-sunshine-farm",
     "name": "阳光农场",
     "location": "江苏省南京市江宁区",
     "area_mu": 30.0,
-    "description": "比赛演示专用农场"
+    "description": "比赛演示专用农场 - 第二时间点：虫害爆发"
   },
   "weather": {
-    "rainfall_24h_mm": 82.0,
-    "observed_at": "2026-07-18T08:00:00+08:00"
+    "rainfall_24h_mm": 0.0,
+    "observed_at": "2026-07-25T08:00:00+08:00",
+    "condition": "晴",
+    "min_temp": 26.0,
+    "max_temp": 34.0,
+    "humidity": 65.0,
+    "wind_level": 2.0
   },
   "fields": [
     {
@@ -20,11 +25,11 @@
       "current_crop": "水稻",
       "planting_date": "2026-05-28",
       "expected_harvest": "2026-10-12",
-      "growth_stage": "分蘖期",
+      "growth_stage": "拔节期",
       "status": "planting",
       "latitude": 31.8121,
       "longitude": 118.8412,
-      "notes": "低洼地块，暴雨前重点检查排水",
+      "notes": "暴雨后排水良好，长势恢复",
       "boundary": [[118.8408, 31.8118], [118.8416, 31.8118], [118.8416, 31.8124], [118.8408, 31.8124]]
     },
     {
@@ -34,11 +39,11 @@
       "current_crop": "玉米",
       "planting_date": "2026-06-05",
       "expected_harvest": "2026-09-28",
-      "growth_stage": "拔节期",
+      "growth_stage": "大喇叭口期",
       "status": "planting",
       "latitude": 31.8130,
       "longitude": 118.8420,
-      "notes": "长势正常",
+      "notes": "草地贪夜蛾爆发，需紧急防治",
       "boundary": [[118.8417, 31.8126], [118.8424, 31.8126], [118.8424, 31.8133], [118.8417, 31.8133]]
     },
     {
@@ -48,33 +53,15 @@
       "current_crop": "大豆",
       "planting_date": "2026-06-12",
       "expected_harvest": "2026-10-05",
-      "growth_stage": "开花期",
+      "growth_stage": "结荚期",
       "status": "planting",
       "latitude": 31.8138,
       "longitude": 118.8428,
-      "notes": "排水条件良好",
+      "notes": "长势正常",
       "boundary": [[118.8425, 31.8135], [118.8432, 31.8135], [118.8432, 31.8141], [118.8425, 31.8141]]
     }
   ],
-  "trajectory_summaries": [
-    {
-      "external_key": "demo-low-quality-a1-rainstorm-v1",
-      "field_name": "A1",
-      "filename": "demo-low-quality-a1-rainstorm-v1.xlsx",
-      "machine_id": "DEMO-TRACTOR-01",
-      "quality": "low",
-      "point_count": 128,
-      "start_time": "2026-07-17T08:00:00+08:00",
-      "end_time": "2026-07-17T08:42:00+08:00",
-      "total_distance_m": 1680.0,
-      "work_distance_m": 920.0,
-      "work_area_mu": 5.0,
-      "avg_depth": 16.0,
-      "avg_speed": 7.2,
-      "depth_std": 7.5,
-      "work_width": 2.2
-    }
-  ],
+  "trajectory_summaries": [],
   "seasons": [
     {
       "field_name": "A1",
@@ -83,7 +70,7 @@
       "season_code": "2026-S1",
       "start_date": "2026-05-28",
       "expected_harvest": "2026-10-12",
-      "current_stage": "分蘖期",
+      "current_stage": "拔节期",
       "area_mu": 12.0,
       "target_yield": "550 kg/亩",
       "status": "growing"
@@ -95,7 +82,7 @@
       "season_code": "2026-S1",
       "start_date": "2026-06-05",
       "expected_harvest": "2026-09-28",
-      "current_stage": "拔节期",
+      "current_stage": "大喇叭口期",
       "area_mu": 10.0,
       "target_yield": "600 kg/亩",
       "status": "growing"
@@ -107,7 +94,7 @@
       "season_code": "2026-S1",
       "start_date": "2026-06-12",
       "expected_harvest": "2026-10-05",
-      "current_stage": "开花期",
+      "current_stage": "结荚期",
       "area_mu": 8.0,
       "target_yield": "200 kg/亩",
       "status": "growing"
@@ -115,69 +102,91 @@
   ],
   "sensor_readings": [
     {
-      "field_name": "A1",
-      "sensor_type": "soil_moisture",
-      "value_float": 95.0,
-      "value_json": {},
-      "unit": "%",
-      "observed_at": "2026-07-18T08:00:00+08:00",
-      "note": "暴雨后土壤饱和"
+      "field_name": "A2",
+      "sensor_type": "pest_count",
+      "value_float": 35.0,
+      "value_json": {
+        "pest_name": "草地贪夜蛾",
+        "count_per_light": 35,
+        "trap_count": 4,
+        "observation_window_hours": 12
+      },
+      "unit": "头/灯",
+      "observed_at": "2026-07-25T06:00:00+08:00",
+      "note": "单灯诱虫量显著上升，疑似草地贪夜蛾迁飞入户"
     },
     {
       "field_name": "A2",
-      "sensor_type": "soil_moisture",
-      "value_float": 68.0,
-      "value_json": {},
+      "sensor_type": "anomaly_image",
+      "value_float": 18.0,
+      "value_json": {
+        "symptom": "叶片缺刻",
+        "affected_part": "叶片",
+        "affected_rate": 0.18,
+        "image_count": 20,
+        "pest_name": "草地贪夜蛾"
+      },
       "unit": "%",
-      "observed_at": "2026-07-18T08:00:00+08:00",
-      "note": "正常"
-    },
-    {
-      "field_name": "A3",
-      "sensor_type": "soil_moisture",
-      "value_float": 62.0,
-      "value_json": {},
-      "unit": "%",
-      "observed_at": "2026-07-18T08:00:00+08:00",
-      "note": "正常"
-    },
-    {
-      "field_name": "A1",
-      "sensor_type": "ndvi",
-      "value_float": 0.72,
-      "value_json": {},
-      "unit": "",
-      "observed_at": "2026-07-18T09:00:00+08:00",
-      "note": "长势正常"
+      "observed_at": "2026-07-25T09:00:00+08:00",
+      "note": "田间被害率 18%，心叶可见虫粪和幼虫"
     },
     {
       "field_name": "A2",
       "sensor_type": "ndvi",
-      "value_float": 0.75,
+      "value_float": 0.62,
       "value_json": {},
       "unit": "",
-      "observed_at": "2026-07-18T09:00:00+08:00",
+      "observed_at": "2026-07-25T09:30:00+08:00",
+      "note": "NDVI 较 7 天前下降 13%，长势受损"
+    },
+    {
+      "field_name": "A2",
+      "sensor_type": "soil_moisture",
+      "value_float": 65.0,
+      "value_json": {
+        "depth_cm": 20
+      },
+      "unit": "%",
+      "observed_at": "2026-07-25T08:00:00+08:00",
+      "note": "土壤墑情正常"
+    },
+    {
+      "field_name": "A1",
+      "sensor_type": "pest_count",
+      "value_float": 5.0,
+      "value_json": {
+        "pest_name": "稻纵卷叶螟",
+        "count_per_light": 5,
+        "trap_count": 4,
+        "observation_window_hours": 12
+      },
+      "unit": "头/灯",
+      "observed_at": "2026-07-25T06:00:00+08:00",
+      "note": "虫量正常"
+    },
+    {
+      "field_name": "A1",
+      "sensor_type": "ndvi",
+      "value_float": 0.74,
+      "value_json": {},
+      "unit": "",
+      "observed_at": "2026-07-25T09:30:00+08:00",
       "note": "长势正常"
     },
     {
       "field_name": "A3",
       "sensor_type": "ndvi",
-      "value_float": 0.78,
+      "value_float": 0.76,
       "value_json": {},
       "unit": "",
-      "observed_at": "2026-07-18T09:00:00+08:00",
+      "observed_at": "2026-07-25T09:30:00+08:00",
       "note": "长势正常"
     }
   ],
   "expected_risks": [
     {
-      "risk_key_prefix": "weather.rainstorm_drainage",
-      "severity": "critical",
-      "min_count": 1
-    },
-    {
-      "risk_key_prefix": "trajectory.work_quality",
-      "severity": "medium",
+      "risk_key_prefix": "pest.outbreak",
+      "severity": "high",
       "min_count": 1
     }
   ]

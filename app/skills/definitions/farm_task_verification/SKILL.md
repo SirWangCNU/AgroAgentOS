@@ -13,6 +13,13 @@ allowed_tools:
   - save_task_verification_draft
 risk_level: medium
 context: inline
+icon: ClipboardCheck
+category: 风险防控
+tagline: 依据证据自动复核农事作业质量
+examples:
+  - 帮我验收最近的施肥任务
+  - 这个喷药任务的轨迹覆盖合格吗？
+  - 生成任务验收草稿
 ---
 
 # 农事任务验收

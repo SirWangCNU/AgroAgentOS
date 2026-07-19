@@ -6,6 +6,13 @@ triggers: [知识库, 查资料, 查文档, 检索, 搜索, 有没有资料, 相
 allowed_tools: [search_knowledge_base, get_current_time]
 risk_level: low
 context: inline
+icon: BookOpen
+category: 生产管理
+tagline: 从知识库中检索有据可查的农业技术资料
+examples:
+  - 检索小麦赤霉病防治资料
+  - 查一下水稻氮肥施用标准
+  - 有没有蔬菜大棚管理规范？
 ---
 
 # 农业知识库检索

@@ -149,10 +149,17 @@ export interface AgentRunTimeline {
   created_at: string | null;
 }
 
+export type DemoScenario =
+  | "rainstorm"
+  | "pest_outbreak"
+  | "nutrient_deficiency"
+  | "drought";
+
 export interface FarmInspectionRequest {
   farm_id: number;
   objective?: string;
-  demo_scenario?: "rainstorm" | null;
+  demo_scenario?: DemoScenario | null;
+  inject_scenario?: boolean;
 }
 
 export interface ProposalFilters {
@@ -180,4 +187,87 @@ export interface TaskSubmitRequest {
   note: string;
   trajectory_file_ids: number[];
   attachment_urls: string[];
+}
+
+// ==================== B9 比赛演示感知/事件/茬次契约 ====================
+
+export interface ScenarioMeta {
+  scenario_id: string;
+  label: string;
+  description: string;
+  weather_summary: string;
+  field_count: number;
+  sensor_count: number;
+}
+
+export interface InjectionReport {
+  scenario_id: string;
+  farm_id: number;
+  created_sensors: number;
+  skipped_sensors: number;
+  created_seasons: number;
+  updated_seasons: number;
+  fields_covered: string[];
+}
+
+export interface SensorReading {
+  id: number;
+  field_id: number;
+  sensor_type: string;
+  value_float: number | null;
+  value: Record<string, unknown>;
+  unit: string;
+  observed_at: string;
+  source: string;
+  scenario_id: string | null;
+  note: string;
+}
+
+export interface FarmEvent {
+  id: number;
+  field_id: number;
+  season_id: number | null;
+  event_type: string;
+  event_time: string;
+  operator: string;
+  inputs: unknown[];
+  source: string;
+  related_task_id: string | null;
+  note: string;
+}
+
+export interface CropSeason {
+  id: number;
+  field_id: number;
+  crop_name: string;
+  variety: string;
+  season_code: string;
+  start_date: string;
+  expected_harvest: string | null;
+  current_stage: string;
+  area_mu: number;
+  target_yield: string;
+  status: string;
+  note: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface SensorFilters {
+  farm_id: number;
+  field_id?: number;
+  sensor_type?: string;
+  days?: number;
+}
+
+export interface EventFilters {
+  farm_id: number;
+  field_id?: number;
+  days?: number;
+}
+
+export interface SeasonFilters {
+  farm_id: number;
+  field_id?: number;
+  status?: string;
 }

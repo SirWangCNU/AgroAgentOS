@@ -15,6 +15,13 @@ allowed_tools:
   - create_action_proposal
 risk_level: medium
 context: inline
+icon: Radar
+category: 风险防控
+tagline: 主动发现农场风险并生成待确认提案
+examples:
+  - 帮我巡检一下海淀农场
+  - 最近暴雨对我的农场有什么影响？
+  - 生成一份农场综合巡检报告
 ---
 
 # 农场综合巡检

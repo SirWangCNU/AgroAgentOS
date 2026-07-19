@@ -232,7 +232,14 @@ async def test_competition_workflow_keeps_both_human_decision_gates(
         event
         async for event in farm_agent_service.stream_inspection(
             user_id=ids["owner_id"],
-            request=FarmInspectionRequest(farm_id=ids["farm_id"], demo_scenario="rainstorm"),
+            request=FarmInspectionRequest(
+                farm_id=ids["farm_id"],
+                demo_scenario="rainstorm",
+                # 本测试只 seed 了 A1 地块，rainstorm fixture 要求 A1/A2/A3，
+                # 关闭自动注入避免 SCENARIO_FIELD_MISMATCH 错误中断流；
+                # _DemoWeatherProvider monkeypatch 仍会让天气走 demo 路径
+                inject_scenario=False,
+            ),
         )
     ]
     run_id = next(event["run_id"] for event in inspection_events if event["type"] == "start")

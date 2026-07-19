@@ -33,6 +33,8 @@ import EmptyState from "../components/ui/EmptyState";
 import LoadingGrid from "../components/ui/LoadingGrid";
 import FarmMap from "../components/map/FarmMap";
 import TrajectoryAnalysis from "../components/farm/TrajectoryAnalysis";
+import SeasonCard from "../components/farm-agent/SeasonCard";
+import FarmEventTimeline from "../components/farm-agent/FarmEventTimeline";
 import type { Field, TrajectoryFile, TrajectoryPoint } from "../types/farm";
 
 export default function Farms() {
@@ -236,6 +238,20 @@ export default function Farms() {
                   )}
                 </div>
               </div>
+            )}
+
+            {/* F2: 茬次卡片 + 事件时间线（farm-agent 数据联动） */}
+            {selectedFieldId && (
+              <>
+                <SeasonCard farmId={selectedFarmId} fieldId={selectedFieldId} />
+                <FarmEventTimeline
+                  farmId={selectedFarmId}
+                  fieldId={selectedFieldId}
+                  days={30}
+                  compact
+                  title="近 30 天事件流"
+                />
+              </>
             )}
 
             {/* Trajectory list */}

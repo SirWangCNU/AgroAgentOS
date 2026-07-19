@@ -65,8 +65,11 @@ def demo_database(monkeypatch) -> sessionmaker[Session]:
 def test_rainstorm_fixture_is_versioned_and_contains_only_source_facts():
     fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
+    # fixture 只包含"源事实"（不含 agent 产出的 proposal/verdict/agent_plan/agent_report），
+    # 但允许扩展茬次/感知/预期风险这三类输入数据。
     assert set(fixture) == {
-        "scenario_id", "label", "farm", "weather", "fields", "trajectory_summaries"
+        "scenario_id", "label", "farm", "weather", "fields", "trajectory_summaries",
+        "seasons", "sensor_readings", "expected_risks",
     }
     assert fixture["scenario_id"] == "rainstorm-v1"
     assert fixture["label"] == "比赛演示数据"
@@ -83,6 +86,10 @@ def test_rainstorm_fixture_is_versioned_and_contains_only_source_facts():
     assert fixture["fields"][0]["growth_stage"] == "分蘖期"
     assert len(fixture["trajectory_summaries"]) == 1
     assert fixture["trajectory_summaries"][0]["quality"] == "low"
+    # 扩展的源事实字段：茬次、感知读数、预期风险
+    assert len(fixture["seasons"]) == 3
+    assert len(fixture["sensor_readings"]) > 0
+    assert any(risk["risk_key_prefix"].startswith("weather") for risk in fixture["expected_risks"])
     serialized = json.dumps(fixture, ensure_ascii=False).lower()
     for forbidden in ("proposal", "verdict", "agent_plan", "agent_report"):
         assert forbidden not in serialized

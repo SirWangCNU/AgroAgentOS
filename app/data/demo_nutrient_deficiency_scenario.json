@@ -1,6 +1,6 @@
 {
-  "scenario_id": "rainstorm-v1",
-  "label": "比赛演示数据",
+  "scenario_id": "nutrient_deficiency-v1",
+  "label": "缺肥黄化演示数据",
   "farm": {
     "external_key": "demo-sunshine-farm",
     "name": "阳光农场",
@@ -9,8 +9,13 @@
     "description": "比赛演示专用农场"
   },
   "weather": {
-    "rainfall_24h_mm": 82.0,
-    "observed_at": "2026-07-18T08:00:00+08:00"
+    "rainfall_24h_mm": 0.0,
+    "observed_at": "2026-08-02T08:00:00+08:00",
+    "condition": "多云",
+    "min_temp": 26.0,
+    "max_temp": 30.0,
+    "humidity": 70,
+    "wind_level": 2
   },
   "fields": [
     {
@@ -20,7 +25,7 @@
       "current_crop": "水稻",
       "planting_date": "2026-05-28",
       "expected_harvest": "2026-10-12",
-      "growth_stage": "分蘖期",
+      "growth_stage": "孕穗期",
       "status": "planting",
       "latitude": 31.8121,
       "longitude": 118.8412,
@@ -34,7 +39,7 @@
       "current_crop": "玉米",
       "planting_date": "2026-06-05",
       "expected_harvest": "2026-09-28",
-      "growth_stage": "拔节期",
+      "growth_stage": "吐丝期",
       "status": "planting",
       "latitude": 31.8130,
       "longitude": 118.8420,
@@ -48,33 +53,15 @@
       "current_crop": "大豆",
       "planting_date": "2026-06-12",
       "expected_harvest": "2026-10-05",
-      "growth_stage": "开花期",
+      "growth_stage": "鼓粒期",
       "status": "planting",
       "latitude": 31.8138,
       "longitude": 118.8428,
-      "notes": "排水条件良好",
+      "notes": "缺氮黄化重点监测",
       "boundary": [[118.8425, 31.8135], [118.8432, 31.8135], [118.8432, 31.8141], [118.8425, 31.8141]]
     }
   ],
-  "trajectory_summaries": [
-    {
-      "external_key": "demo-low-quality-a1-rainstorm-v1",
-      "field_name": "A1",
-      "filename": "demo-low-quality-a1-rainstorm-v1.xlsx",
-      "machine_id": "DEMO-TRACTOR-01",
-      "quality": "low",
-      "point_count": 128,
-      "start_time": "2026-07-17T08:00:00+08:00",
-      "end_time": "2026-07-17T08:42:00+08:00",
-      "total_distance_m": 1680.0,
-      "work_distance_m": 920.0,
-      "work_area_mu": 5.0,
-      "avg_depth": 16.0,
-      "avg_speed": 7.2,
-      "depth_std": 7.5,
-      "work_width": 2.2
-    }
-  ],
+  "trajectory_summaries": [],
   "seasons": [
     {
       "field_name": "A1",
@@ -83,7 +70,7 @@
       "season_code": "2026-S1",
       "start_date": "2026-05-28",
       "expected_harvest": "2026-10-12",
-      "current_stage": "分蘖期",
+      "current_stage": "孕穗期",
       "area_mu": 12.0,
       "target_yield": "550 kg/亩",
       "status": "growing"
@@ -95,7 +82,7 @@
       "season_code": "2026-S1",
       "start_date": "2026-06-05",
       "expected_harvest": "2026-09-28",
-      "current_stage": "拔节期",
+      "current_stage": "吐丝期",
       "area_mu": 10.0,
       "target_yield": "600 kg/亩",
       "status": "growing"
@@ -107,7 +94,7 @@
       "season_code": "2026-S1",
       "start_date": "2026-06-12",
       "expected_harvest": "2026-10-05",
-      "current_stage": "开花期",
+      "current_stage": "鼓粒期",
       "area_mu": 8.0,
       "target_yield": "200 kg/亩",
       "status": "growing"
@@ -115,13 +102,58 @@
   ],
   "sensor_readings": [
     {
+      "field_name": "A3",
+      "sensor_type": "ndvi",
+      "value_float": 0.42,
+      "value_json": {},
+      "unit": "",
+      "observed_at": "2026-08-02T09:00:00+08:00",
+      "note": "NDVI 偏低，长势异常"
+    },
+    {
+      "field_name": "A3",
+      "sensor_type": "soil_nitrogen",
+      "value_float": 65.0,
+      "value_json": {"nutrient": "速效氮", "depth_cm": 20},
+      "unit": "mg/kg",
+      "observed_at": "2026-08-02T08:30:00+08:00",
+      "note": "土壤速效氮偏低"
+    },
+    {
+      "field_name": "A3",
+      "sensor_type": "anomaly_image",
+      "value_float": 35.0,
+      "value_json": {"symptom": "叶片黄化", "affected_part": "叶片", "image_count": 15, "color": "yellow-green"},
+      "unit": "%",
+      "observed_at": "2026-08-02T09:30:00+08:00",
+      "note": "叶片黄化面积 35%"
+    },
+    {
+      "field_name": "A1",
+      "sensor_type": "ndvi",
+      "value_float": 0.78,
+      "value_json": {},
+      "unit": "",
+      "observed_at": "2026-08-02T09:00:00+08:00",
+      "note": "长势正常"
+    },
+    {
+      "field_name": "A2",
+      "sensor_type": "ndvi",
+      "value_float": 0.76,
+      "value_json": {},
+      "unit": "",
+      "observed_at": "2026-08-02T09:00:00+08:00",
+      "note": "长势正常"
+    },
+    {
       "field_name": "A1",
       "sensor_type": "soil_moisture",
-      "value_float": 95.0,
+      "value_float": 72.0,
       "value_json": {},
       "unit": "%",
-      "observed_at": "2026-07-18T08:00:00+08:00",
-      "note": "暴雨后土壤饱和"
+      "observed_at": "2026-08-02T08:00:00+08:00",
+      "note": "正常"
     },
     {
       "field_name": "A2",
@@ -129,54 +161,22 @@
       "value_float": 68.0,
       "value_json": {},
       "unit": "%",
-      "observed_at": "2026-07-18T08:00:00+08:00",
+      "observed_at": "2026-08-02T08:00:00+08:00",
       "note": "正常"
     },
     {
       "field_name": "A3",
       "sensor_type": "soil_moisture",
-      "value_float": 62.0,
+      "value_float": 60.0,
       "value_json": {},
       "unit": "%",
-      "observed_at": "2026-07-18T08:00:00+08:00",
+      "observed_at": "2026-08-02T08:00:00+08:00",
       "note": "正常"
-    },
-    {
-      "field_name": "A1",
-      "sensor_type": "ndvi",
-      "value_float": 0.72,
-      "value_json": {},
-      "unit": "",
-      "observed_at": "2026-07-18T09:00:00+08:00",
-      "note": "长势正常"
-    },
-    {
-      "field_name": "A2",
-      "sensor_type": "ndvi",
-      "value_float": 0.75,
-      "value_json": {},
-      "unit": "",
-      "observed_at": "2026-07-18T09:00:00+08:00",
-      "note": "长势正常"
-    },
-    {
-      "field_name": "A3",
-      "sensor_type": "ndvi",
-      "value_float": 0.78,
-      "value_json": {},
-      "unit": "",
-      "observed_at": "2026-07-18T09:00:00+08:00",
-      "note": "长势正常"
     }
   ],
   "expected_risks": [
     {
-      "risk_key_prefix": "weather.rainstorm_drainage",
-      "severity": "critical",
-      "min_count": 1
-    },
-    {
-      "risk_key_prefix": "trajectory.work_quality",
+      "risk_key_prefix": "nutrient.deficiency",
       "severity": "medium",
       "min_count": 1
     }

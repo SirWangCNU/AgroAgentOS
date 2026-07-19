@@ -2,12 +2,20 @@ import type { ApiResponse } from "../types/api";
 import type {
   AgentRunTimeline,
   ApprovalResult,
+  CropSeason,
+  EventFilters,
   FarmActionProposal,
   FarmAgentEvent,
   FarmAgentEventType,
+  FarmEvent,
   FarmInspectionRequest,
+  InjectionReport,
   ProposalApprovalRequest,
   ProposalFilters,
+  ScenarioMeta,
+  SensorFilters,
+  SensorReading,
+  SeasonFilters,
 } from "../types/farmAgent";
 import { ApiError, authFetch, authFetchRaw, consumeSSE } from "./client";
 
@@ -133,6 +141,77 @@ export async function rejectFarmProposal(
   const response = await authFetch<ApiResponse<FarmActionProposal>>(
     `/farm-agent/proposals/${encodeURIComponent(proposalId)}/reject`,
     { method: "POST", body: JSON.stringify({ decision_note: decisionNote }) },
+  );
+  return response.data;
+}
+
+// ==================== B9 比赛演示感知/事件/茬次查询 ====================
+
+export async function listFarmScenarios(): Promise<ScenarioMeta[]> {
+  const response = await authFetch<ApiResponse<ScenarioMeta[]>>(
+    `/farm-agent/scenarios`,
+  );
+  return response.data;
+}
+
+export async function injectFarmScenario(
+  scenarioId: string,
+  farmId: number,
+): Promise<InjectionReport> {
+  const response = await authFetch<ApiResponse<InjectionReport>>(
+    `/farm-agent/scenarios/${encodeURIComponent(scenarioId)}/inject`,
+    { method: "POST", body: JSON.stringify({ farm_id: farmId }) },
+  );
+  return response.data;
+}
+
+function buildQuery(filters: Record<string, number | string | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null) params.set(key, String(value));
+  }
+  return params.size > 0 ? `?${params.toString()}` : "";
+}
+
+export async function listFarmSensors(
+  filters: SensorFilters,
+): Promise<SensorReading[]> {
+  const query = buildQuery({
+    farm_id: filters.farm_id,
+    field_id: filters.field_id,
+    sensor_type: filters.sensor_type,
+    days: filters.days,
+  });
+  const response = await authFetch<ApiResponse<SensorReading[]>>(
+    `/farm-agent/sensors${query}`,
+  );
+  return response.data;
+}
+
+export async function listFarmEvents(
+  filters: EventFilters,
+): Promise<FarmEvent[]> {
+  const query = buildQuery({
+    farm_id: filters.farm_id,
+    field_id: filters.field_id,
+    days: filters.days,
+  });
+  const response = await authFetch<ApiResponse<FarmEvent[]>>(
+    `/farm-agent/events${query}`,
+  );
+  return response.data;
+}
+
+export async function listFarmSeasons(
+  filters: SeasonFilters,
+): Promise<CropSeason[]> {
+  const query = buildQuery({
+    farm_id: filters.farm_id,
+    field_id: filters.field_id,
+    status: filters.status,
+  });
+  const response = await authFetch<ApiResponse<CropSeason[]>>(
+    `/farm-agent/seasons${query}`,
   );
   return response.data;
 }

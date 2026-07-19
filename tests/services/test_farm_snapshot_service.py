@@ -176,7 +176,9 @@ def test_get_snapshot_returns_only_owned_detached_business_data(
     ]
     assert snapshot.pending_task_count == 1
     assert snapshot.captured_at is not None
-    assert snapshot.data_gaps == []
+    # 本测试 seed 没有注入 sensor_readings，B7 引入了"近 7 天无感知则标记 stale"的 data_gap，
+    # 这里只验证 data_gaps 恰好是这一个（其他缺口都不存在：location/fields/crop/stage/boundary/trajectory 全齐）。
+    assert snapshot.data_gaps == [f"field:{seeded['owned_field_id']}:sensor_data_stale"]
     assert snapshot.model_dump()["farm"]["name"] == seeded["owned_farm_name"]
 
 

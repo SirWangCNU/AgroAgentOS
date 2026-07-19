@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field as PydanticField
 
 from app.core.sqlite import sqlite_manager
 from app.exceptions import AppException, ForbiddenError
-from app.models.farm import Farm, Field
-from app.models.farm_agent import FarmTask
+from app.models.farm import Farm, Field, SensorReading
+from app.models.farm_agent import FarmEvent, FarmTask
 from app.models.trajectory import TrajectoryFile
 from app.schemas.trajectory import TrajectoryFileInfo
 from app.services import farm_service
 
 _TERMINAL_TASK_STATUSES = ("completed", "cancelled")
 _TRAJECTORY_LIMIT_PER_FIELD = 3
+_SENSOR_READING_RECENT_DAYS = 7
+_SENSOR_READING_LIMIT_PER_FIELD = 5
+_EVENT_RECENT_DAYS = 14
+_EVENT_LIMIT = 20
 
 
 class FarmSnapshotFarm(BaseModel):
@@ -52,8 +57,43 @@ class FarmSnapshotField(BaseModel):
     longitude: float | None
     notes: str
     boundary_json: str
+    current_season_id: int | None = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FarmSnapshotSensorReading(BaseModel):
+    """不依赖 ORM 会话的感知读数快照（B7 新增）。"""
+
+    id: int
+    field_id: int
+    sensor_type: str
+    value_float: float | None
+    value: dict[str, Any] = PydanticField(default_factory=dict)
+    unit: str
+    observed_at: datetime
+    source: str
+    scenario_id: str | None = None
+    note: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FarmSnapshotEvent(BaseModel):
+    """不依赖 ORM 会话的农场事件快照（B7 新增）。"""
+
+    id: int
+    field_id: int
+    season_id: int | None = None
+    event_type: str
+    event_time: datetime
+    operator: str
+    inputs: list[Any] = PydanticField(default_factory=list)
+    source: str
+    related_task_id: str | None = None
+    note: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,6 +106,10 @@ class FarmSnapshot(BaseModel):
     recent_trajectory_files: list[TrajectoryFileInfo] = PydanticField(
         default_factory=list
     )
+    sensor_readings: list[FarmSnapshotSensorReading] = PydanticField(
+        default_factory=list
+    )
+    recent_events: list[FarmSnapshotEvent] = PydanticField(default_factory=list)
     pending_task_count: int = PydanticField(default=0, ge=0)
     captured_at: datetime
     data_gaps: list[str] = PydanticField(default_factory=list)
@@ -158,18 +202,79 @@ def get_snapshot(farm_id: int, user_id: int) -> FarmSnapshot:
             .count()
         )
 
+        # 感知读数：近 N 天，每地块每类型最多 M 条
+        sensor_reading_rows: list[SensorReading] = []
+        if field_ids:
+            sensor_cutoff = datetime.now(timezone.utc) - timedelta(
+                days=_SENSOR_READING_RECENT_DAYS
+            )
+            all_sensor_rows = (
+                session.query(SensorReading)
+                .filter(
+                    SensorReading.field_id.in_(field_ids),
+                    SensorReading.observed_at >= sensor_cutoff,
+                )
+                .order_by(
+                    SensorReading.field_id.asc(),
+                    SensorReading.observed_at.desc(),
+                    SensorReading.id.desc(),
+                )
+                .all()
+            )
+            count_by_field_sensor: dict[tuple[int, str], int] = {}
+            for reading in all_sensor_rows:
+                key = (reading.field_id, reading.sensor_type)
+                current_count = count_by_field_sensor.get(key, 0)
+                if current_count >= _SENSOR_READING_LIMIT_PER_FIELD:
+                    continue
+                sensor_reading_rows.append(reading)
+                count_by_field_sensor[key] = current_count + 1
+
+        # 农场事件：近 N 天，最多 M 条（所有地块合并）
+        event_rows: list[FarmEvent] = []
+        if field_ids:
+            event_cutoff = datetime.now(timezone.utc) - timedelta(
+                days=_EVENT_RECENT_DAYS
+            )
+            event_rows = (
+                session.query(FarmEvent)
+                .filter(
+                    FarmEvent.field_id.in_(field_ids),
+                    FarmEvent.event_time >= event_cutoff,
+                )
+                .order_by(FarmEvent.event_time.desc(), FarmEvent.id.desc())
+                .limit(_EVENT_LIMIT)
+                .all()
+            )
+
         farm = FarmSnapshotFarm.model_validate(farm_row)
         fields = [FarmSnapshotField.model_validate(field) for field in field_rows]
         trajectories = [
             TrajectoryFileInfo.model_validate(trajectory)
             for trajectory in trajectory_rows
         ]
+        sensor_readings = [
+            FarmSnapshotSensorReading.model_validate(reading)
+            for reading in sensor_reading_rows
+        ]
+        recent_events = [
+            FarmSnapshotEvent.model_validate(event) for event in event_rows
+        ]
+
+    data_gaps = _build_data_gaps(farm, fields, trajectories)
+    # 补充感知数据缺口检查：某地块近 7 天无任何感知读数
+    sensor_field_ids = {reading.field_id for reading in sensor_readings}
+    for field in fields:
+        if field.id not in sensor_field_ids:
+            data_gaps.append(f"field:{field.id}:sensor_data_stale")
 
     return FarmSnapshot(
         farm=farm,
         fields=fields,
         recent_trajectory_files=trajectories,
+        sensor_readings=sensor_readings,
+        recent_events=recent_events,
         pending_task_count=pending_task_count,
         captured_at=datetime.now(timezone.utc),
-        data_gaps=_build_data_gaps(farm, fields, trajectories),
+        data_gaps=data_gaps,
     )

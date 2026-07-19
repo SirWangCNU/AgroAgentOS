@@ -14,7 +14,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.core.sqlite import sqlite_manager
 from app.exceptions import AppException, ForbiddenError, ServiceError
 from app.models.farm import Farm, Field
-from app.models.farm_agent import FarmTask
+from app.models.farm_agent import FarmEvent, FarmTask
 from app.models.trajectory import TrajectoryFile
 from app.schemas.farm_agent import (
     TaskEvidenceBundle,
@@ -37,6 +37,99 @@ ALLOWED_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     "completed": set(),
     "cancelled": set(),
 }
+
+# FarmTask.task_type → FarmEvent.event_type 映射
+# 未知类型降级为 scouting（巡田），保证事件流可记录
+_TASK_TYPE_TO_EVENT_TYPE: dict[str, str] = {
+    "spraying": "spraying",
+    "pest_control": "spraying",
+    "fertilizing": "fertilizing",
+    "fertilize": "fertilizing",
+    "irrigating": "irrigating",
+    "irrigate": "irrigating",
+    "drainage": "irrigating",  # 排水归为灌溉类事件
+    "scouting": "scouting",
+    "harvest": "harvest",
+    "seeding": "seeding",
+}
+
+
+def _map_task_type_to_event_type(task_type: str) -> str:
+    """把 FarmTask.task_type 映射到 FarmEvent.event_type."""
+    normalized = (task_type or "").strip().lower()
+    return _TASK_TYPE_TO_EVENT_TYPE.get(normalized, "scouting")
+
+
+def _resolve_current_season_id(
+    session: Session,
+    *,
+    field_id: int | None,
+) -> int | None:
+    """读取 Field.current_season_id 指针，让事件关联当前茬次."""
+    if field_id is None:
+        return None
+    field = session.query(Field).filter(Field.id == field_id).first()
+    return field.current_season_id if field is not None else None
+
+
+def _extract_inputs_from_execution(execution: TaskExecution) -> list[dict]:
+    """从执行记录提取投入品清单（用于事件溯源）.
+
+    当前 TaskExecution schema 没有专门 inputs 字段，
+    暂时从 note 和 attachment_urls 推导简化结构，未来可扩展为结构化投入品表。
+    """
+    inputs: list[dict] = []
+    if execution.note.strip():
+        inputs.append({"material": "note", "detail": execution.note.strip()})
+    for url in execution.attachment_urls:
+        inputs.append({"material": "attachment", "url": url})
+    return inputs
+
+
+def _maybe_record_completion_event(
+    session: Session,
+    *,
+    task: FarmTask,
+    actor_user_id: int,
+    note: str,
+    execution: TaskExecution,
+) -> None:
+    """任务完成时自动写入 FarmEvent（source=task_completion）.
+
+    幂等：uq_event_task_type (related_task_id, event_type) 约束保证不重复。
+    无关联地块（field_id is None）的任务不写事件。
+    """
+    if task.field_id is None:
+        return
+
+    event_type = _map_task_type_to_event_type(task.task_type)
+    related_task_id = task.task_id
+
+    # 防御性检查：若已存在同 (related_task_id, event_type) 事件则跳过
+    existing = (
+        session.query(FarmEvent)
+        .filter(
+            FarmEvent.related_task_id == related_task_id,
+            FarmEvent.event_type == event_type,
+        )
+        .first()
+    )
+    if existing is not None:
+        return
+
+    season_id = _resolve_current_season_id(session, field_id=task.field_id)
+    event = FarmEvent(
+        field_id=task.field_id,
+        season_id=season_id,
+        event_type=event_type,
+        event_time=datetime.now(timezone.utc),
+        operator=f"user:{actor_user_id}",
+        source="task_completion",
+        related_task_id=related_task_id,
+        note=note or task.title,
+    )
+    event.set_inputs(_extract_inputs_from_execution(execution))
+    session.add(event)
 
 
 def _raise_forbidden() -> NoReturn:
@@ -169,8 +262,13 @@ def _transition(
     return_reason: str | None = None,
     cancellation_reason: str | None = None,
     expected_agent_verdict_json: str | None = None,
+    actor_user_id: int | None = None,
 ) -> FarmTask:
-    """用来源状态 CAS 完成人工转换并追加审计记录。"""
+    """用来源状态 CAS 完成人工转换并追加审计记录。
+
+    当 target_status == "completed" 且 actor_user_id 不为空时，
+    自动写入 FarmEvent（source=task_completion）形成不可变事件记忆。
+    """
 
     source_status: TaskStatus = task.status
     _require_allowed_transition(source_status, target_status)
@@ -234,6 +332,16 @@ def _transition(
     )
     if affected_rows != 1:
         _raise_invalid_transition()
+
+    # 任务完成时自动写 FarmEvent，形成 AI 可引用的"记忆"
+    if target_status == "completed" and actor_user_id is not None:
+        _maybe_record_completion_event(
+            session,
+            task=task,
+            actor_user_id=actor_user_id,
+            note=note,
+            execution=execution,
+        )
 
     session.expire(task)
     session.refresh(task)
@@ -383,7 +491,10 @@ def save_verification_draft(
 
 
 def complete(*, user_id: int, task_id: str, note: str) -> FarmTask:
-    """人工在可接受复核草稿存在时完成 submitted 任务。"""
+    """人工在可接受复核草稿存在时完成 submitted 任务.
+
+    完成时自动写入 FarmEvent（source=task_completion），让 AI 下次巡检有"记忆"。
+    """
 
     with sqlite_manager.session() as session:
         task = _require_owned_task(session, task_id=task_id, user_id=user_id)
@@ -402,6 +513,7 @@ def complete(*, user_id: int, task_id: str, note: str) -> FarmTask:
             note=note,
             completion_note=note,
             expected_agent_verdict_json=task.agent_verdict_json,
+            actor_user_id=user_id,
         )
 
 

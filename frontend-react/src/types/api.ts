@@ -52,4 +52,8 @@ export interface Skill {
   triggers: string[];
   allowed_tools: string[];
   risk_level: string;
+  icon: string;
+  category: string;
+  tagline: string;
+  examples: string[];
 }
