@@ -32,6 +32,14 @@ export async function authFetch<T = unknown>(
     throw new ApiError(401, "Unauthorized");
   }
 
+  // ✅ 检查返回类型是否是JSON，避免解析HTML导致Unexpected token '<'错误
+  const contentType = resp.headers.get("content-type");
+  if (contentType && !contentType.includes("application/json")) {
+    const text = await resp.text().catch(() => "");
+    console.error(`[authFetch] 接口返回非JSON内容: ${path}`, text.substring(0, 200));
+    throw new ApiError(resp.status, `接口异常: ${path}`);
+  }
+
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
     throw new ApiError(resp.status, text || `HTTP ${resp.status}`);

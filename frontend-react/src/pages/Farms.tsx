@@ -37,6 +37,10 @@ import SeasonCard from "../components/farm-agent/SeasonCard";
 import FarmEventTimeline from "../components/farm-agent/FarmEventTimeline";
 import type { Field, TrajectoryFile, TrajectoryPoint } from "../types/farm";
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "操作失败";
+}
+
 export default function Farms() {
   const showToast = useUIStore((s) => s.showToast);
   const queryClient = useQueryClient();
@@ -68,6 +72,9 @@ export default function Farms() {
     enabled: !!selectedFieldId,
   });
 
+  const selectedField =
+    fields?.find((field) => field.id === selectedFieldId) ?? null;
+
   const deleteMutation = useMutation({
     mutationFn: deleteFarm,
     onSuccess: () => {
@@ -75,7 +82,7 @@ export default function Farms() {
       queryClient.invalidateQueries({ queryKey: ["farms"] });
       setSelectedFarmId(null);
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err), "error"),
   });
 
   const deleteTrajectoryMutation = useMutation({
@@ -86,7 +93,7 @@ export default function Farms() {
       setSelectedFileId(null);
       setTrajectoryPoints([]);
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err), "error"),
   });
 
   const handleLoadTrajectory = async (file: TrajectoryFile) => {
@@ -95,8 +102,8 @@ export default function Farms() {
       setShowAnalysis(false);
       const points = await getTrajectoryPoints(file.id);
       setTrajectoryPoints(points);
-    } catch (err: any) {
-      showToast(`加载轨迹失败: ${err.message}`, "error");
+    } catch (err: unknown) {
+      showToast(`加载轨迹失败: ${getErrorMessage(err)}`, "error");
     }
   };
 
@@ -296,6 +303,12 @@ export default function Farms() {
                                     {traj.avg_speed.toFixed(1)}m/s
                                   </span>
                                   <span>{traj.work_area_mu.toFixed(1)}亩</span>
+                                  {traj.operation_type && traj.operation_type !== "unknown" && (
+                                    <span>{traj.operation_type}</span>
+                                  )}
+                                  {traj.coverage_rate != null && (
+                                    <span>覆盖 {traj.coverage_rate.toFixed(1)}%</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -325,7 +338,7 @@ export default function Farms() {
                       </div>
                     ))
                   ) : (
-                    <EmptyState icon={FileText} title="暂无轨迹数据" description="点击上传按钮导入 Excel 轨迹文件" />
+                    <EmptyState icon={FileText} title="暂无作业轨迹" description="点击上传按钮导入 Excel 作业轨迹文件" />
                   )}
                 </div>
               </div>
@@ -343,7 +356,9 @@ export default function Farms() {
           <div className="lg:col-span-8 min-h-0">
             <FarmMap
               farms={farmMarkers}
+              fields={fields ?? []}
               selectedFarmId={selectedFarmId}
+              selectedFieldId={selectedFieldId}
               trajectoryPoints={trajectoryPoints}
               onFarmClick={(id) => {
                 setSelectedFarmId(id);
@@ -369,6 +384,7 @@ export default function Farms() {
       {uploadOpen && selectedFieldId && (
         <UploadTrajectoryModal
           fieldId={selectedFieldId}
+          field={selectedField}
           onClose={() => setUploadOpen(false)}
           onSuccess={() => {
             setUploadOpen(false);
@@ -425,15 +441,15 @@ function CreateFieldModal({
     mutationFn: () =>
       createField(farmId, {
         ...form,
-        planting_date: null as any,
-        expected_harvest: null as any,
+        planting_date: null,
+        expected_harvest: null,
         growth_stage: "",
       }),
     onSuccess: () => {
       showToast("地块创建成功", "success");
       onSuccess();
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err), "error"),
   });
 
   return (
@@ -520,7 +536,7 @@ function CreateFieldModal({
                 ].map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => setForm({ ...form, status: opt.value as any })}
+                    onClick={() => setForm({ ...form, status: opt.value as Field["status"] })}
                     className={`flex-1 px-2 py-2 text-xs rounded-lg border transition-all ${
                       form.status === opt.value
                         ? "border-primary bg-primary/5 text-primary"
@@ -595,7 +611,7 @@ function CreateFarmModal({
       showToast("创建成功", "success");
       onSuccess();
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err), "error"),
   });
 
   return (
@@ -725,16 +741,20 @@ function CreateFarmModal({
 
 function UploadTrajectoryModal({
   fieldId,
+  field,
   onClose,
   onSuccess,
 }: {
   fieldId: number;
+  field: Field | null;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const showToast = useUIStore((s) => s.showToast);
   const [file, setFile] = useState<File | null>(null);
   const [coordSystem, setCoordSystem] = useState("auto");
+  const [operationType, setOperationType] = useState("cultivation");
+  const [operator, setOperator] = useState("");
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -742,11 +762,16 @@ function UploadTrajectoryModal({
     if (!file) return;
     setUploading(true);
     try {
-      await uploadTrajectory(fieldId, file, coordSystem);
+      await uploadTrajectory(fieldId, file, {
+        coordSystem,
+        operationType,
+        seasonId: field?.current_season_id ?? null,
+        operator,
+      });
       showToast("轨迹上传成功", "success");
       onSuccess();
-    } catch (err: any) {
-      showToast(`上传失败: ${err.message}`, "error");
+    } catch (err: unknown) {
+      showToast(`上传失败: ${getErrorMessage(err)}`, "error");
     } finally {
       setUploading(false);
     }
@@ -773,7 +798,7 @@ function UploadTrajectoryModal({
             <div className="p-1.5 rounded-lg bg-accent-amber/10">
               <Upload className="w-4 h-4 text-accent-amber" />
             </div>
-            <h3 className="text-base font-semibold text-text-primary">上传轨迹文件</h3>
+            <h3 className="text-base font-semibold text-text-primary">上传作业轨迹</h3>
           </div>
           <button
             onClick={onClose}
@@ -858,6 +883,37 @@ function UploadTrajectoryModal({
                   <div className="text-xs text-text-muted mt-0.5">{opt.desc}</div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                作业类型
+              </label>
+              <select
+                value={operationType}
+                onChange={(e) => setOperationType(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+              >
+                <option value="cultivation">耕整地</option>
+                <option value="seeding">播种</option>
+                <option value="fertilizing">施肥</option>
+                <option value="spraying">喷药</option>
+                <option value="irrigating">灌溉</option>
+                <option value="scouting">巡田</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                操作人/农机
+              </label>
+              <input
+                value={operator}
+                onChange={(e) => setOperator(e.target.value)}
+                placeholder="如：XTSAI-TRACTOR-01"
+                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+              />
             </div>
           </div>
 

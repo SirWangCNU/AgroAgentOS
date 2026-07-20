@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -202,11 +203,100 @@ async def clear_session(session_id: str) -> bool:
         return False
 
 
-async def load_session(session_id: str) -> dict[str, Any]:
+async def load_session(
+    session_id: str, user_id: Optional[int] = None
+) -> dict[str, Any]:
+    """加载会话记忆 (多级缓存: Redis → DB fallback).
+
+    Args:
+        session_id: 会话 UUID
+        user_id:    可选. 提供时启用 DB fallback —— Redis miss/TTL 过期时
+                    从 SQLite chat_session_messages 表读取最近 N 条消息回填.
+                    不提供时仅读 Redis (兼容无 auth 的旧调用方).
+
+    Returns:
+        {"summary": str, "messages": list, "recent_messages": list}
+    """
     summary = await get_summary(session_id)
     messages = await get_messages(session_id)
+
+    # Redis 未命中或 TTL 过期 → 从 DB 回填 (确保 RAG 上下文不丢失历史)
+    if not messages and user_id is not None:
+        messages = await _load_messages_from_db(session_id, user_id)
+        if messages:
+            logger.info(
+                f"[chat-memory] Redis miss, 从 DB 回填 {len(messages)} 条消息 "
+                f"session={session_id[:8]}..."
+            )
+            # 回填到 Redis, 下次命中 (best-effort, 失败不影响主流程)
+            await _warm_cache_from_db(session_id, messages)
+
     recent = messages[-max(0, settings.rag_chat_history_turns * 2):]
     return {"summary": summary, "messages": messages, "recent_messages": recent}
+
+
+async def _load_messages_from_db(
+    session_id: str, user_id: int
+) -> list[dict[str, Any]]:
+    """从 DB (chat_session_messages) 读取最近 N 条消息作为 Redis 缓存 fallback.
+
+    返回的 dict 形状与 Redis 存储的一致: {role, content, ts, rewritten_query, sources}.
+    使用 asyncio.to_thread 卸载同步 DB 调用, 避免阻塞事件循环.
+    """
+    try:
+        # 延迟导入避免循环依赖
+        from app.services.session_service import session_service
+
+        # 读取最近 N 条 (N = rag_chat_max_messages, 通常 50)
+        limit = max(20, settings.rag_chat_max_messages)
+        result = await asyncio.to_thread(
+            session_service.get_messages_paginated,
+            session_id,
+            user_id,
+            limit=limit,
+            before_id=None,
+        )
+        # 转换 MessageOut → Redis 消息格式
+        messages: list[dict[str, Any]] = []
+        for msg in result.messages:
+            # 跳过错误消息, 不喂给 LLM 上下文
+            if msg.status == "error":
+                continue
+            extra = msg.extra or {}
+            messages.append(
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "ts": msg.created_at.isoformat() if msg.created_at else "",
+                    "rewritten_query": extra.get("rewritten_query", ""),
+                    "sources": extra.get("sources", []),
+                }
+            )
+        return messages
+    except ValueError as exc:
+        # 会话不存在或不属于该用户
+        logger.debug(f"[chat-memory] DB fallback 跳过 (会话校验失败): {exc}")
+        return []
+    except Exception as exc:
+        logger.warning(
+            f"[chat-memory] DB fallback 读取失败: {type(exc).__name__}: {exc}"
+        )
+        return []
+
+
+async def _warm_cache_from_db(
+    session_id: str, messages: list[dict[str, Any]]
+) -> None:
+    """DB fallback 命中后, 把消息回填到 Redis 缓存, 下次直接命中.
+
+    best-effort: 失败仅 warning, 不影响主流程.
+    """
+    try:
+        await replace_messages(session_id, messages)
+    except Exception as exc:
+        logger.warning(
+            f"[chat-memory] 回填 Redis 缓存失败: {type(exc).__name__}: {exc}"
+        )
 
 
 async def append_diagnosis_report(report: str, *, session_id: str | None = None) -> None:

@@ -41,6 +41,12 @@ const sourceStyle: Record<
     chip: "bg-violet-50 text-violet-700 border-violet-200",
     label: "Agent 运行",
   },
+  trajectory_upload: {
+    icon: ClipboardList,
+    dot: "bg-amber-500",
+    chip: "bg-amber-50 text-amber-800 border-amber-200",
+    label: "轨迹证据",
+  },
 };
 
 const defaultSourceStyle = {
@@ -57,8 +63,12 @@ const eventTypeLabel: Record<string, string> = {
   drainage: "排水",
   scouting: "巡田",
   sowing: "播种",
+  seeding: "播种",
   harvesting: "收获",
+  harvest: "收获",
+  cultivation: "耕整地",
   weeding: "除草",
+  anomaly: "异常",
   task_completed: "任务完成",
 };
 

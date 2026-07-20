@@ -5,7 +5,6 @@ import remarkGfm from "remark-gfm";
 import { chatStream } from "../api/chat";
 import { analyzeImage } from "../api/image";
 import { consumeSSE } from "../api/client";
-import { addSessionMessage } from "../api/sessions";
 import { useConversationStore } from "../stores/conversation";
 import { useUIStore } from "../stores/ui";
 import WelcomeScreen from "../components/chat/WelcomeScreen";
@@ -36,12 +35,15 @@ export default function Chat() {
     activeId,
     setActive,
     loadMessages,
+    loadMoreMessages,
     addMessage,
     updateLastAssistant,
     setThinking,
     setStreaming,
     isStreaming,
+    streamingSessionId,
     isLoadingMessages,
+    isLoadingMore,
     activeConversation,
     createNew,
     refreshConversations,
@@ -86,7 +88,13 @@ export default function Chat() {
     // Skip if we're mid-send: createNew() + addMessage() already populated the conversation
     // 双重保护：模块级 ref + store 中的 isStreaming 状态
     if (_globalSendingRef.current) return;
-    if (useConversationStore.getState().isStreaming) return;
+    // ✅ BUG 修复: 只跳过"当前会话"的流式状态, 允许切换到其他会话加载历史.
+    // 之前: 任何会话在流式时都跳过 loadMessages, 切换会话后页面空白.
+    // 现在: 只有当 streamingSessionId === sessionId (用户切回了正在流式的会话) 才跳过.
+    if (useConversationStore.getState().isStreaming) {
+      const streamingId = useConversationStore.getState().streamingSessionId;
+      if (streamingId === sessionId) return;
+    }
     // Bug 修复: 已加载过该 sessionId 则跳过, 避免 setActive 触发的二次调用
     if (loadedSessionRef.current.has(sessionId)) return;
     const conv = useConversationStore.getState().conversations.find((c) => c.id === sessionId);
@@ -140,7 +148,16 @@ export default function Chat() {
 
   const handleSend = async (text: string, image?: File) => {
     // Prevent double-send (e.g. rapid clicks or double Enter)
-    if (_globalSendingRef.current) return;
+    // ✅ BUG 修复: 只阻止"同一会话"的重复发送, 允许切换到其他会话后立即发送新消息.
+    // 之前: _globalSendingRef 是模块级全局标志, 一旦某个会话在流式生成,
+    //      切换到其他会话也无法发送, 用户体验差.
+    // 现在: 检查目标会话是否正在流式, 只在目标会话忙时阻止.
+    const currentActiveId = useConversationStore.getState().activeId;
+    const currentStreamingId = useConversationStore.getState().streamingSessionId;
+    if (currentStreamingId && currentStreamingId === currentActiveId) {
+      // 当前会话正在流式, 不允许重复发送
+      return;
+    }
     let finalQuestion = text;
 
     // Mark sending in progress BEFORE createNew() — createNew triggers a store
@@ -149,11 +166,19 @@ export default function Chat() {
     // and calls loadMessages, which overwrites the user's first message.
     _globalSendingRef.current = true;
 
-    // Ensure we have an active conversation
-    let convId = activeId;
+    // Ensure we have an active conversation.
+    // 使用 getState() 读取最新 activeId，避免 effect 闭包拿到陈旧的 activeId
+    // （例如从能力中心跳转时，store 中仍残留上次会话的 id），导致消息发到旧会话。
+    let convId = useConversationStore.getState().activeId;
+    const hadActiveId = !!convId;
     if (!convId) {
       convId = await createNew();
     }
+    // ✅ BUG 修复: 整个流式过程绑定到发送时的会话 ID, 避免切换会话后 token 串台.
+    // 之前: updateLastAssistant/setThinking 等函数内部用 get().activeId 作为写入目标,
+    //      用户切换会话后 activeId 变化, 后续 token 被写到切换后的新会话.
+    // 现在: 闭包捕获 targetConvId, 所有流式更新都传这个 ID, 写入原会话不受 activeId 变化影响.
+    const targetConvId = convId!;
 
     // Clear previous live state
     clearLiveState();
@@ -188,15 +213,15 @@ export default function Chat() {
     // the URL change triggers a component remount (different route = unmount/remount).
     // This prevents the "加载对话记录中..." flash where loadMessages overwrites
     // the user's first message.
-    if (!activeId) {
+    if (!hadActiveId) {
       navigate(`/chat/${convId}`, { replace: true });
     }
 
-    setStreaming(true);
+    setStreaming(true, targetConvId);
 
     try {
       const resp = await chatStream({
-        session_id: convId!,
+        session_id: targetConvId,
         question: finalQuestion,
         top_k: 3,
         web_search: webSearch,
@@ -221,40 +246,43 @@ export default function Chat() {
             // Flush buffered tokens
             if (bufferedTokens) {
               assistantContent = bufferedTokens;
-              updateLastAssistant(assistantContent);
+              updateLastAssistant(assistantContent, targetConvId);
               bufferedTokens = "";
             }
             inProgressPhase = false;
-            markAllProgressDone();
+            markAllProgressDone(targetConvId);
 
             // Add llm_start as a done step
             const step = toProgressStep(ev, progressIndex++);
-            addProgressStep(step);
+            addProgressStep(step, targetConvId);
             continue;
           }
 
           // Mark the running version as done if this is a _done/_degraded event
           if (stage.endsWith("_done") || stage.endsWith("_degraded")) {
-            updateLastProgressStep({
-              status: "done",
-              detail: getProgressDetail(stage, data),
-              elapsed_ms: data.elapsed_ms as number | undefined,
-            });
+            updateLastProgressStep(
+              {
+                status: "done",
+                detail: getProgressDetail(stage, data),
+                elapsed_ms: data.elapsed_ms as number | undefined,
+              },
+              targetConvId
+            );
           }
 
           // Add new step
           const step = toProgressStep(ev, progressIndex++);
-          addProgressStep(step);
+          addProgressStep(step, targetConvId);
         } else if (ev.type === "thinking") {
           thinkingContent += ev.content as string;
-          setThinking(thinkingContent);
+          setThinking(thinkingContent, targetConvId);
         } else if (ev.type === "token") {
           if (inProgressPhase) {
             // Buffer tokens until progress phase ends
             bufferedTokens += ev.content as string;
           } else {
             assistantContent += ev.content as string;
-            updateLastAssistant(assistantContent);
+            updateLastAssistant(assistantContent, targetConvId);
           }
         } else if (ev.type === "tool_call") {
           // Tool call events from MCP
@@ -262,7 +290,7 @@ export default function Chat() {
             { type: "progress", stage: "tool_call", data: ev },
             progressIndex++
           );
-          addProgressStep(step);
+          addProgressStep(step, targetConvId);
         } else if (ev.type === "citations") {
           const citations = ev.citations as any[];
           if (citations?.length) {
@@ -273,7 +301,8 @@ export default function Chat() {
                 category: c.category,
                 preview: c.content || c.preview,
                 score: c.relevance_score || c.score,
-              }))
+              })),
+              targetConvId
             );
           }
         } else if (ev.type === "error") {
@@ -284,13 +313,12 @@ export default function Chat() {
       // Flush any remaining buffered tokens (fallback if llm_start was missed)
       if (bufferedTokens && !assistantContent) {
         assistantContent = bufferedTokens;
-        updateLastAssistant(assistantContent);
+        updateLastAssistant(assistantContent, targetConvId);
       }
 
-      // Save assistant message to backend
-      if (assistantContent) {
-        addSessionMessage(convId!, "assistant", assistantContent).catch(() => {});
-      }
+      // assistant 消息已由后端 rag_service.stream_chat 收尾时主动持久化到 DB
+      // 前端无需再 POST, 避免双写不一致 + fire-and-forget 丢失
+      // (BUG-3 修复: 早期版本前端 .catch(() => {}) 吞错导致 AI 消息偶发丢失)
 
       // Refresh conversation list so sidebar shows updated message_count
       refreshConversations().catch(() => {});
@@ -298,7 +326,7 @@ export default function Chat() {
       showToast(`网络错误: ${err.message}`, "error");
     } finally {
       _globalSendingRef.current = false;
-      setStreaming(false);
+      setStreaming(false, targetConvId);
     }
   };
 
@@ -307,8 +335,14 @@ export default function Chat() {
     const initialMessage = (location.state as { initialMessage?: string } | null)?.initialMessage;
     if (!initialMessage) return;
     if (initialHandledRef.current) return;
-    if (sessionId) return;
+
     initialHandledRef.current = true;
+
+    // 强制清空当前 activeId，确保示例问题一定发到新会话。
+    // 否则从能力中心跳回首页时，如果 store 里仍残留上一次会话 id，
+    // handleSend 会把消息追加到旧会话，页面只显示空白欢迎页或旧会话内容。
+    useConversationStore.getState().setActive(null);
+
     // 清理 state，防止 handleSend 内部 navigate 后组件 remount 再次触发
     window.history.replaceState({}, document.title, window.location.pathname);
     handleSend(initialMessage);
@@ -317,8 +351,13 @@ export default function Chat() {
 
   const handleStop = () => {
     // AbortController could be added here in the future
-    setStreaming(false);
+    setStreaming(false, streamingSessionId ?? undefined);
   };
+
+  // ✅ 流式 UI 只在"当前激活会话 = 正在流式的会话"时显示.
+  // 用户切换到其他会话时, 原会话的流式响应在后台继续写入 messages 数组 (用户切回时能看到完整内容),
+  // 但 UI 不显示进度条/打字光标, 新会话的 ChatInput 也可立即使用.
+  const isCurrentStreaming = isStreaming && streamingSessionId === activeId;
 
   // Show loading state only when fetching messages for a conversation that
   // isn't even in the store yet (e.g. cold start, list still loading).
@@ -365,8 +404,8 @@ export default function Chat() {
           <div className="mt-10 w-full">
             <ChatInput
               onSend={handleSend}
-              streaming={isStreaming}
-              disabled={isStreaming}
+              streaming={isCurrentStreaming}
+              disabled={isCurrentStreaming}
               webSearch={webSearch}
               onWebSearchChange={setWebSearch}
               mcpTools={mcpTools}
@@ -384,17 +423,32 @@ export default function Chat() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
+          {/* 向前加载更多历史消息 (游标分页) */}
+          {activeConversation()?.hasMoreMessages && (
+            <div className="flex justify-center mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeId) loadMoreMessages(activeId);
+                }}
+                disabled={isLoadingMore}
+                className="px-4 py-1.5 text-sm text-accent-green hover:text-accent-green-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-full border border-accent-green/30 hover:border-accent-green/60 transition-colors"
+              >
+                {isLoadingMore ? "加载中..." : "加载更多历史消息"}
+              </button>
+            </div>
+          )}
           {messages.map((msg, i) => {
             // Skip last assistant message during streaming (rendered by live block below)
             const isLastMsg = i === messages.length - 1;
-            if (isStreaming && isLastMsg && msg.role === "assistant") {
+            if (isCurrentStreaming && isLastMsg && msg.role === "assistant") {
               return null;
             }
             return <MessageBubble key={i} msg={msg} />;
           })}
 
-          {/* Streaming: progress + answer in one block */}
-          {isStreaming && (
+          {/* Streaming: progress + answer in one block — 仅在当前会话是流式会话时显示 */}
+          {isCurrentStreaming && (
             <div className="flex justify-start mb-6">
               <div className="flex items-start gap-2 max-w-[85%]">
                 <div className="w-8 h-8 rounded-full bg-accent-green/20 flex items-center justify-center flex-shrink-0">
@@ -465,8 +519,8 @@ export default function Chat() {
         <ChatInput
           onSend={handleSend}
           onStop={handleStop}
-          streaming={isStreaming}
-          disabled={isStreaming}
+          streaming={isCurrentStreaming}
+          disabled={isCurrentStreaming}
           webSearch={webSearch}
           onWebSearchChange={setWebSearch}
           mcpTools={mcpTools}

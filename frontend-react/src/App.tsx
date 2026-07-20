@@ -4,14 +4,12 @@ import AppLayout from "./components/layout/AppLayout";
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
 import Dashboard from "./pages/Dashboard";
-// import AgentCapabilities from "./pages/AgentCapabilities"; // 临时移除：文件被截断，阻塞构建
+import AgentCapabilities from "./pages/AgentCapabilities";
 import Weather from "./pages/Weather";
 import Farms from "./pages/Farms";
 import Knowledge from "./pages/Knowledge";
-import Marketing from "./pages/Marketing";
 import PestDiagnosis from "./pages/PestDiagnosis";
 import MarketPrice from "./pages/MarketPrice";
-import VideoGen from "./pages/VideoGen";
 import Users from "./pages/Users";
 import Profile from "./pages/Profile";
 import FarmAgent from "./pages/FarmAgent";
@@ -39,17 +37,14 @@ export default function App() {
             <Route path="/chat/:sessionId" element={<Chat />} />
 
             {/* Workspace (AgentCapabilities = landing page for /workspace) */}
-            {/* 临时移除 /workspace 路由：AgentCapabilities.tsx 被截断，阻塞构建 */}
-            {/* <Route path="/workspace" element={<AgentCapabilities />} /> */}
+            <Route path="/workspace" element={<AgentCapabilities />} />
             <Route path="/workspace/dashboard" element={<Dashboard />} />
             <Route path="/workspace/weather" element={<Weather />} />
             <Route path="/workspace/farms" element={<Farms />} />
             <Route path="/workspace/farm-agent" element={<FarmAgent />} />
             <Route path="/workspace/knowledge" element={<Knowledge />} />
-            <Route path="/workspace/marketing" element={<Marketing />} />
             <Route path="/workspace/pest" element={<PestDiagnosis />} />
             <Route path="/workspace/market" element={<MarketPrice />} />
-            <Route path="/workspace/video" element={<VideoGen />} />
             <Route path="/workspace/users" element={<Users />} />
             <Route path="/profile" element={<Profile />} />
           </Route>

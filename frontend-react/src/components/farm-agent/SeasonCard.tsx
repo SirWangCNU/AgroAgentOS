@@ -19,15 +19,19 @@ interface Props {
 const statusLabel: Record<string, string> = {
   planning: "规划中",
   active: "进行中",
+  growing: "进行中",
   harvested: "已收获",
   abandoned: "已弃收",
+  aborted: "已中止",
 };
 
 const statusStyle: Record<string, string> = {
   planning: "bg-sky-50 text-sky-700 border-sky-200",
   active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  growing: "bg-emerald-50 text-emerald-700 border-emerald-200",
   harvested: "bg-amber-50 text-amber-800 border-amber-200",
   abandoned: "bg-rose-50 text-rose-700 border-rose-200",
+  aborted: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
 function formatDate(iso: string | null): string {
@@ -60,7 +64,7 @@ export default function SeasonCard({ farmId, fieldId, refreshKey = 0 }: Props) {
 
   const current = useMemo<CropSeason | null>(() => {
     if (!seasons.length) return null;
-    return seasons.find((s) => s.status === "active") ?? seasons[0];
+    return seasons.find((s) => s.status === "growing" || s.status === "active") ?? seasons[0];
   }, [seasons]);
 
   if (!enabled) {

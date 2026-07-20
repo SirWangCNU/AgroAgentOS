@@ -6,11 +6,12 @@ import {
   Marker,
   Popup,
   CircleMarker,
+  Polygon,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { TrajectoryPoint } from "../../types/farm";
+import type { Field, TrajectoryPoint } from "../../types/farm";
 
 // Fix Leaflet default marker icons in bundlers
 const iconDefaultProto = L.Icon.Default.prototype as unknown as {
@@ -67,9 +68,43 @@ interface FarmMarker {
 
 interface FarmMapProps {
   farms: FarmMarker[];
+  fields?: Field[];
   selectedFarmId?: number | null;
+  selectedFieldId?: number | null;
   trajectoryPoints?: TrajectoryPoint[];
   onFarmClick?: (farmId: number) => void;
+}
+
+interface FieldBoundary {
+  field: Field;
+  positions: [number, number][];
+}
+
+function parseBoundary(field: Field): FieldBoundary | null {
+  if (!field.boundary_json) return null;
+  try {
+    const boundary = JSON.parse(field.boundary_json) as {
+      type?: string;
+      coordinates?: unknown;
+    };
+    if (boundary.type !== "Polygon" || !Array.isArray(boundary.coordinates)) {
+      return null;
+    }
+    const ring = boundary.coordinates[0];
+    if (!Array.isArray(ring)) return null;
+    const positions = ring
+      .map((point) => {
+        if (!Array.isArray(point) || point.length < 2) return null;
+        const lon = Number(point[0]);
+        const lat = Number(point[1]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        return [lat, lon] as [number, number];
+      })
+      .filter((point): point is [number, number] => point !== null);
+    return positions.length >= 3 ? { field, positions } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Fly to selected farm */
@@ -107,11 +142,16 @@ function FitTrajectory({ points }: { points: TrajectoryPoint[] }) {
 
 export default function FarmMap({
   farms,
+  fields = [],
   selectedFarmId,
+  selectedFieldId,
   trajectoryPoints = [],
   onFarmClick,
 }: FarmMapProps) {
   const selectedFarm = farms.find((f) => f.id === selectedFarmId);
+  const fieldBoundaries = fields
+    .map(parseBoundary)
+    .filter((item): item is FieldBoundary => item !== null);
 
   const center: [number, number] = selectedFarm
     ? [selectedFarm.latitude, selectedFarm.longitude]
@@ -167,6 +207,36 @@ export default function FarmMap({
 
         <FlyToFarm farm={selectedFarm} />
         <FitTrajectory points={trajectoryPoints} />
+
+        {/* Field boundaries */}
+        {fieldBoundaries.map(({ field, positions }) => {
+          const selected = field.id === selectedFieldId;
+          return (
+            <Polygon
+              key={`field-${field.id}`}
+              positions={positions}
+              pathOptions={{
+                color: selected ? "#f59e0b" : "#16a34a",
+                fillColor: selected ? "#fbbf24" : "#22c55e",
+                fillOpacity: selected ? 0.22 : 0.12,
+                weight: selected ? 3 : 2,
+              }}
+            >
+              <Popup>
+                <div className="text-xs space-y-1 min-w-[150px]">
+                  <div className="text-sm font-semibold">{field.name}</div>
+                  <div className="text-gray-500">{field.area_mu} 亩</div>
+                  {field.current_crop && (
+                    <div>
+                      {field.current_crop}
+                      {field.growth_stage ? ` · ${field.growth_stage}` : ""}
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Polygon>
+          );
+        })}
 
         {/* Farm markers */}
         {farms.map((farm) => {

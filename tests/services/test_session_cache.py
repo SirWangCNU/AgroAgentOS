@@ -49,6 +49,20 @@ class TChatSession(TestBase):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     extra_json = Column(Text, nullable=True)
 
+    @property
+    def extra(self):
+        import json as _json
+        if not self.extra_json:
+            return {}
+        try:
+            return _json.loads(self.extra_json)
+        except Exception:
+            return {}
+
+    def set_extra(self, data):
+        import json as _json
+        self.extra_json = _json.dumps(data, ensure_ascii=False, default=str)
+
 
 class TChatSessionMessage(TestBase):
     __tablename__ = "cache_test_chat_messages"
@@ -60,7 +74,24 @@ class TChatSessionMessage(TestBase):
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     image_url = Column(String(500), nullable=True)
+    status = Column(String(16), nullable=False, default="success")
+    error_message = Column(Text, nullable=True)
+    extra_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now())
+
+    @property
+    def extra(self):
+        import json as _json
+        if not self.extra_json:
+            return {}
+        try:
+            return _json.loads(self.extra_json)
+        except Exception:
+            return {}
+
+    def set_extra(self, data):
+        import json as _json
+        self.extra_json = _json.dumps(data, ensure_ascii=False, default=str)
 
 
 # Patch session_service 引用的模型
@@ -73,12 +104,13 @@ _real_csm = svc_module.ChatSessionMessage
 def _swap_models(monkeypatch):
     monkeypatch.setattr(svc_module, "ChatSession", TChatSession)
     monkeypatch.setattr(svc_module, "ChatSessionMessage", TChatSessionMessage)
-    # 每次测试重置缓存
-    svc_module._list_cache.invalidate()
-    svc_module._detail_cache.invalidate()
+    # 每次测试重置缓存 (_SessionTTLCache 通过 _store.clear() 全清,
+    #  与新设计的 invalidate_session / invalidate_user 精确失效不冲突)
+    svc_module._list_cache._store.clear()
+    svc_module._detail_cache._store.clear()
     yield
-    svc_module._list_cache.invalidate()
-    svc_module._detail_cache.invalidate()
+    svc_module._list_cache._store.clear()
+    svc_module._detail_cache._store.clear()
 
 
 @pytest.fixture
@@ -188,8 +220,8 @@ class TestCacheInvalidation:
         r2 = service.get_session("session-001", user_id=1)
         assert r2 is not None
 
-        # 添加消息: 缓存应失效
-        service.add_message("session-001", "user", "新消息")
+        # 添加消息: 缓存应失效 (新签名要求 user_id)
+        service.add_message("session-001", user_id=1, role="user", content="新消息")
 
         # 验证: 再次调用应重新查 DB (新对象)
         r3 = service.list_sessions(user_id=1, page=1, page_size=50)

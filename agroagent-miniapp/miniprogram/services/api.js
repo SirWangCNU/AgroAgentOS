@@ -9,6 +9,33 @@ const api = {
   // ===== 聊天（流式在 sse.js） =====
   createSession: (title = '') => request({ url: '/sessions', method: 'POST', data: { title } }),
   listSessions: () => request({ url: '/sessions', method: 'GET' }),
+  getSession: (sessionId) => request({ url: `/sessions/${sessionId}`, method: 'GET' }),
+
+  /**
+   * 分页查询会话消息 (游标分页).
+   * @param {string} sessionId 会话 ID
+   * @param {Object} opt { limit=10, beforeId=null }
+   *   - limit:     每页条数 (1-50)
+   *   - beforeId:  游标, 返回 id < before_id 的消息. 首次加载留空.
+   * @returns Promise<{ messages, has_more, oldest_id }>
+   */
+  listMessages: (sessionId, opt = {}) => {
+    const limit = opt.limit || 10;
+    const beforeId = opt.beforeId;
+    let url = `/sessions/${sessionId}/messages?limit=${limit}`;
+    if (beforeId != null) url += `&before_id=${beforeId}`;
+    return request({ url, method: 'GET' });
+  },
+
+  /**
+   * 添加消息 (仅 user 消息需要前端调用).
+   * assistant 消息由后端 rag_service.stream_chat 收尾时主动持久化, 前端无需调用.
+   */
+  addSessionMessage: (sessionId, role, content, imageUrl) => {
+    let url = `/sessions/${sessionId}/messages?role=${encodeURIComponent(role)}&content=${encodeURIComponent(content)}`;
+    if (imageUrl) url += `&image_url=${encodeURIComponent(imageUrl)}`;
+    return request({ url, method: 'POST' });
+  },
 
   // ===== 天气 =====
   getWeather: (location) => request({ url: `/weather?location=${encodeURIComponent(location)}`, method: 'GET' }),

@@ -210,11 +210,17 @@ if FRONTEND_DIR.exists():
 
     # SPA 路由：所有非 API 路径都返回 index.html
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str) -> FileResponse:
+    async def serve_spa(full_path: str):
         """SPA 路由：返回 index.html 让前端路由处理."""
+        # ✅ 拦截所有API路径，返回JSON 404而不是HTML，避免前端JSON解析错误
+        if full_path.startswith(("api/", "/api/")):
+            return JSONResponse(
+                status_code=404,
+                content={"code": "NOT_FOUND", "message": "接口不存在", "data": None, "request_id": None}
+            )
         # 如果请求的是静态文件，直接返回
         file_path = FRONTEND_DIR / full_path
-        if file_path.is_file():
+        if file_path.is_file() and ".." not in full_path:
             return FileResponse(str(file_path))
         # 否则返回 index.html (SPA 路由)
         return FileResponse(str(FRONTEND_DIR / "index.html"))

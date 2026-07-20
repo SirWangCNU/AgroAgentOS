@@ -16,11 +16,15 @@ export interface Field {
   area_mu: number;
   soil_type: string;
   current_crop: string;
-  planting_date: string;
-  expected_harvest: string;
+  planting_date?: string | null;
+  expected_harvest?: string | null;
   growth_stage: string;
   status: "idle" | "planting" | "fallow";
+  latitude?: number | null;
+  longitude?: number | null;
   notes: string;
+  boundary_json?: string;
+  current_season_id?: number | null;
 }
 
 export interface TrajectoryFile {
@@ -36,6 +40,13 @@ export interface TrajectoryFile {
   work_area_mu: number;
   avg_depth: number;
   avg_speed: number;
+  operation_type?: string;
+  season_id?: number | null;
+  related_task_id?: string | null;
+  operator?: string;
+  event_time?: string | null;
+  coverage_rate?: number | null;
+  quality_summary?: Record<string, unknown>;
 }
 
 export interface TrajectoryPoint {
@@ -69,4 +80,13 @@ export interface TrajectoryAnalysis {
   work_efficiency: Record<string, unknown>;
   work_volume_chart: string;
   work_efficiency_chart: string;
+}
+
+export interface TrajectoryUploadOptions {
+  coordSystem?: string;
+  operationType?: string;
+  seasonId?: number | null;
+  relatedTaskId?: string | null;
+  operator?: string;
+  eventTime?: string | null;
 }

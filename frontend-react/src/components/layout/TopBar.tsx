@@ -8,13 +8,11 @@ import {
   CloudSun,
   Tractor,
   BookOpen,
-  Megaphone,
   Bug,
   Users,
   Leaf,
   MessageSquare,
   TrendingUp,
-  Film,
   UserCircle,
   Radar,
   Bot,
@@ -23,18 +21,43 @@ import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import WeatherBadge from "./WeatherBadge";
 
-const WORKSPACE_ITEMS = [
-  { icon: Bot, label: "智能体能力中心", path: "/workspace" },
-  { icon: LayoutDashboard, label: "数据仪表盘", path: "/workspace/dashboard" },
-  { icon: Radar, label: "AI 农场驾驶舱", path: "/workspace/farm-agent" },
-  { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
-  { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
-  { icon: BookOpen, label: "智能体技能和知识库", path: "/workspace/knowledge" },
-  { icon: Megaphone, label: "营销生成", path: "/workspace/marketing" },
-  { icon: Bug, label: "病虫害诊断", path: "/workspace/pest" },
-  { icon: TrendingUp, label: "市场行情", path: "/workspace/market" },
-  { icon: Film, label: "AI 视频生成", path: "/workspace/video" },
-  { icon: Users, label: "用户管理", path: "/workspace/users", adminOnly: true },
+interface WorkspaceItem {
+  icon: typeof Bot;
+  label: string;
+  path: string;
+  adminOnly?: boolean;
+}
+
+interface WorkspaceGroup {
+  title: string;
+  items: WorkspaceItem[];
+}
+
+const WORKSPACE_GROUPS: WorkspaceGroup[] = [
+  {
+    title: "核心",
+    items: [
+      { icon: Radar, label: "AI 农场驾驶舱", path: "/workspace/farm-agent" },
+      { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
+      { icon: LayoutDashboard, label: "数据仪表盘", path: "/workspace/dashboard" },
+    ],
+  },
+  {
+    title: "工具",
+    items: [
+      { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
+      { icon: Bug, label: "病虫害诊断", path: "/workspace/pest" },
+      { icon: TrendingUp, label: "市场行情", path: "/workspace/market" },
+      { icon: BookOpen, label: "知识库管理", path: "/workspace/knowledge" },
+    ],
+  },
+  {
+    title: "管理",
+    items: [
+      { icon: Bot, label: "智能体能力中心", path: "/workspace" },
+      { icon: Users, label: "用户管理", path: "/workspace/users", adminOnly: true },
+    ],
+  },
 ];
 
 export default function TopBar() {
@@ -137,20 +160,30 @@ export default function TopBar() {
           </button>
           {wsOpen && (
             <div className="absolute right-0 top-full z-[60] mt-2 w-56 rounded-[8px] border border-slate-200 bg-white py-2 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
-              {WORKSPACE_ITEMS.map((item) => {
-                if (item.adminOnly && !isAdmin) return null;
+              {WORKSPACE_GROUPS.map((group) => {
+                const visibleItems = group.items.filter(
+                  (item) => !item.adminOnly || isAdmin
+                );
+                if (visibleItems.length === 0) return null;
                 return (
-                  <button
-                    key={item.path}
-                    onClick={() => {
-                      navigate(item.path);
-                      setWsOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.label}
-                  </button>
+                  <div key={group.title}>
+                    <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      {group.title}
+                    </div>
+                    {visibleItems.map((item) => (
+                      <button
+                        key={item.path}
+                        onClick={() => {
+                          navigate(item.path);
+                          setWsOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                      >
+                        <item.icon className="w-4 h-4" />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 );
               })}
             </div>

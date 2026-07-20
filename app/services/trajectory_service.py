@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from loguru import logger
@@ -22,7 +22,8 @@ from sqlalchemy.orm import Session
 from app.core.redis import redis_manager
 from app.core.sqlite import sqlite_manager
 from app.exceptions import AppException
-from app.models.farm import Field
+from app.models.farm import CropSeason, Field
+from app.models.farm_agent import FarmEvent, FarmTask
 from app.models.trajectory import TrajectoryFile, TrajectoryPoint
 from app.schemas.trajectory import (
     TrajectoryFileInfo,
@@ -321,6 +322,11 @@ def upload_trajectory(
     file_content: bytes,
     filename: str,
     coord_system: str = "auto",
+    operation_type: str = "unknown",
+    season_id: int | None = None,
+    related_task_id: str | None = None,
+    operator: str = "",
+    event_time: datetime | None = None,
 ) -> TrajectoryUploadResponse:
     """上传并解析轨迹文件.
 
@@ -335,7 +341,7 @@ def upload_trajectory(
         TrajectoryUploadResponse
     """
     # 验证地块存在且属于当前用户
-    _verify_field_access(field_id, user_id)
+    field = _verify_field_access(field_id, user_id)
 
     # 解析 Excel
     parsed = parse_excel(file_content, filename)
@@ -361,6 +367,14 @@ def upload_trajectory(
         points=points_data,
         work_width=parsed["work_width"],
     )
+    coverage_rate = None
+    if field.area_mu and field.area_mu > 0:
+        coverage_rate = round(min(100.0, (stats.work_area_mu / field.area_mu) * 100), 1)
+    quality_summary = {
+        "depth_pass_rate": stats.depth_pass_rate,
+        "work_efficiency_mu_per_hour": stats.work_efficiency_mu_per_hour,
+        "coverage_rate": coverage_rate,
+    }
 
     # 存入数据库
     with sqlite_manager.session() as sess:
@@ -379,10 +393,23 @@ def upload_trajectory(
             avg_speed=stats.avg_speed,
             depth_std=stats.depth_std,
             work_width=parsed["work_width"],
+            operation_type=operation_type,
+            season_id=season_id,
+            related_task_id=related_task_id,
+            operator=operator,
+            event_time=event_time or stats.end_time or stats.start_time,
+            coverage_rate=coverage_rate,
         )
+        traj_file.set_quality_summary(quality_summary)
         sess.add(traj_file)
         sess.flush()
         file_id = traj_file.id
+        _validate_trajectory_context(
+            sess,
+            field=field,
+            season_id=season_id,
+            related_task_id=related_task_id,
+        )
 
         # 批量插入轨迹点（分批，每批 500 条）
         batch_size = 500
@@ -402,6 +429,19 @@ def upload_trajectory(
                 )
                 sess.add(point)
             sess.flush()
+
+        _record_trajectory_event(
+            sess,
+            field=field,
+            file_id=file_id,
+            filename=filename,
+            operation_type=operation_type,
+            season_id=season_id,
+            related_task_id=related_task_id,
+            operator=operator or f"user:{user_id}",
+            event_time=event_time or stats.end_time or stats.start_time,
+            quality_summary=quality_summary,
+        )
 
         # 更新统计（使用真实的 file_id）
         traj_file_info = TrajectoryFileInfo.model_validate(traj_file)
@@ -564,6 +604,67 @@ def delete_trajectory(file_id: int, user_id: int) -> None:
 
 
 # ==================== 内部辅助 ====================
+
+
+def _validate_trajectory_context(
+    session: Session,
+    *,
+    field: Field,
+    season_id: int | None,
+    related_task_id: str | None,
+) -> None:
+    """校验轨迹关联的茬次和任务没有越过地块/农场边界."""
+    if season_id is not None:
+        season = session.query(CropSeason).filter(
+            CropSeason.id == season_id,
+            CropSeason.field_id == field.id,
+        ).first()
+        if season is None:
+            raise AppException(status_code=403, detail="无权关联目标茬次")
+    if related_task_id:
+        task = session.query(FarmTask).filter(
+            FarmTask.task_id == related_task_id,
+            FarmTask.farm_id == field.farm_id,
+        ).first()
+        if task is None or (task.field_id is not None and task.field_id != field.id):
+            raise AppException(status_code=403, detail="无权关联目标任务")
+
+
+def _record_trajectory_event(
+    session: Session,
+    *,
+    field: Field,
+    file_id: int,
+    filename: str,
+    operation_type: str,
+    season_id: int | None,
+    related_task_id: str | None,
+    operator: str,
+    event_time: datetime | None,
+    quality_summary: dict[str, Any],
+) -> None:
+    """将轨迹上传沉淀为一条可被 AI snapshot 引用的农事事件."""
+    event_type = operation_type.strip() or "scouting"
+    if related_task_id:
+        existing = session.query(FarmEvent).filter(
+            FarmEvent.related_task_id == related_task_id,
+            FarmEvent.event_type == event_type,
+        ).first()
+        if existing is not None:
+            return
+    event = FarmEvent(
+        field_id=field.id,
+        season_id=season_id or field.current_season_id,
+        event_type=event_type,
+        event_time=event_time or datetime.now(timezone.utc),
+        operator=operator,
+        source="trajectory_upload",
+        related_task_id=related_task_id,
+        note=f"上传作业轨迹 {filename}",
+    )
+    event.set_inputs([{"material": "trajectory", "file_id": file_id, "filename": filename}])
+    event.set_evidence([{"type": "trajectory_file", "file_id": file_id, "summary": quality_summary}])
+    session.add(event)
 
 
 def _verify_field_access(field_id: int, user_id: int) -> Field:

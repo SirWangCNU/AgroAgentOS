@@ -1,0 +1,13 @@
+{
+  "root": {
+    "nodeId": "gen-page-frontend-review",
+    "kind": "page-leaf",
+    "pageIds": ["page-frontend-review"],
+    "output": "pages/frontend-review.html",
+    "sharedRegions": [],
+    "privateRegions": ["full-page"],
+    "mutableSlots": [],
+    "status": "planned",
+    "children": []
+  }
+}
