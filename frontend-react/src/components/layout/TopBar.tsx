@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  PanelLeft,
   ChevronDown,
   LogOut,
   LayoutDashboard,
@@ -18,7 +17,6 @@ import {
   Bot,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
-import { useUIStore } from "../../stores/ui";
 import WeatherBadge from "./WeatherBadge";
 
 interface WorkspaceItem {
@@ -66,7 +64,6 @@ export default function TopBar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isAdmin = useAuthStore((s) => s.isAdmin());
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
 
   const [wsOpen, setWsOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -89,15 +86,8 @@ export default function TopBar() {
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)] backdrop-blur">
-      {/* Left: sidebar toggle + brand */}
+      {/* Left: brand */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={toggleSidebar}
-          className="rounded-[8px] p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
-          title="打开对话列表"
-        >
-          <PanelLeft className="w-5 h-5" />
-        </button>
         <button
           onClick={() => navigate("/")}
           className="flex items-center gap-2 rounded-[8px] px-1 py-1 transition-opacity hover:opacity-85"
@@ -117,28 +107,17 @@ export default function TopBar() {
       </div>
 
       {/* Center: quick nav to chat */}
-      <div className="hidden items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 md:flex">
+      <div className="hidden md:flex">
         <button
           onClick={() => navigate("/")}
-          className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+          className={`flex items-center gap-1.5 rounded-full border border-slate-200 px-4 py-1.5 text-sm font-semibold transition-colors ${
             !isWorkspace
               ? "bg-white text-emerald-700 shadow-sm"
-              : "text-slate-500 hover:bg-white hover:text-slate-800"
+              : "bg-slate-50 text-slate-500 hover:bg-white hover:text-slate-800"
           }`}
         >
           <MessageSquare className="w-4 h-4" />
           对话
-        </button>
-        <button
-          onClick={() => navigate("/workspace")}
-          className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-            isWorkspace
-              ? "bg-white text-emerald-700 shadow-sm"
-              : "text-slate-500 hover:bg-white hover:text-slate-800"
-          }`}
-        >
-          <LayoutDashboard className="w-4 h-4" />
-          工作台
         </button>
       </div>
 

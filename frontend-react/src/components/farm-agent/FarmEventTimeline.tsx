@@ -16,6 +16,7 @@ interface Props {
   refreshKey?: number;
   compact?: boolean;
   title?: string;
+  embedded?: boolean;
 }
 
 // 来源 → 颜色 + 图标 + 标签
@@ -104,6 +105,7 @@ export default function FarmEventTimeline({
   refreshKey = 0,
   compact = false,
   title,
+  embedded = false,
 }: Props) {
   const enabled = farmId !== null;
   const { data: events = [], isLoading } = useQuery({
@@ -124,12 +126,89 @@ export default function FarmEventTimeline({
     );
   }, [events]);
 
+  const timelineList = (
+    <ol className={`${embedded || compact ? "space-y-2" : "mt-4 space-y-3"}`}>
+      {sorted.map((event) => {
+        const style = sourceStyle[event.source] ?? defaultSourceStyle;
+        const Icon = style.icon;
+        const typeLabel = eventTypeLabel[event.event_type] ?? event.event_type;
+        const inputSummary = summarizeInputs(event.inputs);
+        return (
+          <li
+            key={event.id}
+            className={`relative flex items-start gap-3 ${embedded || compact ? "" : "rounded-xl border border-[#ece5d8] bg-white/80 p-3"}`}
+          >
+            <span className="mt-1 flex flex-col items-center">
+              <span
+                className={`grid h-7 w-7 place-items-center rounded-full ${style.dot} text-white`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+              {!embedded && !compact && (
+                <span className="mt-1 w-px flex-1 bg-[#ece5d8]" />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${style.chip}`}
+                >
+                  {typeLabel}
+                </span>
+                <span className="text-[10px] text-[#9a8c78]">
+                  {formatEventTime(event.event_time)}
+                </span>
+                <span className="text-[10px] text-[#806c54]">
+                  操作人 {event.operator}
+                </span>
+              </div>
+              {event.note && (
+                <p className="mt-1 text-xs leading-5 text-[#4c554e]">
+                  {event.note}
+                </p>
+              )}
+              {inputSummary && (
+                <p className="mt-1 text-[10px] text-[#9a8c78]">
+                  投入：{inputSummary}
+                </p>
+              )}
+              {event.related_task_id && (
+                <p className="mt-1 text-[10px] text-[#597461]">
+                  关联任务 {event.related_task_id}
+                </p>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+
   if (!enabled) {
     return (
       <section className="rounded-2xl border border-dashed border-[#d6cebf] bg-[#fbfaf5] px-4 py-8 text-center text-xs text-[#8c8375]">
         选择农场后展示事件时间线。
       </section>
     );
+  }
+
+  if (embedded) {
+    if (isLoading) {
+      return (
+        <div className="py-8 text-center text-xs text-[#8c8375]">
+          <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
+          加载事件流…
+        </div>
+      );
+    }
+    if (sorted.length === 0) {
+      return (
+        <div className="py-8 text-center text-xs text-[#8c8375]">
+          近 {days} 天暂无事件记录。任务完成或人工录入后将出现在这里。
+        </div>
+      );
+    }
+    return timelineList;
   }
 
   return (
@@ -163,57 +242,7 @@ export default function FarmEventTimeline({
           近 {days} 天暂无事件记录。任务完成或人工录入后将出现在这里。
         </div>
       ) : (
-        <ol className={`mt-4 ${compact ? "space-y-2" : "space-y-3"}`}>
-          {sorted.map((event) => {
-            const style = sourceStyle[event.source] ?? defaultSourceStyle;
-            const Icon = style.icon;
-            const typeLabel = eventTypeLabel[event.event_type] ?? event.event_type;
-            const inputSummary = summarizeInputs(event.inputs);
-            return (
-              <li
-                key={event.id}
-                className={`relative flex items-start gap-3 ${compact ? "" : "rounded-xl border border-[#ece5d8] bg-white/80 p-3"}`}
-              >
-                <span className="mt-1 flex flex-col items-center">
-                  <span className={`grid h-7 w-7 place-items-center rounded-full ${style.dot} text-white`}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  {!compact && (
-                    <span className="mt-1 w-px flex-1 bg-[#ece5d8]" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${style.chip}`}>
-                      {typeLabel}
-                    </span>
-                    <span className="text-[10px] text-[#9a8c78]">
-                      {formatEventTime(event.event_time)}
-                    </span>
-                    <span className="text-[10px] text-[#806c54]">
-                      操作人 {event.operator}
-                    </span>
-                  </div>
-                  {event.note && (
-                    <p className="mt-1 text-xs leading-5 text-[#4c554e]">
-                      {event.note}
-                    </p>
-                  )}
-                  {inputSummary && (
-                    <p className="mt-1 text-[10px] text-[#9a8c78]">
-                      投入：{inputSummary}
-                    </p>
-                  )}
-                  {event.related_task_id && (
-                    <p className="mt-1 text-[10px] text-[#597461]">
-                      关联任务 {event.related_task_id}
-                    </p>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+        timelineList
       )}
     </section>
   );

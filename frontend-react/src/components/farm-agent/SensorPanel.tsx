@@ -16,6 +16,7 @@ interface Props {
   farmId: number | null;
   days?: number;
   refreshKey?: number;
+  embedded?: boolean;
 }
 
 const sensorIcon: Record<string, typeof Droplets> = {
@@ -52,7 +53,12 @@ function formatObservedAt(iso: string): string {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-export default function SensorPanel({ farmId, days = 7, refreshKey = 0 }: Props) {
+export default function SensorPanel({
+  farmId,
+  days = 7,
+  refreshKey = 0,
+  embedded = false,
+}: Props) {
   const enabled = farmId !== null;
   const { data: readings = [], isLoading } = useQuery({
     queryKey: ["farm-agent-sensors", farmId, days, refreshKey],
@@ -77,12 +83,76 @@ export default function SensorPanel({ farmId, days = 7, refreshKey = 0 }: Props)
       .sort((a, b) => a.fieldId - b.fieldId);
   }, [readings]);
 
+  const listContent =
+    grouped.length === 0 ? null : (
+      <div className={`space-y-4 ${embedded ? "" : "mt-4"}`}>
+        {grouped.map(({ fieldId, readings: list }) => (
+          <div
+            key={fieldId}
+            className="rounded-xl border border-[#ece5d8] bg-white/80 p-3"
+          >
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[#597461]">
+              地块 #{fieldId}
+            </p>
+            <ul className="space-y-2">
+              {list.map((reading) => {
+                const Icon = sensorIcon[reading.sensor_type] ?? Activity;
+                const label =
+                  sensorLabel[reading.sensor_type] ?? reading.sensor_type;
+                return (
+                  <li
+                    key={reading.id}
+                    className="flex items-start justify-between gap-3 text-xs"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[#f4eedd] text-[#6f4d2c]">
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <div>
+                        <p className="font-semibold text-[#34453b]">{label}</p>
+                        <p className="text-[10px] text-[#9a8c78]">
+                          {formatObservedAt(reading.observed_at)} · 来源{" "}
+                          {reading.source}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-[#fbfaf5] px-2 py-1 text-[11px] font-bold text-[#5a4a32]">
+                      {formatValue(reading)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    );
+
   if (!enabled) {
     return (
       <section className="rounded-2xl border border-dashed border-[#d6cebf] bg-[#fbfaf5] px-4 py-8 text-center text-xs text-[#8c8375]">
         选择农场后展示近期感知读数。
       </section>
     );
+  }
+
+  if (embedded) {
+    if (isLoading) {
+      return (
+        <div className="py-8 text-center text-xs text-[#8c8375]">
+          <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
+          加载感知读数…
+        </div>
+      );
+    }
+    if (grouped.length === 0) {
+      return (
+        <div className="py-8 text-center text-xs text-[#8c8375]">
+          近 {days} 天暂无感知读数。选择比赛场景并注入数据后会在这里显示。
+        </div>
+      );
+    }
+    return listContent;
   }
 
   return (
@@ -116,45 +186,7 @@ export default function SensorPanel({ farmId, days = 7, refreshKey = 0 }: Props)
           近 {days} 天暂无感知读数。可在上方选择比赛场景并注入数据。
         </div>
       ) : (
-        <div className="mt-4 space-y-4">
-          {grouped.map(({ fieldId, readings: list }) => (
-            <div
-              key={fieldId}
-              className="rounded-xl border border-[#ece5d8] bg-white/80 p-3"
-            >
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[#597461]">
-                地块 #{fieldId}
-              </p>
-              <ul className="space-y-2">
-                {list.map((reading) => {
-                  const Icon = sensorIcon[reading.sensor_type] ?? Activity;
-                  const label = sensorLabel[reading.sensor_type] ?? reading.sensor_type;
-                  return (
-                    <li
-                      key={reading.id}
-                      className="flex items-start justify-between gap-3 text-xs"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[#f4eedd] text-[#6f4d2c]">
-                          <Icon className="h-3.5 w-3.5" />
-                        </span>
-                        <div>
-                          <p className="font-semibold text-[#34453b]">{label}</p>
-                          <p className="text-[10px] text-[#9a8c78]">
-                            {formatObservedAt(reading.observed_at)} · 来源 {reading.source}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="shrink-0 rounded-md bg-[#fbfaf5] px-2 py-1 text-[11px] font-bold text-[#5a4a32]">
-                        {formatValue(reading)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+        listContent
       )}
     </section>
   );

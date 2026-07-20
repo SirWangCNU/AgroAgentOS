@@ -35,14 +35,12 @@ from app.api.v1 import (
     farm_tasks,
     farms,
     health,
-    history,
     image,
     market,
     observability,
     sessions,
     skills,
     trajectories,
-    video,
     weather,
     webhook,
 )
@@ -182,7 +180,6 @@ app.include_router(farm_tasks.router, prefix=API_PREFIX)
 app.include_router(documents.router, prefix=API_PREFIX)
 app.include_router(skills.router, prefix=API_PREFIX)
 app.include_router(webhook.router, prefix=API_PREFIX)
-app.include_router(history.router, prefix=API_PREFIX)
 app.include_router(observability.router, prefix=API_PREFIX)
 app.include_router(diagnosis.router, prefix=API_PREFIX)
 app.include_router(weather.router, prefix=API_PREFIX)
@@ -192,7 +189,6 @@ app.include_router(trajectories.router, prefix=API_PREFIX)
 app.include_router(image.router, prefix=API_PREFIX)
 app.include_router(sessions.router, prefix=API_PREFIX)
 app.include_router(market.router, prefix=API_PREFIX)
-app.include_router(video.router, prefix=API_PREFIX)
 
 
 # ============================================================
