@@ -16,15 +16,6 @@ from loguru import logger
 
 from app.core.mcp_client import mcp_client_manager
 from app.tools.calendar_tools import generate_planting_calendar, solar_term_reminder
-from app.tools.farm_agent_tools import (
-    create_action_proposal,
-    get_farm_snapshot,
-    get_field_work_quality,
-    get_pending_farm_tasks,
-    get_task_evidence,
-    inspect_farm_weather_risks,
-    save_task_verification_draft,
-)
 from app.tools.knowledge_tool import search_knowledge_base
 from app.tools.market_tool import (
     get_market_analysis,
@@ -62,13 +53,6 @@ def get_local_tools() -> List[BaseTool]:
         get_supply_demand,
         get_policy_subsidies,
         get_market_analysis,
-        get_farm_snapshot,
-        inspect_farm_weather_risks,
-        get_field_work_quality,
-        get_pending_farm_tasks,
-        get_task_evidence,
-        create_action_proposal,
-        save_task_verification_draft,
     ]
 
 
@@ -87,7 +71,7 @@ def get_all_tools() -> List[BaseTool]:
     # 延迟 import 避免循环 (meta -> tools.__init__ -> mcp_loader)
     from app.tools.meta import warn_unregistered_tools
 
-    # §5: 农业 subagent delegate 工具
+    # §5: subagent delegate 工具 (delegate_to_evidence_collector 等)
     # 延迟 import: subagents.runner 内部依赖 mcp_loader, 避免循环
     from app.agents.subagents.runner import get_subagent_tools
 

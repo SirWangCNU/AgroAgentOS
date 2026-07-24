@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.diagnosis import (
+from app.schemas.aiops import (
     ConversationRecordRequest,
     DiagnosisRecordRequest,
     RecordListResponse,
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/diagnosis", tags=["diagnosis-records"])
 async def save_diagnosis_record(req: DiagnosisRecordRequest) -> ApiResponse:
     """保存诊断记录.
 
-    将 Farm Agent 或监控系统产生的农业诊断结果保存到 SQLite 历史记录表中。
+    将 AIOps 诊断或监控系统产生的诊断结果保存到 SQLite 历史记录表中。
     """
     record_id = await diagnosis_recorder.record_diagnosis(
         question=req.question,

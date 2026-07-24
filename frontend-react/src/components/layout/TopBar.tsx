@@ -1,61 +1,36 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
+  PanelLeft,
   ChevronDown,
   LogOut,
   LayoutDashboard,
   CloudSun,
   Tractor,
   BookOpen,
+  Megaphone,
   Bug,
   Users,
   Leaf,
   MessageSquare,
   TrendingUp,
+  Film,
   UserCircle,
-  Radar,
-  Bot,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
+import { useUIStore } from "../../stores/ui";
 import WeatherBadge from "./WeatherBadge";
 
-interface WorkspaceItem {
-  icon: typeof Bot;
-  label: string;
-  path: string;
-  adminOnly?: boolean;
-}
-
-interface WorkspaceGroup {
-  title: string;
-  items: WorkspaceItem[];
-}
-
-const WORKSPACE_GROUPS: WorkspaceGroup[] = [
-  {
-    title: "核心",
-    items: [
-      { icon: Radar, label: "AI 农场驾驶舱", path: "/workspace/farm-agent" },
-      { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
-      { icon: LayoutDashboard, label: "数据仪表盘", path: "/workspace/dashboard" },
-    ],
-  },
-  {
-    title: "工具",
-    items: [
-      { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
-      { icon: Bug, label: "病虫害诊断", path: "/workspace/pest" },
-      { icon: TrendingUp, label: "市场行情", path: "/workspace/market" },
-      { icon: BookOpen, label: "知识库管理", path: "/workspace/knowledge" },
-    ],
-  },
-  {
-    title: "管理",
-    items: [
-      { icon: Bot, label: "智能体能力中心", path: "/workspace" },
-      { icon: Users, label: "用户管理", path: "/workspace/users", adminOnly: true },
-    ],
-  },
+const WORKSPACE_ITEMS = [
+  { icon: LayoutDashboard, label: "仪表盘", path: "/workspace" },
+  { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
+  { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
+  { icon: BookOpen, label: "智能体技能和知识库", path: "/workspace/knowledge" },
+  { icon: Megaphone, label: "营销生成", path: "/workspace/marketing" },
+  { icon: Bug, label: "病虫害诊断", path: "/workspace/pest" },
+  { icon: TrendingUp, label: "市场行情", path: "/workspace/market" },
+  { icon: Film, label: "AI 视频生成", path: "/workspace/video" },
+  { icon: Users, label: "用户管理", path: "/workspace/users", adminOnly: true },
 ];
 
 export default function TopBar() {
@@ -64,6 +39,7 @@ export default function TopBar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isAdmin = useAuthStore((s) => s.isAdmin());
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
 
   const [wsOpen, setWsOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -85,35 +61,34 @@ export default function TopBar() {
   }, []);
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)] backdrop-blur">
-      {/* Left: brand */}
+    <header className="fixed top-0 left-0 right-0 h-12 px-3 bg-bg-card border-b border-border flex items-center justify-between z-50">
+      {/* Left: sidebar toggle + brand */}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => navigate("/")}
-          className="flex items-center gap-2 rounded-[8px] px-1 py-1 transition-opacity hover:opacity-85"
+          onClick={toggleSidebar}
+          className="p-1.5 text-text-muted hover:text-text-primary rounded-lg hover:bg-bg-hover transition-colors"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-emerald-50 text-emerald-600">
-            <Leaf className="w-5 h-5" />
-          </span>
-          <span className="hidden sm:block text-left">
-            <span className="block text-sm font-black leading-4 text-slate-900">
-              AgroAgentOS
-            </span>
-            <span className="block text-[11px] font-medium text-slate-500">
-              智农协同平台
-            </span>
+          <PanelLeft className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => navigate("/")}
+          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+        >
+          <Leaf className="w-5 h-5 text-primary" />
+          <span className="text-sm font-semibold text-text-primary hidden sm:inline">
+            AgroAgentOS
           </span>
         </button>
       </div>
 
       {/* Center: quick nav to chat */}
-      <div className="hidden md:flex">
+      <div className="hidden md:flex items-center">
         <button
           onClick={() => navigate("/")}
-          className={`flex items-center gap-1.5 rounded-full border border-slate-200 px-4 py-1.5 text-sm font-semibold transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
             !isWorkspace
-              ? "bg-white text-emerald-700 shadow-sm"
-              : "bg-slate-50 text-slate-500 hover:bg-white hover:text-slate-800"
+              ? "text-primary bg-primary/10"
+              : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
           }`}
         >
           <MessageSquare className="w-4 h-4" />
@@ -122,15 +97,15 @@ export default function TopBar() {
       </div>
 
       {/* Right: workspace + user */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {/* Workspace dropdown */}
         <div ref={wsRef} className="relative">
           <button
             onClick={() => setWsOpen(!wsOpen)}
-            className={`flex items-center gap-1 rounded-[8px] px-3 py-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
               isWorkspace
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                ? "text-primary bg-primary/10"
+                : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
@@ -138,31 +113,21 @@ export default function TopBar() {
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
           {wsOpen && (
-            <div className="absolute right-0 top-full z-[60] mt-2 w-56 rounded-[8px] border border-slate-200 bg-white py-2 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
-              {WORKSPACE_GROUPS.map((group) => {
-                const visibleItems = group.items.filter(
-                  (item) => !item.adminOnly || isAdmin
-                );
-                if (visibleItems.length === 0) return null;
+            <div className="absolute top-full right-0 mt-1 w-48 bg-bg-card border border-border rounded-xl shadow-lg py-1 z-[60]">
+              {WORKSPACE_ITEMS.map((item) => {
+                if (item.adminOnly && !isAdmin) return null;
                 return (
-                  <div key={group.title}>
-                    <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      {group.title}
-                    </div>
-                    {visibleItems.map((item) => (
-                      <button
-                        key={item.path}
-                        onClick={() => {
-                          navigate(item.path);
-                          setWsOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
-                      >
-                        <item.icon className="w-4 h-4" />
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
+                  <button
+                    key={item.path}
+                    onClick={() => {
+                      navigate(item.path);
+                      setWsOpen(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                  </button>
                 );
               })}
             </div>
@@ -173,19 +138,19 @@ export default function TopBar() {
         <WeatherBadge />
 
         {/* Divider */}
-        <div className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
+        <div className="w-px h-5 bg-border mx-1" />
 
         {/* User avatar — 直接跳转个人中心 */}
         <div ref={userRef} className="relative">
           <button
             onClick={() => navigate("/profile")}
-            className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 transition-colors hover:bg-slate-100"
+            className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-bg-hover transition-colors"
             title="个人中心"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[linear-gradient(135deg,#16a34a,#2563eb)] text-xs font-bold text-white shadow-sm">
+            <div className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-medium">
               {user?.username?.[0]?.toUpperCase() || "U"}
             </div>
-            <span className="hidden text-sm font-semibold text-slate-700 sm:inline">
+            <span className="text-sm text-text-secondary hidden sm:inline">
               {user?.username}
             </span>
           </button>

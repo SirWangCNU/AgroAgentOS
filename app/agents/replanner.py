@@ -111,9 +111,9 @@ def _ensure_report_time(report: str, current_time: str) -> str:
     line = f"**生成时间**: {current_time}"
     if re.search(r"^\*\*生成时间\*\*:.*$", report, flags=re.MULTILINE):
         return re.sub(r"^\*\*生成时间\*\*:.*$", line, report, count=1, flags=re.MULTILINE)
-    if report.startswith("# 农业风险分析报告"):
-        return report.replace("# 农业风险分析报告", f"# 农业风险分析报告\n{line}", 1)
-    return f"# 农业风险分析报告\n{line}\n\n{report}"
+    if report.startswith("# 故障诊断报告"):
+        return report.replace("# 故障诊断报告", f"# 故障诊断报告\n{line}", 1)
+    return f"# 故障诊断报告\n{line}\n\n{report}"
 
 
 def _build_skill_context(
@@ -421,10 +421,10 @@ def _force_summary(
 ) -> str:
     """硬兜底: 当 LLM 决策失败或超步数, 用模板生成简单报告."""
     if not past_steps:
-        return f"# 农业风险分析报告\n**生成时间**: {current_time}\n\n## 问题\n{user_input}\n\n## 结论\n分析流程异常终止, 未能收集到有效信息, 请人工介入。"
+        return f"# 故障诊断报告\n**生成时间**: {current_time}\n\n## 问题\n{user_input}\n\n## 结论\n诊断流程异常终止, 未能收集到有效信息, 请人工介入。"
 
     sections = [
-        "# 农业风险分析报告\n",
+        "# 故障诊断报告\n",
         f"**生成时间**: {current_time}\n",
         f"## 问题\n{user_input}\n",
         "## 收集到的信息\n",

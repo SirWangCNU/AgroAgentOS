@@ -6,13 +6,6 @@ triggers: [病虫害, 虫害, 病害, 打药, 农药, 生虫, 发病, 叶子黄,
 allowed_tools: [search_knowledge_base, get_weather, get_current_time]
 risk_level: low
 context: inline
-icon: Bug
-category: 风险防控
-tagline: 根据症状描述智能诊断病虫害并给出防治方案
-examples:
-  - 番茄叶子发黄卷曲是怎么回事？
-  - 苹果树上有白色粉状物是什么病？
-  - 黄瓜霜霉病怎么防治？
 ---
 
 # 病虫害诊断专家

@@ -1,6 +1,6 @@
 """§5 Subagent runner: 把每个 SubagentDefinition 包装成主 Executor 可见的 BaseTool.
 
-主 Executor 通过 ainvoke({"name": "delegate_to_farm_data_analyst",
+主 Executor 通过 ainvoke({"name": "delegate_to_evidence_collector",
                           "args": {"task": "..."}}) 来委托.
 
 设计要点:
@@ -77,7 +77,7 @@ async def _run_subagent(sub: SubagentDefinition, task: str) -> str:
 
     try:
         if not sub_tools:
-            # 纯规划助手没有工具, run_parallel_agent 要求 tools 非空
+            # report_writer 没工具, run_parallel_agent 要求 tools 非空
             # 直接调 LLM 跑一轮
             llm = get_chat_llm(temperature=0.2)
             ai_msg = await llm.ainvoke(

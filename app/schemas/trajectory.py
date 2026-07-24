@@ -1,7 +1,7 @@
 """轨迹相关 Pydantic Schema."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -68,13 +68,6 @@ class TrajectoryFileInfo(BaseModel):
     avg_speed: float = 0.0
     depth_std: float = 0.0
     work_width: float = 0.0
-    operation_type: str = "unknown"
-    season_id: Optional[int] = None
-    related_task_id: Optional[str] = None
-    operator: str = ""
-    event_time: Optional[datetime] = None
-    coverage_rate: Optional[float] = None
-    quality_summary: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
     model_config = {"from_attributes": True}

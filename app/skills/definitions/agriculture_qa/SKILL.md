@@ -6,13 +6,6 @@ triggers: [种植, 栽培, 播种, 施肥, 灌溉, 采收, 养殖, 农业, 农�
 allowed_tools: [search_knowledge_base, get_weather, get_current_time]
 risk_level: low
 context: inline
-icon: MessageSquare
-category: 生产管理
-tagline: 一问就懂的种植养殖顾问
-examples:
-  - 现在适合种玉米吗？
-  - 大棚番茄花期怎么管理？
-  - 养猪场冬季防疫要注意什么？
 ---
 
 # 农业智能问答

@@ -8,7 +8,7 @@
   - 当前默认 7 个 OnCall Skill 均走 inline, 避免不必要的子图开销
 
 设计要点:
-  - 子图复用主图 build_farm_agent_graph(), 通过 state.inside_fork=True 防止无限递归 fork
+  - 子图复用主图 build_aiops_graph(), 通过 state.inside_fork=True 防止无限递归 fork
   - 子图的 input 拼成 "用户问题 + Skill playbook" 让 Planner 直接基于 playbook 拆步
   - 子图异常 → 主线 response 设为 fallback 提示, 不中断整个 SSE 流
 
@@ -50,7 +50,7 @@ async def fork_skill_node(state: PlanExecuteState) -> PlanExecuteState:
           - transition_history: fork_success 或 fork_failed
     """
     # 延迟 import 避免循环 (graph -> fork_runner -> graph)
-    from app.agents.graph import build_farm_agent_graph
+    from app.agents.graph import build_aiops_graph
 
     user_input = state.get("input", "")
     skill_name = state.get("selected_skill", "")
@@ -62,7 +62,7 @@ async def fork_skill_node(state: PlanExecuteState) -> PlanExecuteState:
         f"display={skill.display_name} max_iters={skill.fork_max_iters}"
     )
 
-    sub_graph = build_farm_agent_graph()
+    sub_graph = build_aiops_graph()
     sub_input = (
         f"# 主对话用户问题\n{user_input}\n\n"
         f"# 你需要按以下 Playbook 完成: {skill.display_name}\n"
@@ -75,12 +75,6 @@ async def fork_skill_node(state: PlanExecuteState) -> PlanExecuteState:
         "inside_fork": True,
         # 透传父级 permission_mode (子图也走相同安全策略)
         "permission_mode": state.get("permission_mode", "") or get_agent_harness().default_permission_mode(),
-        "user_id": state.get("user_id", 0),
-        "farm_id": state.get("farm_id", 0),
-        "run_id": state.get("run_id", ""),
-        "run_type": state.get("run_type", "inspection"),
-        "business_context": state.get("business_context", {}),
-        "proposal_ids": [],
     }
 
     try:

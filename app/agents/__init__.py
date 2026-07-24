@@ -8,7 +8,7 @@ Plan-Execute-Replan 三段式：
 详细图结构见 graph.py, 状态见 state.py。
 """
 
-from app.agents.graph import build_farm_agent_graph
+from app.agents.graph import build_aiops_graph
 from app.agents.state import PlanExecuteState
 
-__all__ = ["build_farm_agent_graph", "PlanExecuteState"]
+__all__ = ["build_aiops_graph", "PlanExecuteState"]

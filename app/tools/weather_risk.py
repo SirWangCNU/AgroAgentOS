@@ -12,25 +12,9 @@
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from app.schemas.weather import DailyForecastDetail, WeatherAlert
-
-RAINSTORM_ALERT_THRESHOLD_MM = 50.0
-DAILY_RAINSTORM_HIGH_THRESHOLD_MM = 100.0
-DRAINAGE_CRITICAL_THRESHOLD_MM = 80.0
-
-
-def classify_drainage_rainfall(
-    precipitation_proxy_mm: float,
-) -> Literal["high", "critical"] | None:
-    """按调用方提供的降雨量代理值判定排水风险等级。"""
-
-    if precipitation_proxy_mm >= DRAINAGE_CRITICAL_THRESHOLD_MM:
-        return "critical"
-    if precipitation_proxy_mm >= RAINSTORM_ALERT_THRESHOLD_MM:
-        return "high"
-    return None
 
 
 def analyze_weather_risks(
@@ -61,12 +45,8 @@ def analyze_weather_risks(
             ))
 
         # 暴雨检测
-        if day.precipitation_mm >= RAINSTORM_ALERT_THRESHOLD_MM:
-            severity = (
-                "高"
-                if day.precipitation_mm >= DAILY_RAINSTORM_HIGH_THRESHOLD_MM
-                else "中"
-            )
+        if day.precipitation_mm >= 50:
+            severity = "高" if day.precipitation_mm >= 100 else "中"
             advice = _get_rainstorm_advice(crop)
             alerts.append(WeatherAlert(
                 alert_type="暴雨",

@@ -6,34 +6,20 @@ import {
   listSessions,
   deleteSession,
   updateSession,
-  listMessages,
+  getSession,
   addSessionMessage,
   type SessionOut,
 } from "../api/sessions";
 
 interface Conversation extends SessionOut {
   messages: ChatMessage[];
-  /** 是否还有更早的历史消息可加载 (游标分页) */
-  hasMoreMessages: boolean;
-  /** 当前已加载的最旧消息 id, 作为下次向前加载的 before_id 游标 */
-  oldestLoadedId: number | null;
 }
 
 interface ConversationState {
   conversations: Conversation[];
   activeId: string | null;
   isStreaming: boolean;
-  /**
-   * 当前正在流式生成的会话 ID.
-   * BUG 修复: 之前 updateLastAssistant/setThinking 等流式更新函数内部用 get().activeId
-   * 作为写入目标, 用户切换会话后 activeId 变了, 正在生成的 token 会被写到切换后的新会话.
-   * 现在所有流式更新都接受 targetSessionId 参数, 写入"发送时的会话"而不是"当前激活的会话".
-   * streamingSessionId 同时用于 UI 判断: 只在 activeId === streamingSessionId 时显示进度.
-   */
-  streamingSessionId: string | null;
   isLoadingMessages: boolean;
-  /** 向前加载更多历史消息的 loading 标记 */
-  isLoadingMore: boolean;
 
   // Chat settings
   webSearch: boolean;
@@ -52,22 +38,20 @@ interface ConversationState {
   deleteOne: (id: string) => Promise<void>;
   renameOne: (id: string, title: string) => Promise<void>;
   loadMessages: (id: string) => Promise<void>;
-  loadMoreMessages: (id: string) => Promise<void>;
   addMessage: (msg: ChatMessage) => Promise<void>;
-  /** targetSessionId 缺省时回落到 activeId (兼容旧调用) */
-  updateLastAssistant: (content: string, targetSessionId?: string) => void;
-  setThinking: (content: string, targetSessionId?: string) => void;
-  setStreaming: (v: boolean, targetSessionId?: string) => void;
+  updateLastAssistant: (content: string) => void;
+  setThinking: (content: string) => void;
+  setStreaming: (v: boolean) => void;
   setWebSearch: (v: boolean) => void;
   setMcpTools: (v: boolean) => void;
 
-  // Progress tracking — targetSessionId 用于隔离多会话的流式进度
-  addProgressStep: (step: ProgressStep, targetSessionId?: string) => void;
-  updateLastProgressStep: (step: Partial<ProgressStep>, targetSessionId?: string) => void;
-  setLiveCitations: (citations: Citation[], targetSessionId?: string) => void;
-  setProgressPhase: (v: boolean, targetSessionId?: string) => void;
-  markAllProgressDone: (targetSessionId?: string) => void;
-  clearLiveState: (targetSessionId?: string) => void;
+  // Progress tracking
+  addProgressStep: (step: ProgressStep) => void;
+  updateLastProgressStep: (step: Partial<ProgressStep>) => void;
+  setLiveCitations: (citations: Citation[]) => void;
+  setProgressPhase: (v: boolean) => void;
+  markAllProgressDone: () => void;
+  clearLiveState: () => void;
 
   // Getters
   activeConversation: () => Conversation | null;
@@ -77,9 +61,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
   activeId: null,
   isStreaming: false,
-  streamingSessionId: null,
   isLoadingMessages: false,
-  isLoadingMore: false,
   webSearch: false,
   mcpTools: true,
   liveProgress: [],
@@ -90,12 +72,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     try {
       const sessions = await listSessions();
       set({
-        conversations: sessions.map((s) => ({
-          ...s,
-          messages: [],
-          hasMoreMessages: false,
-          oldestLoadedId: null,
-        })),
+        conversations: sessions.map((s) => ({ ...s, messages: [] })),
       });
     } catch (err) {
       console.error("Failed to load conversations:", err);
@@ -117,8 +94,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
               return {
                 ...session,
                 messages: existing?.messages ?? [],
-                hasMoreMessages: existing?.hasMoreMessages ?? false,
-                oldestLoadedId: existing?.oldestLoadedId ?? null,
               };
             }),
             // Bug fix: 保留本地存在但服务器尚未返回的会话
@@ -135,12 +110,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   createNew: async () => {
     const session = await createSession();
-    const conv: Conversation = {
-      ...session,
-      messages: [],
-      hasMoreMessages: false,
-      oldestLoadedId: null,
-    };
+    const conv: Conversation = { ...session, messages: [] };
     set((s) => ({
       conversations: [conv, ...s.conversations],
       activeId: conv.id,
@@ -175,21 +145,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   loadMessages: async (id) => {
     set({ isLoadingMessages: true });
     try {
-      // ✅ 新会话（0条消息）直接跳过请求，避免不必要的接口调用
-      const conv = get().conversations.find((c) => c.id === id);
-      if (conv && conv.message_count === 0 && conv.messages.length === 0) {
-        set({ isLoadingMessages: false });
-        return;
-      }
-      // 首次进入会话只加载最新 10 条 (需求 3: 类似聊天软件的消息加载机制)
-      // 向前加载更多历史用 loadMoreMessages (顶部"加载更多"按钮触发)
-      const page = await listMessages(id, { limit: 10, beforeId: null });
-      const messages: ChatMessage[] = page.messages.map((m) => ({
+      const detail = await getSession(id);
+      const messages: ChatMessage[] = detail.messages.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
         ...(m.image_url ? { imageUrl: m.image_url } : {}),
-        ...(m.status && m.status !== "success" ? { status: m.status as "error" | "partial" } : {}),
-        ...(m.error_message ? { errorMessage: m.error_message } : {}),
       }));
       set((s) => {
         const existing = s.conversations.find((c) => c.id === id);
@@ -212,14 +172,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           return {
             isLoadingMessages: false,
             conversations: s.conversations.map((c) =>
-              c.id === id
-                ? {
-                    ...c,
-                    messages: merged,
-                    hasMoreMessages: page.has_more,
-                    oldestLoadedId: page.oldest_id,
-                  }
-                : c
+              c.id === id ? { ...c, messages: merged, title: detail.title } : c
             ),
           };
         }
@@ -228,14 +181,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           isLoadingMessages: false,
           conversations: [
             {
-              id,
-              title: "新对话",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              message_count: messages.length,
+              id: detail.id,
+              title: detail.title,
+              created_at: detail.created_at,
+              updated_at: detail.updated_at,
+              message_count: detail.messages.length,
               messages,
-              hasMoreMessages: page.has_more,
-              oldestLoadedId: page.oldest_id,
             },
             ...s.conversations,
           ],
@@ -263,8 +214,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
                 updated_at: new Date().toISOString(),
                 message_count: 0,
                 messages: [],
-                hasMoreMessages: false,
-                oldestLoadedId: null,
               },
               ...s.conversations,
             ],
@@ -274,45 +223,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       }
       set({ isLoadingMessages: false });
       throw err; // 其他错误继续向上抛, 让 Chat 显示错误信息
-    }
-  },
-
-  loadMoreMessages: async (id) => {
-    const conv = get().conversations.find((c) => c.id === id);
-    if (!conv || !conv.hasMoreMessages || conv.oldestLoadedId == null) {
-      return;
-    }
-    set({ isLoadingMore: true });
-    try {
-      // 游标分页: 用当前最旧消息 id 作为 before_id, 加载更早的 10 条
-      const page = await listMessages(id, {
-        limit: 10,
-        beforeId: conv.oldestLoadedId,
-      });
-      const olderMessages: ChatMessage[] = page.messages.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-        ...(m.image_url ? { imageUrl: m.image_url } : {}),
-        ...(m.status && m.status !== "success" ? { status: m.status as "error" | "partial" } : {}),
-        ...(m.error_message ? { errorMessage: m.error_message } : {}),
-      }));
-      set((s) => ({
-        isLoadingMore: false,
-        conversations: s.conversations.map((c) =>
-          c.id === id
-            ? {
-                ...c,
-                // prepend 更早的消息到列表头部
-                messages: [...olderMessages, ...c.messages],
-                hasMoreMessages: page.has_more,
-                oldestLoadedId: page.oldest_id ?? c.oldestLoadedId,
-              }
-            : c
-        ),
-      }));
-    } catch (err) {
-      console.error("[conversation] loadMoreMessages failed:", err);
-      set({ isLoadingMore: false });
     }
   },
 
@@ -349,17 +259,16 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         ),
       };
     });
-
-    // 仅 user 消息需要前端 POST 持久化 (与后端 SSE 兜底形成双保险, 5s 幂等去重)
-    // assistant 消息由后端 rag_service.stream_chat 收尾时主动持久化, 前端无需调用
-    // (修复 BUG-3: 早期版本前端 fire-and-forget POST assistant 消息易丢失)
+    // Persist to backend —— 必须 await
+    // 之前用 fire-and-forget 模式发出 POST，紧接着 chatStream 占用 HTTP 连接池，
+    // 导致 user 消息的 POST 偶发被 abort/丢弃，DB 里只有 assistant 消息没有 user 消息
+    try {
+      await addSessionMessage(activeId, msg.role, msg.content);
+    } catch (err) {
+      console.error("[conversation] addSessionMessage failed:", err);
+    }
+    // Auto-title from first user message
     if (msg.role === "user") {
-      try {
-        await addSessionMessage(activeId, msg.role, msg.content);
-      } catch (err) {
-        console.error("[conversation] addSessionMessage failed:", err);
-      }
-      // Auto-title from first user message (后端 chat.py 也会 auto_title, 这里做前端 UI 同步)
       const conv = get().conversations.find((c) => c.id === activeId);
       if (conv && conv.title === "新对话") {
         const title = msg.content.slice(0, 30) + (msg.content.length > 30 ? "..." : "");
@@ -368,15 +277,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
-  updateLastAssistant: (content, targetSessionId) => {
-    // ✅ BUG 修复: 优先使用 targetSessionId (发送时捕获的会话 ID),
-    // 而不是 get().activeId (用户切换会话后会变化).
-    // 这样流式响应期间用户切换到其他会话, token 仍写入原会话, 不会串台.
-    const id = targetSessionId ?? get().activeId;
-    if (!id) return;
+  updateLastAssistant: (content) => {
+    const { activeId } = get();
+    if (!activeId) return;
     set((s) => ({
       conversations: s.conversations.map((c) => {
-        if (c.id !== id) return c;
+        if (c.id !== activeId) return c;
         const msgs = [...c.messages];
         const last = msgs[msgs.length - 1];
         if (last?.role === "assistant") {
@@ -389,13 +295,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }));
   },
 
-  setThinking: (content, targetSessionId) => {
-    // ✅ 同 updateLastAssistant, 绑定到发送时的会话
-    const id = targetSessionId ?? get().activeId;
-    if (!id) return;
+  setThinking: (content) => {
+    const { activeId } = get();
+    if (!activeId) return;
     set((s) => ({
       conversations: s.conversations.map((c) => {
-        if (c.id !== id) return c;
+        if (c.id !== activeId) return c;
         const msgs = [...c.messages];
         const last = msgs[msgs.length - 1];
         if (last?.role === "assistant") {
@@ -406,33 +311,15 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }));
   },
 
-  setStreaming: (v, targetSessionId) => {
-    // ✅ 流式开始时记录 streamingSessionId, 结束时清除.
-    // UI 用 (isStreaming && streamingSessionId === activeId) 判断是否显示进度.
-    if (v) {
-      const id = targetSessionId ?? get().activeId;
-      set({ isStreaming: true, streamingSessionId: id });
-    } else {
-      // 只允许结束自己会话的流式状态, 避免被其他会话的 setStreaming(false) 误清
-      const current = get().streamingSessionId;
-      if (!targetSessionId || !current || current === targetSessionId) {
-        set({ isStreaming: false, streamingSessionId: null });
-      }
-    }
-  },
+  setStreaming: (v) => set({ isStreaming: v }),
   setWebSearch: (v) => set({ webSearch: v }),
   setMcpTools: (v) => set({ mcpTools: v }),
 
-  addProgressStep: (step, targetSessionId) => {
-    // ✅ 只更新属于 targetSessionId 的进度, 避免切换会话后进度串台
-    const current = get().streamingSessionId;
-    if (targetSessionId && current !== targetSessionId) return;
+  addProgressStep: (step) => {
     set((s) => ({ liveProgress: [...s.liveProgress, step] }));
   },
 
-  updateLastProgressStep: (update, targetSessionId) => {
-    const current = get().streamingSessionId;
-    if (targetSessionId && current !== targetSessionId) return;
+  updateLastProgressStep: (update) => {
     set((s) => {
       const steps = [...s.liveProgress];
       if (steps.length > 0) {
@@ -442,21 +329,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     });
   },
 
-  setLiveCitations: (citations, targetSessionId) => {
-    const current = get().streamingSessionId;
-    if (targetSessionId && current !== targetSessionId) return;
-    set({ liveCitations: citations });
-  },
+  setLiveCitations: (citations) => set({ liveCitations: citations }),
 
-  setProgressPhase: (v, targetSessionId) => {
-    const current = get().streamingSessionId;
-    if (targetSessionId && current !== targetSessionId) return;
-    set({ progressPhase: v });
-  },
+  setProgressPhase: (v) => set({ progressPhase: v }),
 
-  markAllProgressDone: (targetSessionId) => {
-    const current = get().streamingSessionId;
-    if (targetSessionId && current !== targetSessionId) return;
+  markAllProgressDone: () => {
     set((s) => ({
       progressPhase: false,
       liveProgress: s.liveProgress.map((step) =>
@@ -465,12 +342,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }));
   },
 
-  clearLiveState: (_targetSessionId) => {
-    // clearLiveState 通常在发送前调用, 此时 streamingSessionId 还没设,
-    // 不做 targetSessionId 检查, 直接清空. 参数保留是为了 API 一致性.
-    void _targetSessionId;
-    set({ liveProgress: [], liveCitations: [], progressPhase: true });
-  },
+  clearLiveState: () => set({ liveProgress: [], liveCitations: [], progressPhase: true }),
 
   activeConversation: () => {
     const { conversations, activeId } = get();

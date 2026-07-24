@@ -1,6 +1,6 @@
 """UserContextService 集成测试."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine
@@ -25,8 +25,6 @@ def db_session():
 
 def _setup_full_data(db_session):
     """创建完整的测试数据."""
-    trajectory_start = datetime.now() - timedelta(days=1)
-
     farm = Farm(user_id=1, name="阳光农场", location="山东寿光", area_mu=50.0)
     db_session.add(farm)
     db_session.flush()
@@ -44,8 +42,8 @@ def _setup_full_data(db_session):
         filename="旋耕作业.xlsx",
         machine_id="JD-1001",
         point_count=500,
-        start_time=trajectory_start,
-        end_time=trajectory_start + timedelta(hours=2),
+        start_time=datetime(2026, 5, 28),
+        end_time=datetime(2026, 5, 28, 2),
         total_distance_m=5000.0,
         work_distance_m=4500.0,
         work_area_mu=28.5,

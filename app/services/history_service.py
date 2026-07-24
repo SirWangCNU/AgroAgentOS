@@ -5,7 +5,7 @@
 
 设计:
   - 持久化存储，永久保留历史记录
-  - 新写入来源: farm_agent/chat/monitoring；历史 aiops 记录保持可读
+  - 记录来源: "chat" (RAG Copilot) 或 "aiops" (智能诊断)
   - 单条回答截断到 12KB, 防极端情况撑爆数据库
   - 使用 SQLiteManager 进行数据操作
   - 单条记录最大 12KB
@@ -20,11 +20,9 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.history_source import (
-    HistoryWriteSource,
-    validate_history_write_source,
-)
 from app.core.sqlite import sqlite_manager
+from app.core.vector_store import get_vector_store
+from app.utils.splitter import split_markdown
 
 _MAX_ANSWER_CHARS = 12000
 
@@ -33,14 +31,13 @@ async def add_record(
     *,
     question: str,
     answer: str = "",
-    source: HistoryWriteSource = "chat",
+    source: str = "chat",
     session_id: str = "",
     skill: str = "",
     sources: list[str] | None = None,
     extra: dict[str, Any] | None = None,
 ) -> str | None:
     """写入一条历史记录, 返回 record_id (失败返回 None)."""
-    source = validate_history_write_source(source)
     if not question:
         return None
 
@@ -74,10 +71,6 @@ async def upload_record_to_kb(record_id: str) -> bool:
         True if uploaded successfully, False otherwise.
     """
     try:
-        # 向量库依赖只在显式上传时加载，普通历史查询不应依赖 RAG 运行环境。
-        from app.core.vector_store import get_vector_store
-        from app.utils.splitter import split_markdown
-
         record = sqlite_manager.get_history_record(record_id)
         if not record:
             logger.warning(f"[history] 记录不存在 record_id={record_id}")

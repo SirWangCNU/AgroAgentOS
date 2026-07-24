@@ -1,78 +1,44 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import {
-  ArrowUp,
-  Camera,
-  Globe,
-  Loader2,
-  PanelLeft,
-  Square,
-  Wrench,
-  X,
-  Sparkles,
-  Leaf,
-  Bot,
-  CloudSun,
-  Bug,
-  Radar,
-} from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { chatStream } from "../api/chat";
 import { analyzeImage } from "../api/image";
 import { consumeSSE } from "../api/client";
+import { addSessionMessage } from "../api/sessions";
 import { useConversationStore } from "../stores/conversation";
 import { useUIStore } from "../stores/ui";
-import { useAuthStore } from "../stores/auth";
+import WelcomeScreen from "../components/chat/WelcomeScreen";
 import MessageBubble from "../components/chat/MessageBubble";
-import ProgressSteps, { toProgressStep } from "../components/chat/ProgressSteps";
-import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE } from "../lib/constants";
+import ChatInput from "../components/chat/ChatInput";
+import ProgressSteps, {
+  toProgressStep,
+} from "../components/chat/ProgressSteps";
 
 // 模块级 ref：跨组件卸载/重挂载保持状态，防止 navigate 导致 sendingRef 被重置
 const _globalSendingRef = { current: false };
 
-interface AgentMode {
-  id: string;
-  label: string;
-  icon: typeof Sparkles;
-  tagline: string;
-}
-
-const AGENT_MODES: AgentMode[] = [
-  { id: "chat", label: "智农助手", icon: Sparkles, tagline: "问问农业问题" },
-  { id: "farm", label: "农场巡检", icon: Radar, tagline: "综合风险研判" },
-  { id: "pest", label: "病虫害诊断", icon: Bug, tagline: "看叶片识病害" },
-  { id: "weather", label: "天气农事", icon: CloudSun, tagline: "明天能打药吗" },
-];
-
-const QUICK_PROMPTS = [
-  "水稻分蘖期该怎么管理？",
-  "帮我看看这片叶子是什么病",
-  "明天天气适合施肥吗？",
-  "玉米现在卖合算吗？",
-  "A1地块最近有风险吗？",
-];
-
 export default function Chat() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bug 修复: 记录已加载的 sessionId, 防止 useEffect 因 activeId 变化重复触发 loadMessages
+  // 之前的问题: setActive(sessionId) 触发 store 更新 → 组件 re-render → useEffect 依赖 [sessionId, activeId]
+  // 重跑, 但此时 conv.find 仍找不到 (loadMessages 还在进行中), 会再次调用 loadMessages.
+  // 这浪费网络请求, 且 isLoadingMessages 反复被设为 true, UI 卡在 "加载对话记录中..." 状态.
   const loadedSessionRef = useRef<Set<string>>(new Set());
-  const initialHandledRef = useRef(false);
 
   const {
     activeId,
     setActive,
     loadMessages,
-    loadMoreMessages,
     addMessage,
     updateLastAssistant,
     setThinking,
     setStreaming,
     isStreaming,
-    streamingSessionId,
     isLoadingMessages,
-    isLoadingMore,
     activeConversation,
     createNew,
     refreshConversations,
@@ -82,6 +48,7 @@ export default function Chat() {
     setMcpTools,
     liveProgress,
     liveCitations,
+    progressPhase,
     addProgressStep,
     updateLastProgressStep,
     setLiveCitations,
@@ -89,143 +56,144 @@ export default function Chat() {
     clearLiveState,
   } = useConversationStore();
   const showToast = useUIStore((s) => s.showToast);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const user = useAuthStore((s) => s.user);
-
-  const [text, setText] = useState("");
-  const [image, setImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState("chat");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // Sync URL param with store
   useEffect(() => {
     if (!sessionId) {
+      // Navigated to /chat (no session) — clear active so welcome screen shows
+      // Bug fix: 不要在发送过程中清除 activeId
+      // createNew() 会在 navigate() 之前更新 store 中的 activeId，
+      // 此时 sessionId 还是 undefined，如果不加保护就会清掉刚设置的 activeId，
+      // 导致后续 addMessage 失败（addMessage 内部有 if (!activeId) return），
+      // 用户消息不显示也不持久化，最终触发了 loadMessages 出现"加载对话记录"
       if (activeId && !_globalSendingRef.current) setActive(null);
       setLoadError(null);
       return;
     }
-    if (sessionId !== activeId) setActive(sessionId);
-    setLoadError(null);
-    if (_globalSendingRef.current) return;
-    if (useConversationStore.getState().isStreaming) {
-      const streamingId = useConversationStore.getState().streamingSessionId;
-      if (streamingId === sessionId) return;
+
+    // Always ensure activeId matches the URL
+    if (sessionId !== activeId) {
+      setActive(sessionId);
     }
+
+    // Clear previous errors when navigating to a new conversation
+    setLoadError(null);
+
+    // Load messages if not already loaded
+    // Skip if we're mid-send: createNew() + addMessage() already populated the conversation
+    // 双重保护：模块级 ref + store 中的 isStreaming 状态
+    if (_globalSendingRef.current) return;
+    if (useConversationStore.getState().isStreaming) return;
+    // Bug 修复: 已加载过该 sessionId 则跳过, 避免 setActive 触发的二次调用
     if (loadedSessionRef.current.has(sessionId)) return;
     const conv = useConversationStore.getState().conversations.find((c) => c.id === sessionId);
-    if (conv && conv.messages.length > 0) {
+    if (!conv || conv.messages.length === 0) {
       loadedSessionRef.current.add(sessionId);
-      return;
-    }
-    const timeoutPromise = new Promise<"timeout">((resolve) =>
-      setTimeout(() => resolve("timeout"), 4000)
-    );
-    Promise.race([
-      loadMessages(sessionId).then(() => "ok" as const),
-      timeoutPromise,
-    ]).then((result) => {
-      if (result === "timeout") {
+      // Bug 修复: 包装 loadMessages 带超时, 避免后端慢/挂起时永远卡在 "加载对话记录中..."
+      // 之前如果 getSession 端点慢/超时, isLoadingMessages 一直 true, 用户卡在 loading 状态
+      // Bug 修复: 超时从 8s 缩短到 4s. 后端有 TTL 缓存 + LEFT JOIN 优化, 正常请求 < 100ms,
+      // 4s 内未返回基本可以判定为后端异常, 立即兜底让用户看到内容.
+      const timeoutPromise = new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), 4000)
+      );
+      Promise.race([
+        loadMessages(sessionId).then(() => "ok" as const),
+        timeoutPromise,
+      ]).then((result) => {
+        if (result === "timeout") {
+          // 超时兜底: 强制结束 loading 状态, 让用户看到内容(可能是空对话的 welcome 页面)
+          // 如果 store 中已有 stub (AppLayout 预加载的), 用户会看到空对话的 welcome 页面;
+          // 如果 store 仍为空 (冷启动且 list 加载失败), 强制清空 isLoadingMessages 让 Chat 渲染欢迎页.
+          loadedSessionRef.current.delete(sessionId);
+          useConversationStore.setState({ isLoadingMessages: false });
+        }
+      }).catch((err) => {
+        // 失败时清除标记, 允许重试
         loadedSessionRef.current.delete(sessionId);
-        useConversationStore.setState({ isLoadingMessages: false });
-      } else {
-        loadedSessionRef.current.add(sessionId);
-      }
-    }).catch((err: any) => {
-      loadedSessionRef.current.delete(sessionId);
-      if (err?.status === 404) {
-        useConversationStore.setState({ isLoadingMessages: false });
-        return;
-      }
-      setLoadError(err.message || "加载失败");
-    });
-  }, [sessionId, activeId, loadMessages, setActive]);
+        // 404 (会话不存在) 静默处理, 不弹错误 —— 用户可能刷新到一个旧链接,
+        // 强制清空 loading 让 Chat 渲染 welcome 页面, 体验更平滑
+        if (err?.status === 404) {
+          useConversationStore.setState({ isLoadingMessages: false });
+          return;
+        }
+        const message = `加载对话失败: ${err?.message || "未知错误"}`;
+        setLoadError(message);
+      });
+    } else {
+      // store 已有消息也标记为已加载
+      loadedSessionRef.current.add(sessionId);
+    }
+  }, [sessionId, activeId]);
+
+  // 当前激活会话 (从 store 取, 避免组件渲染时再次 fetch)
+  const conversation = activeConversation();
+  const messages = conversation?.messages || [];
+  const lastMsg = messages[messages.length - 1];
 
   // Auto-scroll on new messages or progress updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConversation()?.messages, liveProgress, liveCitations]);
+  }, [messages, liveProgress]);
 
-  // Textarea auto-resize
-  useEffect(() => {
-    const element = textareaRef.current;
-    if (!element) return;
-    element.style.height = "auto";
-    element.style.height = `${Math.max(56, Math.min(element.scrollHeight, 200))}px`;
-  }, [text]);
+  const handleSend = async (text: string, image?: File) => {
+    // Prevent double-send (e.g. rapid clicks or double Enter)
+    if (_globalSendingRef.current) return;
+    let finalQuestion = text;
 
-  // 支持能力中心「一键体验」：携带 initialMessage 进入 /chat 时自动创建会话并发送
-  useEffect(() => {
-    const initialMessage = (location.state as { initialMessage?: string } | null)?.initialMessage;
-    if (!initialMessage) return;
-    if (initialHandledRef.current) return;
-    initialHandledRef.current = true;
-    useConversationStore.getState().setActive(null);
-    window.history.replaceState({}, document.title, window.location.pathname);
-    handleSend(initialMessage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state?.initialMessage, sessionId]);
-
-  const handleSend = async (question: string, sendImage?: File) => {
-    if (!question.trim() && !sendImage) return;
-
-    const currentActiveId = useConversationStore.getState().activeId;
-    const currentStreamingId = useConversationStore.getState().streamingSessionId;
-    if (currentStreamingId && currentStreamingId === currentActiveId) return;
-
-    let finalQuestion = question;
+    // Mark sending in progress BEFORE createNew() — createNew triggers a store
+    // update that re-renders the component and runs the useEffect. If the flag
+    // is set after createNew, the effect sees _globalSendingRef.current=false
+    // and calls loadMessages, which overwrites the user's first message.
     _globalSendingRef.current = true;
 
-    let convId = useConversationStore.getState().activeId;
-    const hadActiveId = !!convId;
+    // Ensure we have an active conversation
+    let convId = activeId;
     if (!convId) {
       convId = await createNew();
     }
-    const targetConvId = convId!;
-    if (!targetConvId) {
-      showToast("创建会话失败", "error");
-      _globalSendingRef.current = false;
-      return;
-    }
 
+    // Clear previous live state
     clearLiveState();
 
-    if (sendImage) {
+    // Image analysis
+    if (image) {
       try {
-        const result = await analyzeImage(sendImage);
+        const result = await analyzeImage(image);
         if (result.success && result.detections.length > 0) {
           const detText = result.detections
             .map((d) => `${d.chinese_name}(${(d.confidence * 100).toFixed(0)}%)`)
             .join(", ");
-          const userNote = question ? `\n用户补充说明: ${question}` : "";
+          const userNote = text ? `\n用户补充说明: ${text}` : "";
           finalQuestion = `[图片分析] 识别到: ${detText}。\n${result.summary}${userNote}\n请根据识别结果给出详细的病虫害防治建议。`;
         } else {
-          finalQuestion = `[图片分析] ${result.summary || "未识别到病虫害"}${question ? `\n用户说明: ${question}` : ""}`;
+          finalQuestion = `[图片分析] ${result.summary || "未识别到病虫害"}${text ? `\n用户说明: ${text}` : ""}`;
         }
         await addMessage({
           role: "user",
-          content: question || "(图片分析)",
+          content: text || "(图片分析)",
           type: "image",
         });
       } catch (err: any) {
         showToast(`图片分析失败: ${err.message}`, "error");
-        _globalSendingRef.current = false;
         return;
       }
     } else {
-      await addMessage({ role: "user", content: question });
+      await addMessage({ role: "user", content: text });
     }
 
-    if (!hadActiveId) {
+    // Navigate AFTER addMessage — ensures user message is in the store before
+    // the URL change triggers a component remount (different route = unmount/remount).
+    // This prevents the "加载对话记录中..." flash where loadMessages overwrites
+    // the user's first message.
+    if (!activeId) {
       navigate(`/chat/${convId}`, { replace: true });
     }
 
-    setStreaming(true, targetConvId);
+    setStreaming(true);
 
     try {
       const resp = await chatStream({
-        session_id: targetConvId,
+        session_id: convId!,
         question: finalQuestion,
         top_k: 3,
         web_search: webSearch,
@@ -245,57 +213,55 @@ export default function Chat() {
           const stage = ev.stage as string;
           const data = (ev.data || ev) as Record<string, unknown>;
 
+          // llm_start means retrieval/search phase is done, transition to answer phase
           if (stage === "llm_start") {
+            // Flush buffered tokens
             if (bufferedTokens) {
               assistantContent = bufferedTokens;
-              updateLastAssistant(assistantContent, targetConvId);
+              updateLastAssistant(assistantContent);
               bufferedTokens = "";
             }
             inProgressPhase = false;
-            markAllProgressDone(targetConvId);
+            markAllProgressDone();
+
+            // Add llm_start as a done step
             const step = toProgressStep(ev, progressIndex++);
-            addProgressStep(step, targetConvId);
+            addProgressStep(step);
             continue;
           }
 
+          // Mark the running version as done if this is a _done/_degraded event
           if (stage.endsWith("_done") || stage.endsWith("_degraded")) {
-            updateLastProgressStep(
-              {
-                status: "done",
-                detail: getProgressDetail(stage, data),
-                elapsed_ms: data.elapsed_ms as number | undefined,
-              },
-              targetConvId
-            );
+            updateLastProgressStep({
+              status: "done",
+              detail: getProgressDetail(stage, data),
+              elapsed_ms: data.elapsed_ms as number | undefined,
+            });
           }
+
+          // Add new step
           const step = toProgressStep(ev, progressIndex++);
-          addProgressStep(step, targetConvId);
+          addProgressStep(step);
         } else if (ev.type === "thinking") {
           thinkingContent += ev.content as string;
-          setThinking(thinkingContent, targetConvId);
+          setThinking(thinkingContent);
         } else if (ev.type === "token") {
           if (inProgressPhase) {
+            // Buffer tokens until progress phase ends
             bufferedTokens += ev.content as string;
           } else {
             assistantContent += ev.content as string;
-            updateLastAssistant(assistantContent, targetConvId);
+            updateLastAssistant(assistantContent);
           }
         } else if (ev.type === "tool_call") {
+          // Tool call events from MCP
           const step = toProgressStep(
             { type: "progress", stage: "tool_call", data: ev },
             progressIndex++
           );
-          addProgressStep(step, targetConvId);
+          addProgressStep(step);
         } else if (ev.type === "citations") {
-          const citations = ev.citations as Array<{
-            source?: string;
-            chapter?: string;
-            category?: string;
-            content?: string;
-            preview?: string;
-            relevance_score?: number;
-            score?: number;
-          }>;
+          const citations = ev.citations as any[];
           if (citations?.length) {
             setLiveCitations(
               citations.map((c) => ({
@@ -303,9 +269,8 @@ export default function Chat() {
                 chapter: c.chapter,
                 category: c.category,
                 preview: c.content || c.preview,
-                score: c.relevance_score ?? c.score,
-              })),
-              targetConvId
+                score: c.relevance_score || c.score,
+              }))
             );
           }
         } else if (ev.type === "error") {
@@ -313,60 +278,58 @@ export default function Chat() {
         }
       }
 
+      // Flush any remaining buffered tokens (fallback if llm_start was missed)
       if (bufferedTokens && !assistantContent) {
         assistantContent = bufferedTokens;
-        updateLastAssistant(assistantContent, targetConvId);
+        updateLastAssistant(assistantContent);
       }
 
+      // Save assistant message to backend
+      if (assistantContent) {
+        addSessionMessage(convId!, "assistant", assistantContent).catch(() => {});
+      }
+
+      // Refresh conversation list so sidebar shows updated message_count
       refreshConversations().catch(() => {});
     } catch (err: any) {
       showToast(`网络错误: ${err.message}`, "error");
     } finally {
       _globalSendingRef.current = false;
-      setStreaming(false, targetConvId);
+      setStreaming(false);
     }
   };
 
-  const clearImage = () => {
-    setImage(null);
-    setImagePreview(null);
+  const handleStop = () => {
+    // AbortController could be added here in the future
+    setStreaming(false);
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      alert("请上传 JPEG/PNG/WebP 格式的图片");
-      return;
-    }
-    if (file.size > MAX_IMAGE_SIZE) {
-      alert("图片文件过大，限制 10MB");
-      return;
-    }
-    setImage(file);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
-    event.target.value = "";
+  const handleQuickAction = (text: string) => {
+    handleSend(text);
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      if (isCurrentStreaming) return;
-      handleSend(text, image || undefined);
-      setText("");
-      clearImage();
-    }
-  };
+  // Show loading state only when fetching messages for a conversation that
+  // isn't even in the store yet (e.g. cold start, list still loading).
+  // If AppLayout eagerly preloaded conversations, we already have a stub
+  // here — render the chat shell immediately and let loadMessages fill in
+  // messages silently in the background. This avoids the "stuck on loading"
+  // flash when the backend is slow on first hit.
+  const hasStub = !!conversation;
+  if (sessionId && isLoadingMessages && !hasStub) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-text-muted text-sm">
+          <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+          加载对话记录中...
+        </div>
+      </div>
+    );
+  }
 
-  const activeConv = activeConversation();
-  const messages = activeConv?.messages || [];
-  const isCurrentStreaming = isStreaming && streamingSessionId === activeId;
-
+  // Show error state if loading failed
   if (sessionId && loadError) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+      <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <div className="text-red-400 text-sm">{loadError}</div>
         <button
           onClick={() => {
@@ -381,242 +344,100 @@ export default function Chat() {
     );
   }
 
-  // ===== WELCOME SCREEN =====
+  // Show welcome screen if no messages
   if (!messages.length) {
     return (
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* 沉浸式背景 */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-to-b from-[#eef5f1] via-[#f6f9f6] to-white" />
-          <div className="absolute left-1/4 top-0 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-emerald-200/20 blur-[120px]" />
-          <div className="absolute right-0 top-1/4 h-[500px] w-[500px] rounded-full bg-amber-200/20 blur-[100px]" />
-          <div
-            className="absolute inset-0 opacity-[0.35]"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-            }}
+      <>
+        <WelcomeScreen onQuickAction={handleQuickAction} />
+        <div className="pb-6">
+          <ChatInput
+            onSend={handleSend}
+            streaming={isStreaming}
+            disabled={isStreaming}
+            webSearch={webSearch}
+            onWebSearchChange={setWebSearch}
+            mcpTools={mcpTools}
+            onMcpToolsChange={setMcpTools}
           />
         </div>
-
-        <div className="mx-auto flex min-h-full w-full max-w-[880px] flex-col items-center justify-center px-6 pb-10 pt-16 sm:px-8">
-          {/* 顶部导航栏（极简） */}
-          <div className="absolute top-0 left-0 right-0 flex h-16 items-center justify-between px-6">
-            <button
-              onClick={toggleSidebar}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition-all hover:bg-white/60 hover:text-slate-800"
-            >
-              <PanelLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 rounded-full border border-white/60 bg-white/40 px-3 py-1.5 text-xs text-slate-600 backdrop-blur-sm">
-                <Leaf className="w-3.5 h-3.5 text-emerald-600" />
-                <span>AgroAgentOS</span>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs font-medium">
-                {user?.username?.[0]?.toUpperCase() || "U"}
-              </div>
-            </div>
-          </div>
-
-          {/* 主标题 */}
-          <div className="text-center mb-8">
-            <h1 className="text-[40px] font-semibold leading-[1.15] tracking-tight text-[#16271c] sm:text-[52px]">
-              Hi {user?.username ? `${user.username.slice(0, 8)}...` : "农户"}，
-            </h1>
-            <h1 className="mt-2 text-[40px] font-semibold leading-[1.15] tracking-tight text-[#16271c] sm:text-[52px]">
-              和智农助手聊聊农田事
-            </h1>
-          </div>
-
-          {/* Agent 模式切换 */}
-          <div className="mb-8 inline-flex items-center gap-1 rounded-full border border-white/70 bg-white/50 p-1 shadow-sm backdrop-blur-sm">
-            {AGENT_MODES.map((mode) => {
-              const Icon = mode.icon;
-              const active = activeMode === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  onClick={() => setActiveMode(mode.id)}
-                  className={`relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                    active
-                      ? "bg-[#16271c] text-white shadow-md"
-                      : "text-slate-600 hover:bg-white/60"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {mode.label}
-                  {active && <Sparkles className="w-3 h-3 text-emerald-300" />}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 输入区 */}
-          <div className="w-full max-w-[720px]">
-            <input
-              type="file"
-              ref={fileRef}
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-
-            {image && imagePreview && (
-              <div className="mb-3 flex items-center gap-3 rounded-2xl border border-slate-200/60 bg-white/70 px-4 py-3 backdrop-blur-sm">
-                <img src={imagePreview} alt="" className="h-12 w-12 rounded-lg object-cover" />
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{image.name}</span>
-                <button
-                  onClick={clearImage}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
-            <div className="group relative overflow-hidden rounded-[28px] border border-white/80 bg-white/80 shadow-[0_12px_50px_rgba(22,39,28,0.10)] backdrop-blur-xl transition-all focus-within:shadow-[0_18px_60px_rgba(22,39,28,0.15)] focus-within:bg-white/95">
-              <textarea
-                ref={textareaRef}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  activeMode === "chat"
-                    ? "描述你要处理的农业问题，用 @ 引用农场/地块，用 / 使用技能..."
-                    : activeMode === "farm"
-                    ? "输入农场名称或地块编号，启动综合巡检..."
-                    : activeMode === "pest"
-                    ? "描述病虫害症状，或上传叶片照片..."
-                    : "输入地点和日期，获取天气农事建议..."
-                }
-                rows={1}
-                className="block max-h-[180px] min-h-[56px] w-full resize-none bg-transparent px-6 pt-5 pb-16 text-[16px] leading-6 text-slate-800 outline-none placeholder:text-slate-400"
-              />
-
-              <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-800"
-                    title="上传图片"
-                  >
-                    <Camera className="h-[18px] w-[18px]" />
-                  </button>
-                  <button
-                    onClick={() => setWebSearch(!webSearch)}
-                    className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
-                      webSearch
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                    }`}
-                    title="联网搜索"
-                  >
-                    <Globe className="h-[18px] w-[18px]" />
-                  </button>
-                  <button
-                    onClick={() => setMcpTools(!mcpTools)}
-                    className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
-                      mcpTools
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                    }`}
-                    title="MCP 工具"
-                  >
-                    <Wrench className="h-[18px] w-[18px]" />
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => {
-                    handleSend(text, image || undefined);
-                    setText("");
-                    clearImage();
-                  }}
-                  disabled={isCurrentStreaming || (!text.trim() && !image)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#16271c] text-white shadow-md transition-all hover:bg-[#2a3d2f] hover:scale-105 disabled:scale-100 disabled:bg-slate-200 disabled:text-slate-400"
-                >
-                  {isCurrentStreaming ? (
-                    <Loader2 className="h-[18px] w-[18px] animate-spin" />
-                  ) : (
-                    <ArrowUp className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* 快捷标签 */}
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              {QUICK_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => {
-                    handleSend(prompt);
-                    setText("");
-                    clearImage();
-                  }}
-                  className="rounded-full border border-slate-200/70 bg-white/50 px-4 py-2 text-xs text-slate-600 backdrop-blur-sm transition-all hover:border-emerald-300 hover:bg-white hover:text-emerald-800"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      </>
     );
   }
 
-  // ===== CHAT MESSAGES =====
   return (
     <>
-      <div className="flex-1 overflow-y-auto bg-[#f8faf8]">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
-          {activeConversation()?.hasMoreMessages && (
-            <div className="flex justify-center mb-4">
-              <button
-                onClick={() => activeId && loadMoreMessages(activeId)}
-                disabled={isLoadingMore}
-                className="px-4 py-1.5 text-sm text-emerald-700 hover:text-emerald-800 disabled:opacity-50 rounded-full border border-emerald-200 hover:border-emerald-400 transition-colors"
-              >
-                {isLoadingMore ? "加载中..." : "加载更多历史消息"}
-              </button>
-            </div>
-          )}
+          {messages.map((msg, i) => {
+            // Skip last assistant message during streaming (rendered by live block below)
+            const isLastMsg = i === messages.length - 1;
+            if (isStreaming && isLastMsg && msg.role === "assistant") {
+              return null;
+            }
+            return <MessageBubble key={i} msg={msg} />;
+          })}
 
-          {messages.map((msg, index) => (
-            <MessageBubble key={index} msg={msg} />
-          ))}
+          {/* Streaming: progress + answer in one block */}
+          {isStreaming && (
+            <div className="flex justify-start mb-6">
+              <div className="flex items-start gap-2 max-w-[85%]">
+                <div className="w-8 h-8 rounded-full bg-accent-green/20 flex items-center justify-center flex-shrink-0">
+                  <div className="w-2 h-2 bg-accent-green rounded-full animate-pulse" />
+                </div>
+                <div className="space-y-2 flex-1 min-w-0">
+                  {/* Progress steps — always on top */}
+                  {liveProgress.length > 0 ? (
+                    <ProgressSteps steps={liveProgress} />
+                  ) : progressPhase ? (
+                    <div className="flex items-center gap-2 text-text-muted text-sm">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                      正在分析问题...
+                    </div>
+                  ) : null}
 
-          {(isCurrentStreaming || isLoadingMessages) && (
-            <div className="flex items-start gap-3 py-3">
-              <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white">
-                <Bot className="w-4 h-4" />
+                  {/* Citations */}
+                  {liveCitations.length > 0 && (
+                    <div className="p-3 bg-bg-card border border-border rounded-xl">
+                      <div className="text-xs font-medium text-text-secondary mb-2">
+                        📚 引用来源
+                      </div>
+                      <div className="space-y-1.5">
+                        {liveCitations.map((c, i) => (
+                          <div key={i} className="text-xs text-text-muted">
+                            <span className="text-text-secondary font-medium">
+                              {c.source}
+                            </span>
+                            {c.chapter && (
+                              <span className="text-text-muted"> · {c.chapter}</span>
+                            )}
+                            {c.score != null && (
+                              <span className="text-accent-blue ml-1">
+                                {(c.score * 100).toFixed(0)}%
+                              </span>
+                            )}
+                            {c.preview && (
+                              <div className="text-text-muted mt-0.5 line-clamp-1">
+                                {c.preview}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Answer content — appears below progress */}
+                  {!progressPhase && lastMsg?.role === "assistant" && (
+                    <div className="px-4 py-3 bg-bg-card border border-border rounded-2xl rounded-bl-sm text-sm markdown-body">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {lastMsg.content || "..."}
+                      </ReactMarkdown>
+                      <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 animate-pulse rounded-sm align-middle" />
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                {liveProgress.length > 0 ? (
-                  <ProgressSteps steps={liveProgress} />
-                ) : (
-                  <div className="flex items-center gap-2 text-slate-500 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{isLoadingMessages ? "加载中..." : "思考中..."}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {liveCitations.length > 0 && (
-            <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-              <div className="font-medium text-slate-700 mb-2">参考来源</div>
-              <ul className="space-y-2">
-                {liveCitations.map((c, i) => (
-                  <li key={i} className="text-slate-600 text-xs">
-                    <span className="font-medium">[{i + 1}] {c.source}</span>
-                    {c.chapter && <span className="text-slate-400"> · {c.chapter}</span>}
-                    {c.preview && <p className="mt-0.5 text-slate-500 line-clamp-2">{c.preview}</p>}
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
 
@@ -624,106 +445,36 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 底部输入 */}
-      <div className="border-t border-slate-200/60 bg-white/90 backdrop-blur px-4 py-3">
-        <div className="max-w-3xl mx-auto">
-          <div className="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition-all focus-within:border-emerald-400 focus-within:shadow-md">
-            <input
-              type="file"
-              ref={fileRef}
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="mb-1.5 flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-            >
-              <Camera className="h-[18px] w-[18px]" />
-            </button>
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="继续追问..."
-              rows={1}
-              className="max-h-[160px] min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-[15px] text-slate-800 outline-none placeholder:text-slate-400"
-            />
-            <div className="flex items-center gap-1 mb-1">
-              <button
-                onClick={() => setWebSearch(!webSearch)}
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm ${
-                  webSearch ? "bg-emerald-100 text-emerald-700" : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                <Globe className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setMcpTools(!mcpTools)}
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm ${
-                  mcpTools ? "bg-emerald-100 text-emerald-700" : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                <Wrench className="h-4 w-4" />
-              </button>
-            </div>
-            {isCurrentStreaming ? (
-              <button
-                onClick={() => setStreaming(false)}
-                className="mb-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-white"
-              >
-                <Square className="h-4 w-4 fill-current" />
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  handleSend(text, image || undefined);
-                  setText("");
-                  clearImage();
-                }}
-                disabled={!text.trim() && !image}
-                className="mb-1 flex h-9 w-9 items-center justify-center rounded-full bg-[#16271c] text-white disabled:bg-slate-200"
-              >
-                <ArrowUp className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-          {image && imagePreview && (
-            <div className="mt-2 flex items-center gap-2">
-              <img src={imagePreview} alt="" className="h-10 w-10 rounded-lg object-cover" />
-              <span className="text-xs text-slate-500">{image.name}</span>
-              <button onClick={clearImage} className="text-xs text-slate-400 hover:text-slate-700">
-                移除
-              </button>
-            </div>
-          )}
-        </div>
+      {/* Input */}
+      <div className="pb-6 pt-2">
+        <ChatInput
+          onSend={handleSend}
+          onStop={handleStop}
+          streaming={isStreaming}
+          disabled={isStreaming}
+          webSearch={webSearch}
+          onWebSearchChange={setWebSearch}
+          mcpTools={mcpTools}
+          onMcpToolsChange={setMcpTools}
+        />
       </div>
     </>
   );
 }
 
-function getProgressDetail(stage: string, data: Record<string, unknown>): string | undefined {
-  if (stage === "rewrite_done") {
-    return data.rewritten ? String(data.rewritten).slice(0, 30) : undefined;
+/** Extract human-readable detail from progress event data */
+function getProgressDetail(
+  stage: string,
+  data: Record<string, unknown>
+): string | undefined {
+  if (stage === "retrieve_done" && data.hits) {
+    return `${(data.hits as unknown[]).length} 条结果`;
   }
-  if (stage === "retrieve_done") {
-    return data.hits
-      ? `${(data.hits as unknown[]).length} 条结果`
-      : data.top_k
-      ? `top-${data.top_k}`
-      : undefined;
+  if (stage === "web_done" && data.results) {
+    return `${(data.results as unknown[]).length} 条结果`;
   }
-  if (stage === "web_done") {
-    return data.results
-      ? `${(data.results as unknown[]).length} 条结果`
-      : data.skip_reason
-      ? String(data.skip_reason)
-      : undefined;
-  }
-  if (stage === "user_context_done") {
-    return data.label ? String(data.label) : undefined;
+  if (stage === "user_context_done" && data.label) {
+    return String(data.label);
   }
   return undefined;
 }

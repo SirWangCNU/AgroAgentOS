@@ -4,22 +4,21 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_current_user, require_admin
 from app.core.security import create_access_token
-from app.exceptions import BadRequestError
 from app.models.user import User
 from app.schemas.auth import (
     AdminCreateUserRequest,
     AdminUpdateUserRequest,
-    CaptchaChallengeResponse,
     ChangePasswordRequest,
     LoginRequest,
     RegisterRequest,
     TokenResponse,
     UserInfo,
     UserListResponse,
+    WxBindConfirmRequest,
     WxLoginRequest,
 )
 from app.schemas.common import ApiResponse
-from app.services import auth_service, captcha_service
+from app.services import auth_service, wx_bind_service
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -37,19 +36,9 @@ def register(req: RegisterRequest) -> ApiResponse:
     )
 
 
-@router.get("/captcha", response_model=ApiResponse[CaptchaChallengeResponse])
-def get_captcha() -> ApiResponse:
-    """生成登录验证码."""
-    challenge = captcha_service.create_captcha_challenge()
-    return ApiResponse.success(data=CaptchaChallengeResponse(**challenge.__dict__))
-
-
 @router.post("/login", response_model=ApiResponse[TokenResponse])
 def login(req: LoginRequest) -> ApiResponse:
     """用户登录."""
-    if not captcha_service.verify_captcha(req.captcha_token, req.captcha_answer):
-        raise BadRequestError(message="验证码错误或已过期")
-
     user = auth_service.authenticate_user(req.username, req.password)
 
     # 生成 JWT token
@@ -93,6 +82,77 @@ def wx_login(req: WxLoginRequest) -> ApiResponse:
         ),
         message="登录成功",
     )
+
+
+# ==================== 微信 ↔ Web 账号绑定 ====================
+
+
+@router.post("/wx-bind/init", response_model=ApiResponse, summary="Web 端: 生成微信绑定码")
+def wx_bind_init(current_user: User = Depends(get_current_user)) -> ApiResponse:
+    """已登录 Web 用户调用, 后端生成一个 6 位绑定码 (Redis 存 5 分钟)."""
+    if current_user.wx_openid:
+        return ApiResponse.error(
+            code="ALREADY_BOUND",
+            message=f"当前账号已绑定微信, 请先解绑",
+        )
+    code = wx_bind_service.create_bind_code(current_user.id)
+    return ApiResponse.success(data={"bind_code": code, "expires_in": 300})
+
+
+@router.get("/wx-bind/status", response_model=ApiResponse, summary="Web 端: 轮询绑定状态")
+def wx_bind_status(
+    code: str = Query(..., min_length=6, max_length=6, description="绑定码"),
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
+    """Web 前端轮询: pending / bound / expired."""
+    return ApiResponse.success(data=wx_bind_service.get_bind_status(code))
+
+
+@router.post("/wx-bind/confirm", response_model=ApiResponse[TokenResponse], summary="小程序端: 确认绑定")
+def wx_bind_confirm(
+    req: WxBindConfirmRequest,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
+    """小程序端调用: 输入 Web 端拿到的绑定码后, 把当前微信身份写到 Web 账号上.
+
+    调用成功后, 后端会:
+      1. 把 wx_openid 挂到 Web 账号上
+      2. 迁移当前匿名微信账号的历史数据 (农场/会话) 到 Web 账号
+      3. 停用旧匿名微信账号
+      4. 重新签发 Web 账号的 JWT 返回, 小程序应立即替换本地 token
+    """
+    if not current_user.wx_openid:
+        return ApiResponse.error(code="NOT_WX_USER", message="当前会话不是微信用户")
+
+    result = wx_bind_service.confirm_bind(
+        code=req.bind_code,
+        wx_user_id=current_user.id,
+        wx_openid=current_user.wx_openid,
+        wx_unionid=current_user.wx_unionid,
+    )
+    target_user_id = result["target_user_id"]
+
+    # 重新为 Web 账号签发 JWT (小程序换 token, 后续以 Web 账号身份操作)
+    from app.services.auth_service import get_user_by_id
+    target = get_user_by_id(target_user_id)
+    access_token = create_access_token(
+        data={"sub": str(target.id), "username": target.username, "role": target.role}
+    )
+    return ApiResponse.success(
+        data=TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserInfo.model_validate(target),
+        ),
+        message=f"绑定成功, 已迁移 {result['migrated']['farms']} 个农场 / {result['migrated']['chat_sessions']} 个会话",
+    )
+
+
+@router.delete("/wx-bind", response_model=ApiResponse, summary="Web 端: 解绑微信")
+def wx_unbind(current_user: User = Depends(get_current_user)) -> ApiResponse:
+    """Web 端解除当前账号的微信绑定 (不影响历史数据)."""
+    wx_bind_service.unbind_wx(current_user.id)
+    return ApiResponse.success(message="已解绑微信")
 
 
 @router.put("/password", response_model=ApiResponse)

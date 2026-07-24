@@ -8,11 +8,11 @@ from app.core.sqlite import sqlite_manager
 from app.exceptions import AuthenticationError, ForbiddenError
 from app.models.user import User
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> User:
     """获取当前认证用户.
 
@@ -24,8 +24,6 @@ def get_current_user(
     Raises:
         AuthenticationError: token 无效或用户不存在
     """
-    if credentials is None:
-        raise AuthenticationError()
     token = credentials.credentials
     payload = decode_access_token(token)
 

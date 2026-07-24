@@ -31,13 +31,6 @@ allowed_tools:
   - get_current_time
 risk_level: low
 context: inline
-icon: CloudSun
-category: 生产管理
-tagline: 结合天气给出播种、喷药、灌溉建议
-examples:
-  - 北京明天适合打药吗？
-  - 帮我生成一份水稻全年种植历
-  - 本周有极端天气吗？需要注意什么？
 ---
 
 # 气象农事顾问

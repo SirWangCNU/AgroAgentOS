@@ -9,25 +9,16 @@ export interface SessionOut {
   message_count: number;
 }
 
+export interface SessionDetailOut extends SessionOut {
+  messages: MessageOut[];
+}
+
 export interface MessageOut {
   id: number;
   role: string;
   content: string;
   image_url?: string;
-  status?: string; // success / error / partial
-  error_message?: string | null;
-  extra?: Record<string, unknown>;
   created_at: string;
-}
-
-export interface SessionDetailOut extends SessionOut {
-  messages: MessageOut[];
-}
-
-export interface PaginatedMessagesOut {
-  messages: MessageOut[];
-  has_more: boolean;
-  oldest_id: number | null;
 }
 
 export async function createSession(
@@ -56,21 +47,6 @@ export async function getSession(
   return resp.data;
 }
 
-export async function listMessages(
-  sessionId: string,
-  options?: { limit?: number; beforeId?: number | null }
-): Promise<PaginatedMessagesOut> {
-  const params = new URLSearchParams();
-  params.set("limit", String(options?.limit ?? 10));
-  if (options?.beforeId != null) {
-    params.set("before_id", String(options.beforeId));
-  }
-  const resp = await authFetch<ApiResponse<PaginatedMessagesOut>>(
-    `/sessions/${sessionId}/messages?${params}`
-  );
-  return resp.data;
-}
-
 export async function updateSession(
   sessionId: string,
   title: string
@@ -87,13 +63,6 @@ export async function deleteSession(sessionId: string): Promise<void> {
   });
 }
 
-/**
- * 添加消息.
- *
- * 用途:
- *   - 持久化 user 消息 (前端 POST + 后端 SSE 兜底双写, 后端 5s 幂等去重)
- *   - assistant 消息已由后端 rag_service.stream_chat 主动持久化, 前端无需调用
- */
 export async function addSessionMessage(
   sessionId: string,
   role: string,

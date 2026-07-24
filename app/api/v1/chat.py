@@ -72,32 +72,27 @@ async def chat_stream(
 
     # 兜底持久化 user 消息：避免前端 fire-and-forget POST 在 SSE 长连接占用
     # 连接池时偶发丢失，导致 DB 里只有 assistant 消息没有对应的 user 消息。
-    # 安全: add_message 内部强制校验 (session_id, user_id) 归属, 越权写入会抛 ValueError.
-    # 幂等: add_message 内部按 (session_id, role, content[:200], 5s) 去重, 重复写入安全.
+    # 只在该 session 还没有该条 user 消息时写（按内容去重，幂等）。
     if user_id is not None and req.session_id and req.question:
         try:
-            session_service.add_message(
-                req.session_id,
-                user_id,
-                "user",
-                req.question,
-                image_url=None,
-            )
-            logger.info(
-                f"[chat] 兜底持久化 user 消息 session={req.session_id} len={len(req.question)}"
-            )
-            # 第一条消息自动更新会话标题
-            session_service.auto_title_from_message(req.session_id, user_id, req.question)
-        except ValueError as e:
-            # 会话不属于该用户或不存在 → 不阻塞 SSE, 由前端处理 404
-            logger.warning(f"[chat] 兜底持久化 user 消息被拒 (归属校验失败): {e}")
+            detail = session_service.get_session(req.session_id, user_id)
+            if detail is not None:
+                already_persisted = any(
+                    m.role == "user" and m.content == req.question
+                    for m in detail.messages
+                )
+                if not already_persisted:
+                    session_service.add_message(
+                        req.session_id, "user", req.question, image_url=None
+                    )
+                    logger.info(
+                        f"[chat] 兜底持久化 user 消息 session={req.session_id} len={len(req.question)}"
+                    )
         except Exception as e:
             # 持久化失败不阻塞 SSE 流（消息历史的 fallback 是前端自己 POST）
             logger.warning(f"[chat] 兜底持久化 user 消息失败: {type(e).__name__}: {e}")
 
     async def event_generator() -> AsyncIterator[dict]:
-        # 累加器: 即使流中断也能记录已生成的部分内容
-        accumulated_answer: list[str] = []
         try:
             async for event in rag_service.stream_chat(
                 req.question,
@@ -110,9 +105,6 @@ async def chat_stream(
                 # 向后兼容: 若底层 yield 的是字符串, 默认当 token 包装
                 if isinstance(event, str):
                     event = {"type": "token", "content": event}
-                # 累加 token 内容用于错误兜底持久化
-                if isinstance(event, dict) and event.get("type") == "token":
-                    accumulated_answer.append(event.get("content", ""))
                 yield {
                     "event": "message",
                     "data": json.dumps(event, ensure_ascii=False),
@@ -121,25 +113,6 @@ async def chat_stream(
 
         except Exception as e:
             logger.exception(f"[chat] stream 异常: {e}")
-            # 即使 AI 回复失败, 也要持久化错误信息, 确保对话历史完整性
-            # (需求: 即使 AI 回复失败, 也要记录错误信息)
-            if user_id is not None and req.session_id:
-                partial_content = "".join(accumulated_answer)
-                error_content = partial_content if partial_content else "（AI 回复失败）"
-                try:
-                    session_service.add_error_message(
-                        req.session_id,
-                        user_id,
-                        content=error_content,
-                        error_message=f"{type(e).__name__}: {e}",
-                    )
-                    logger.info(
-                        f"[chat] 持久化 AI 错误消息 session={req.session_id} err={type(e).__name__}"
-                    )
-                except Exception as persist_err:
-                    logger.warning(
-                        f"[chat] 错误消息持久化失败: {type(persist_err).__name__}: {persist_err}"
-                    )
             yield {
                 "event": "message",
                 "data": json.dumps(

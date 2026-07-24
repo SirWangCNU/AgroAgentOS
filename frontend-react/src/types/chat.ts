@@ -7,10 +7,6 @@ export interface ChatMessage {
   thinking?: string;
   citations?: Citation[];
   progress?: ProgressEvent[];
-  /** 消息状态: success=正常 / error=AI 回复失败 / partial=流式中断 */
-  status?: "success" | "error" | "partial";
-  /** status=error 时的具体异常信息, 用于红色错误样式渲染 */
-  errorMessage?: string;
 }
 
 export interface ChatRequest {

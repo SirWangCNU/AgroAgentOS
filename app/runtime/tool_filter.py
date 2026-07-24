@@ -27,8 +27,6 @@ from app.tools.meta import TOOL_META, get_meta
 
 ToolRisk = Literal["low", "medium", "high"]
 
-STRICT_ALLOWLIST_SKILLS = frozenset({"farm_inspection", "farm_task_verification"})
-
 
 # ============================================================
 # 高危 / 通知工具集合 (派生自 TOOL_META, 给 evaluate_permission 用)
@@ -85,7 +83,7 @@ def filter_tools_for_skill(
       - decisions:     运行时 tool_runner 用 (ask -> 走审批, allow -> 直接调)
 
     Args:
-        selected_skill_name: SkillRouter 选定的 skill (None -> agriculture_qa 兜底)
+        selected_skill_name: SkillRouter 选定的 skill (None -> generic_oncall 兜底)
         tools: get_all_tools() 给的全量工具列表
         mode: 权限模式 (read_only / normal / ask_destructive / bypass)
 
@@ -117,8 +115,8 @@ def filter_tools_for_skill(
             skill_tools.append(tool)
             seen_names.add(tool.name)
             continue
-        # 受控 Farm Skill 必须严格遵守 playbook 白名单；其它旧 Skill 保留只读工具兼容策略。
-        if skill.name not in STRICT_ALLOWLIST_SKILLS and get_meta(tool.name).read_only:
+        # Skill 未显式声明, 但是只读工具 → 自动放入候选
+        if get_meta(tool.name).read_only:
             skill_tools.append(tool)
             seen_names.add(tool.name)
             auto_readonly_added.append(tool.name)

@@ -6,13 +6,8 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.farm import (
-    CropSeasonCreateRequest,
-    CropSeasonInfo,
-    CropSeasonUpdateRequest,
     FarmCreateRequest,
     FarmDetail,
-    FarmEventCreateRequest,
-    FarmEventInfo,
     FarmInfo,
     FarmListResponse,
     FarmUpdateRequest,
@@ -145,73 +140,3 @@ def delete_field(
     """删除地块."""
     farm_service.delete_field(field_id, current_user.id)
     return ApiResponse.success(message="地块已删除")
-
-
-@router.post("/fields/{field_id}/seasons", response_model=ApiResponse[CropSeasonInfo])
-def create_crop_season(
-    field_id: int,
-    req: CropSeasonCreateRequest,
-    current_user: User = Depends(get_current_user),
-) -> ApiResponse:
-    """为地块创建茬次."""
-    season = farm_service.create_crop_season(
-        field_id=field_id,
-        user_id=current_user.id,
-        data=req,
-    )
-    return ApiResponse.success(
-        data=CropSeasonInfo.model_validate(season),
-        message="茬次创建成功",
-    )
-
-
-@router.put("/seasons/{season_id}", response_model=ApiResponse[CropSeasonInfo])
-def update_crop_season(
-    season_id: int,
-    req: CropSeasonUpdateRequest,
-    current_user: User = Depends(get_current_user),
-) -> ApiResponse:
-    """更新地块茬次."""
-    season = farm_service.update_crop_season(
-        season_id=season_id,
-        user_id=current_user.id,
-        data=req,
-    )
-    return ApiResponse.success(
-        data=CropSeasonInfo.model_validate(season),
-        message="茬次更新成功",
-    )
-
-
-@router.post("/seasons/{season_id}/close", response_model=ApiResponse[CropSeasonInfo])
-def close_crop_season(
-    season_id: int,
-    current_user: User = Depends(get_current_user),
-) -> ApiResponse:
-    """结束地块当前茬次."""
-    season = farm_service.close_crop_season(
-        season_id=season_id,
-        user_id=current_user.id,
-    )
-    return ApiResponse.success(
-        data=CropSeasonInfo.model_validate(season),
-        message="茬次已结束",
-    )
-
-
-@router.post("/fields/{field_id}/events", response_model=ApiResponse[FarmEventInfo])
-def create_farm_event(
-    field_id: int,
-    req: FarmEventCreateRequest,
-    current_user: User = Depends(get_current_user),
-) -> ApiResponse:
-    """为地块记录一条农事事件."""
-    event = farm_service.create_farm_event(
-        field_id=field_id,
-        user_id=current_user.id,
-        data=req,
-    )
-    return ApiResponse.success(
-        data=FarmEventInfo.model_validate(event),
-        message="农事事件创建成功",
-    )

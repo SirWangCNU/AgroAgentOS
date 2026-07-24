@@ -121,7 +121,7 @@ def build_restricted_web_query(
     联网仅允许搜索 "前面诊断报告里出现过的实体/术语". 报告范围:
       - RAG Chat 历史里 assistant 角色发的内容 (本会话内)
       - summary (压缩后的历史)
-      - extra_reports: 调用方注入的额外语料 (例如 Farm Agent 写入 Redis 的最近报告)
+      - extra_reports: 调用方注入的额外语料 (例如来自 AIOps 诊断模块写入 Redis 的最近报告)
     """
     block_reason = _web_query_block_reason(rewritten_question)
     if block_reason:

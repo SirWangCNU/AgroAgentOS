@@ -35,10 +35,6 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="调试模式")
     host: str = Field(default="0.0.0.0", description="监听地址")
     port: int = Field(default=9800, description="监听端口")
-    competition_demo_enabled: bool = Field(
-        default=False,
-        description="是否允许请求显式启用版本化比赛演示场景",
-    )
 
     # ==================== DashScope LLM ====================
     dashscope_api_key: str = Field(default="", description="DashScope API Key")
@@ -180,7 +176,7 @@ class Settings(BaseSettings):
             "证据不足时 (past_steps < 该值) 即使 LLM 想切也会被阻止."
         ),
     )
-    agent_max_concurrency: int = Field(default=2, description="Farm Agent 最大并发运行数")
+    agent_max_concurrency: int = Field(default=2, description="AIOps Agent 最大并发诊断数")
     rag_max_concurrency: int = Field(default=5, description="RAG Chat 最大并发请求数")
     guardrails_block_high_risk_tools: bool = Field(
         default=True,
@@ -236,7 +232,7 @@ class Settings(BaseSettings):
         description=(
             "最终报告合成使用的模型. 留空则走 dashscope_chat_model (推荐 pro). "
             "Replanner 用 flash 做快速决策, 决策 is_finished=true 后再用 report_model "
-            "单独写一份高质量的农业风险分析报告, 质量 / 速度两头兼顾."
+            "单独写一份高质量的 5 段 SRE 报告, 质量 / 速度两头兼顾."
         ),
     )
     agent_planner_model: str = Field(

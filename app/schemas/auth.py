@@ -23,19 +23,18 @@ class LoginRequest(BaseModel):
 
     username: str = Field(..., description="用户名")
     password: str = Field(..., description="密码")
-    captcha_token: str = Field(..., description="验证码挑战 token")
-    captcha_answer: str = Field(
-        ...,
-        min_length=4,
-        max_length=4,
-        description="用户输入的 4 位验证码",
-    )
 
 
 class WxLoginRequest(BaseModel):
     """微信小程序登录请求."""
 
     code: str = Field(..., description="wx.login 返回的临时登录凭证 code")
+
+
+class WxBindConfirmRequest(BaseModel):
+    """小程序端确认绑定 Web 账号请求."""
+
+    bind_code: str = Field(..., min_length=6, max_length=6, description="Web 端展示的 6 位绑定码")
 
 
 class ChangePasswordRequest(BaseModel):
@@ -89,14 +88,6 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserInfo
-
-
-class CaptchaChallengeResponse(BaseModel):
-    """验证码挑战响应."""
-
-    captcha_token: str
-    image_svg: str
-    expires_in: int
 
 
 class UserListResponse(BaseModel):

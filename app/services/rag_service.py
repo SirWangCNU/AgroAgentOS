@@ -28,7 +28,6 @@ from app.services.rag.memory import compact_if_needed, rewrite_question
 from app.services.rag.retrieval import build_context
 from app.services.rag.utils import content_to_text, history_to_messages
 from app.services.rag.web_context import build_web_context
-from app.services.session_service import session_service
 from app.services.user_context import get_user_context
 from app.tools.mcp_loader import get_all_tools
 from app.tools.meta import get_meta
@@ -44,9 +43,9 @@ _RAG_TOOL_EXCLUDE = {
     "get_current_time",       # 没必要
     "mcp_search_tools",       # Lazy MCP 元工具
     "mcp_execute_tool",
-    "delegate_to_farm_data_analyst",   # 农场工作流专用 subagent
-    "delegate_to_agronomy_researcher",
-    "delegate_to_farm_work_planner",
+    "delegate_to_evidence_collector",   # 诊断专用 subagent
+    "delegate_to_kb_researcher",
+    "delegate_to_report_writer",
 }
 
 
@@ -124,8 +123,7 @@ async def stream_chat(
             "data": data or {},
         }
 
-    # 传入 user_id 启用多级缓存: Redis miss 时从 DB 回填历史, 避免 RAG 上下文断片
-    session = await chat_memory.load_session(session_id, user_id=user_id)
+    session = await chat_memory.load_session(session_id)
     summary = session.get("summary") or "(无)"
     recent_messages = session.get("recent_messages") or []
 
@@ -236,9 +234,9 @@ async def stream_chat(
         f"(hybrid={settings.rag_hybrid_enabled}, rerank={settings.rag_rerank_enabled})"
     )
 
-    # ---------- 注入最近 Farm Agent 报告 (跨 session, 走 Redis) ----------
+    # ---------- 注入最近 AIOps 诊断报告 (跨 session, 走 Redis) ----------
     # 不依赖联网开关, 让 "刚才那个 vmmem 是什么" 这种指代追问也能找到答案.
-    # 只取 1 份, 单份截断 1200 字；更早记录可在农场驾驶舱查看.
+    # 只取 1 份, 单份截断 1200 字 (报告头 TL;DR 已足够); 想看更早请去 AIOps 页面.
     try:
         recent_reports = await chat_memory.get_recent_diagnosis_reports(limit=1)
     except Exception as e:
@@ -450,22 +448,6 @@ async def stream_chat(
                 total_tokens = input_tokens + output_tokens
         except Exception as e:
             logger.exception(f"[rag] LLM 调用失败: {e}")
-            # LLM 失败时持久化 assistant 错误消息到 DB, 确保对话历史完整性.
-            # 注意: stream_chat 内部捕获的异常不会冒泡到 chat.py 的 except, 必须在此处持久化.
-            if user_id is not None and session_id:
-                error_content = full_answer if full_answer else "（AI 回复失败）"
-                try:
-                    await asyncio.to_thread(
-                        session_service.add_error_message,
-                        session_id,
-                        user_id,
-                        content=error_content,
-                        error_message=f"LLM 调用失败: {type(e).__name__}: {e}",
-                    )
-                except Exception as persist_err:
-                    logger.warning(
-                        f"[rag] LLM 失败错误消息持久化失败: {type(persist_err).__name__}: {persist_err}"
-                    )
             yield {"type": "error", "message": f"LLM 调用失败: {type(e).__name__}: {e}"}
             return
 
@@ -481,39 +463,6 @@ async def stream_chat(
         await compact_if_needed(session_id)
     except Exception as exc:
         logger.warning(f"[rag] memory 写入失败: {type(exc).__name__}: {exc}")
-
-    # ---------- 持久化 assistant 消息到 DB (权威源) ----------
-    # Redis chat_memory 仅作 RAG 上下文记忆 (TTL 后丢失), DB 才是对话历史的权威源.
-    # 早期版本完全依赖前端 POST 持久化 assistant 消息, fire-and-forget 易丢失.
-    # 现由后端在 SSE 收尾主动写入, 前端 POST 仅作 user 消息双保险 (5s 幂等去重).
-    if user_id is not None and session_id and full_answer:
-        try:
-            await asyncio.to_thread(
-                session_service.add_message,
-                session_id,
-                user_id,
-                "assistant",
-                full_answer,
-                None,  # image_url
-                {
-                    "sources": sources + web_sources,
-                    "rewritten_query": rewritten_question,
-                    "tokens": {
-                        "input": input_tokens,
-                        "output": output_tokens,
-                        "total": total_tokens,
-                    },
-                },
-                "success",  # status
-                None,  # error_message
-            )
-        except ValueError as exc:
-            # 会话不属于该用户或不存在 (理论上不应发生, 因 chat.py 已兜底创建/校验)
-            logger.warning(f"[rag] assistant 消息持久化被拒 (归属校验): {exc}")
-        except Exception as exc:
-            logger.warning(
-                f"[rag] assistant 消息 DB 持久化失败: {type(exc).__name__}: {exc}"
-            )
 
     # ---------- 写入历史记录 (使用新的 diagnosis_recorder) ----------
     try:

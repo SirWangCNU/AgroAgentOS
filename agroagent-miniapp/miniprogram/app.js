@@ -1,4 +1,6 @@
 // app.js 全局逻辑
+const { login } = require('./services/auth');
+
 App({
   globalData: {
     userInfo: null,      // 登录后的用户资料
@@ -13,20 +15,18 @@ App({
     if (token) {
       this.globalData.token = token;
       this.globalData.userInfo = userInfo || null;
-    } else {
-      // 未登录，跳转到登录页（延迟以保证首页已注册）
-      setTimeout(() => {
-        wx.reLaunch({ url: '/pages/login/index' });
-      }, 0);
     }
   },
 
-  // 统一登录态检查：返回 Promise<token>，未登录会 reject
+  // 统一登录入口：返回 Promise<token>
   ensureLogin() {
     if (this.globalData.token) {
       return Promise.resolve(this.globalData.token);
     }
-    wx.reLaunch({ url: '/pages/login/index' });
-    return Promise.reject(new Error('未登录'));
+    return login().then((token) => {
+      this.globalData.token = token;
+      this.globalData.userInfo = wx.getStorageSync('userInfo');
+      return token;
+    });
   },
 });

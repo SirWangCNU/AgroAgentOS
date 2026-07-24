@@ -3,7 +3,6 @@
 提供轨迹文件的上传、查询、统计分析和删除功能。
 """
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Query
@@ -39,11 +38,6 @@ async def upload_trajectory(
     field_id: int,
     file: UploadFile = File(..., description="轨迹 Excel 文件"),
     coord_system: str = Form("auto", description="坐标系: wgs84/gcj02/auto"),
-    operation_type: str = Form("unknown", description="作业类型"),
-    season_id: int | None = Form(None, description="关联茬次 ID"),
-    related_task_id: str | None = Form(None, description="关联任务 ID"),
-    operator: str = Form("", description="操作人"),
-    event_time: datetime | None = Form(None, description="作业事件时间"),
     current_user: User = Depends(get_current_user),
 ) -> ApiResponse:
     """上传轨迹 Excel 文件.
@@ -81,11 +75,6 @@ async def upload_trajectory(
         file_content=content,
         filename=file.filename,
         coord_system=coord_system,
-        operation_type=operation_type,
-        season_id=season_id,
-        related_task_id=related_task_id,
-        operator=operator,
-        event_time=event_time,
     )
 
     return ApiResponse.success(data=result, message=result.message)

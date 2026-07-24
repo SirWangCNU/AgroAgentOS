@@ -30,13 +30,6 @@ allowed_tools:
   - get_current_time
 risk_level: low
 context: inline
-icon: TrendingUp
-category: 市场经营
-tagline: 价格、供需、政策补贴一站式分析
-examples:
-  - 北京最近黄瓜价格怎么样？
-  - 今年什么时候卖玉米最合适？
-  - 北京有哪些农业补贴可以申报？
 ---
 
 # 市场行情分析

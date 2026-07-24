@@ -66,7 +66,7 @@ class AgentHarness:
    - 营销/广告/文案/销售/推广 → marketing_generator
    - 价格/行情/市场/报价/供需/补贴/政策/走势 → market_intelligence
    - 知识库/查资料/检索/文档 → knowledge_retrieval
-   - 其它无法归类 → agriculture_qa
+   - 其它无法归类 → generic_oncall
 
 # 输出格式
 返回一个 JSON 对象, 字段为:
@@ -131,7 +131,7 @@ class AgentHarness:
 - 不要输出"我已完成步骤 X"之类的过程性废话。
 """
 
-    _EXECUTOR_TASK_TEMPLATE = """# 整体分析计划
+    _EXECUTOR_TASK_TEMPLATE = """# 整体诊断计划
 {plan_text}
 
 # 你现在要完成的步骤 ({step_index}/{total_steps})
@@ -165,7 +165,7 @@ class AgentHarness:
 - 当前方向只是信息不足, 还没证明错误。
 
 # 最终报告格式
-# 农业风险分析报告
+# 农业分析报告
 **生成时间**: <使用用户消息中提供的当前生成时间>
 
 ## 一、问题分析
@@ -205,7 +205,7 @@ class AgentHarness:
 当前 reroute_count = {reroute_count}, 上限 = {max_reroutes}
 {reroute_quota_hint}
 
-# 原始分析计划
+# 原始诊断计划
 {plan_text}
 
 # 已完成步骤及结果
@@ -216,7 +216,7 @@ class AgentHarness:
 
 情况 1: 信息已充足 → 出报告
 - is_finished = true
-- response = 完整农业风险分析报告
+- response = 完整诊断报告
 - plan = [], should_reroute = false
 
 情况 2: 信息不足, 但方向是对的 → 继续在当前 Skill 内 replan
@@ -232,20 +232,20 @@ class AgentHarness:
 - plan = [], response = ""
 """
 
-    _REPORT_SYSTEM_PROMPT = """你是一名资深农业风险分析专家, 基于已收集的农场证据写一份农业风险分析报告。
+    _REPORT_SYSTEM_PROMPT = """你是一名资深 SRE 工程师, 基于已收集的证据写一份运维诊断报告。
 
 # 硬性要求
-1. 标题固定为"农业风险分析报告"，包含问题概述、关键证据、风险判断、行动建议、结论。
-2. 严格区分实测事实、规则依据和分析推断；证据段注明来源与时间，不要凭空编。
-3. 证据不足时降低置信度并列出数据缺口，不生成高置信度结论。
-4. 行动建议写明截止时间与验收条件；提案或验收结果必须提示人工确认。
-5. 中文输出, 语气专业但不啰嗦；不要写"我将"这类过程性语言。
+1. 必须产出完整 5 段: 问题概述、关键证据、根因分析、处置建议、结论。
+2. 证据段要引用关键指标/日志/SOP, 不要凭空编。
+3. 处置建议按"紧急止损 / 长期优化"两小节。
+4. 中文输出, 语气专业但不啰嗦。
+5. 不要写"我将"这类过程性语言, 直接给结论。
 """
 
     _REPORT_USER_TEMPLATE = """# 用户原始问题
 {user_input}
 
-# 分析流程中收集的证据
+# 诊断流程中收集的证据
 {past_steps_text}
 
 # Replanner 初版结论
@@ -254,7 +254,7 @@ class AgentHarness:
 # 报告生成时间
 {current_time}
 
-请用 Markdown 输出标题固定为"农业风险分析报告"的最终报告。
+请严格按 5 段结构, 用 Markdown 输出最终报告。
 """
 
     _RAG_SYSTEM_PROMPT = """您是智农协同平台的农业智能助手，专注于解答农业种植、养殖、施肥、灌溉、病虫害防治等方面的问题。
@@ -296,7 +296,7 @@ class AgentHarness:
     _RAG_USER_TEMPLATE = """# 会话摘要
 {summary}
 
-# 最近农业风险分析报告
+# 最近诊断报告
 {diagnosis_context}
 
 # 用户农场与作业数据
@@ -311,7 +311,7 @@ class AgentHarness:
 # 用户问题
 {question}
 
-请基于以上资料回答, 必要时标注 [来源 N]。若用户问"刚才/之前/这个"等指代, 优先参考最近农业风险分析报告。
+请基于以上资料回答, 必要时标注 [来源 N]。若用户问"刚才/之前/这个"等指代, 优先参考最近诊断报告。
 """
 
     _RAG_REWRITE_TEMPLATE = """你是 RAG 检索查询改写器。
@@ -334,12 +334,12 @@ class AgentHarness:
 
 # 改写后的检索问题"""
 
-    _RAG_COMPACT_TEMPLATE = """请总结这段农业问答历史, 保留后续追问需要的信息。
+    _RAG_COMPACT_TEMPLATE = """请总结这段 OnCall SOP 问答历史, 保留后续追问需要的信息。
 
 必须包含:
-1. 用户正在关注的农场、地块、作物或任务
-2. 已讨论过的天气风险、作业参数和证据缺口
-3. 已给过的关键农事建议
+1. 用户正在关注的系统/组件
+2. 已讨论过的告警、参数、错误码
+3. 已给过的关键处置建议
 4. 用户明确表达的约束或偏好
 5. 仍未解决/可能继续追问的问题
 
@@ -559,8 +559,8 @@ class AgentHarness:
 
     def planner_fallback_plan(self, reason: str) -> list[str]:
         if reason == "empty_plan":
-            return ["汇总现有信息, 给出农业风险结论"]
-        return ["查询知识库, 寻找相关农艺依据", "汇总现有信息, 给出农业风险结论"]
+            return ["汇总现有信息, 给出诊断结论"]
+        return ["查询知识库, 寻找类似问题的处理经验", "汇总现有信息, 给出诊断结论"]
 
     def executor_system_prompt(self) -> str:
         return self._EXECUTOR_SYSTEM_PROMPT
@@ -755,7 +755,7 @@ class AgentHarness:
         kind = self.classify_error(exc)
         detail = f"{type(exc).__name__}: {exc}"
         return {
-            "context": "(知识库检索暂不可用，已降级为无知识库上下文回答。请基于已有会话、实时工具或通用农业知识回答，并明确说明知识库不可用。)",
+            "context": "(知识库检索暂不可用，已降级为无知识库上下文回答。请基于已有会话、实时工具或通用运维知识回答，并明确说明知识库不可用。)",
             "sources": [],
             "hits_meta": [],
             "event_data": {

@@ -1,13 +1,6 @@
 import { authFetch } from "./client";
 import type { ApiResponse } from "../types/api";
-import type {
-  Farm,
-  Field,
-  TrajectoryAnalysis,
-  TrajectoryFile,
-  TrajectoryPoint,
-  TrajectoryUploadOptions,
-} from "../types/farm";
+import type { Farm, Field, TrajectoryFile, TrajectoryPoint, TrajectoryAnalysis } from "../types/farm";
 
 // ---- Farms ----
 export async function getFarms(): Promise<Farm[]> {
@@ -85,28 +78,11 @@ export async function getTrajectories(
 export async function uploadTrajectory(
   fieldId: number,
   file: File,
-  coordSystemOrOptions: string | TrajectoryUploadOptions = "auto"
+  coordSystem: string
 ): Promise<void> {
-  const options =
-    typeof coordSystemOrOptions === "string"
-      ? { coordSystem: coordSystemOrOptions }
-      : coordSystemOrOptions;
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("coord_system", options.coordSystem ?? "auto");
-  formData.append("operation_type", options.operationType ?? "unknown");
-  if (options.seasonId !== undefined && options.seasonId !== null) {
-    formData.append("season_id", String(options.seasonId));
-  }
-  if (options.relatedTaskId) {
-    formData.append("related_task_id", options.relatedTaskId);
-  }
-  if (options.operator) {
-    formData.append("operator", options.operator);
-  }
-  if (options.eventTime) {
-    formData.append("event_time", options.eventTime);
-  }
+  formData.append("coord_system", coordSystem);
   await authFetch<ApiResponse>(`/fields/${fieldId}/trajectories/upload`, {
     method: "POST",
     body: formData,

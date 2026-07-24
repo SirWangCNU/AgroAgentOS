@@ -26,24 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.middleware import setup_middlewares
-from app.api.v1 import (
-    auth,
-    chat,
-    diagnosis,
-    documents,
-    farm_agent,
-    farm_tasks,
-    farms,
-    health,
-    image,
-    market,
-    observability,
-    sessions,
-    skills,
-    trajectories,
-    weather,
-    webhook,
-)
+from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, image, market, observability, sessions, skills, trajectories, video, weather, webhook
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
 from app.core.database import database_manager
@@ -175,11 +158,11 @@ API_PREFIX = "/api/v1"
 
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(chat.router, prefix=API_PREFIX)
-app.include_router(farm_agent.router, prefix=API_PREFIX)
-app.include_router(farm_tasks.router, prefix=API_PREFIX)
+app.include_router(aiops.router, prefix=API_PREFIX)
 app.include_router(documents.router, prefix=API_PREFIX)
 app.include_router(skills.router, prefix=API_PREFIX)
 app.include_router(webhook.router, prefix=API_PREFIX)
+app.include_router(history.router, prefix=API_PREFIX)
 app.include_router(observability.router, prefix=API_PREFIX)
 app.include_router(diagnosis.router, prefix=API_PREFIX)
 app.include_router(weather.router, prefix=API_PREFIX)
@@ -189,6 +172,7 @@ app.include_router(trajectories.router, prefix=API_PREFIX)
 app.include_router(image.router, prefix=API_PREFIX)
 app.include_router(sessions.router, prefix=API_PREFIX)
 app.include_router(market.router, prefix=API_PREFIX)
+app.include_router(video.router, prefix=API_PREFIX)
 
 
 # ============================================================
@@ -206,17 +190,11 @@ if FRONTEND_DIR.exists():
 
     # SPA 路由：所有非 API 路径都返回 index.html
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str):
+    async def serve_spa(full_path: str) -> FileResponse:
         """SPA 路由：返回 index.html 让前端路由处理."""
-        # ✅ 拦截所有API路径，返回JSON 404而不是HTML，避免前端JSON解析错误
-        if full_path.startswith(("api/", "/api/")):
-            return JSONResponse(
-                status_code=404,
-                content={"code": "NOT_FOUND", "message": "接口不存在", "data": None, "request_id": None}
-            )
         # 如果请求的是静态文件，直接返回
         file_path = FRONTEND_DIR / full_path
-        if file_path.is_file() and ".." not in full_path:
+        if file_path.is_file():
             return FileResponse(str(file_path))
         # 否则返回 index.html (SPA 路由)
         return FileResponse(str(FRONTEND_DIR / "index.html"))

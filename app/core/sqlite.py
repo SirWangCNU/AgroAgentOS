@@ -6,7 +6,7 @@
   - 向后兼容: 导出 sqlite_manager 作为 database_manager 的别名
 
 数据库设计原则:
-  - 面向农业业务的独立数据模型
+  - 独立于原 AIOps 项目，全新农业场景
   - 支持农业问答、天气查询、营销生成、病虫害诊断等业务
 
 注意:
@@ -24,27 +24,12 @@ from pathlib import Path
 from typing import Any, Generator
 
 from loguru import logger
-from sqlalchemy import (
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    create_engine,
-    event,
-    func,
-)
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine, event, func
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.core.history_source import (
-    HistoryWriteSource,
-    validate_history_write_source,
-)
 
 Base = declarative_base()
 
@@ -238,14 +223,6 @@ class AgentRun(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     run_id = Column(String(64), unique=True, nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    farm_id = Column(
-        Integer,
-        ForeignKey("farms.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    run_type = Column(String(32), nullable=True, index=True)
     session_id = Column(String(128), nullable=True, index=True)
     query = Column(Text, nullable=True)
     selected_skill = Column(String(128), nullable=True, index=True)
@@ -259,8 +236,6 @@ class AgentRun(Base):
     model_used = Column(String(128), nullable=True)
     reroute_count = Column(Integer, nullable=True, default=0)
     transitions_json = Column(Text, nullable=True)  # Full transition_history as JSON
-    context_snapshot_json = Column(Text, nullable=True)
-    outcome_json = Column(Text, nullable=True)
     report_preview = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=func.now())
 
@@ -275,38 +250,6 @@ class AgentRun(Base):
 
     def set_transitions(self, data: list[dict[str, Any]]) -> None:
         self.transitions_json = json.dumps(data, ensure_ascii=False, default=str)
-
-    @property
-    def context_snapshot(self) -> dict[str, Any]:
-        if not self.context_snapshot_json:
-            return {}
-        try:
-            value = json.loads(self.context_snapshot_json)
-            if not isinstance(value, dict):
-                raise ValueError("JSON value is not an object")
-            return value
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
-            logger.warning("解析 context_snapshot_json 失败，返回空对象: {}", exc)
-            return {}
-
-    def set_context_snapshot(self, data: dict[str, Any]) -> None:
-        self.context_snapshot_json = json.dumps(data, ensure_ascii=False)
-
-    @property
-    def outcome(self) -> dict[str, Any]:
-        if not self.outcome_json:
-            return {}
-        try:
-            value = json.loads(self.outcome_json)
-            if not isinstance(value, dict):
-                raise ValueError("JSON value is not an object")
-            return value
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
-            logger.warning("解析 outcome_json 失败，返回空对象: {}", exc)
-            return {}
-
-    def set_outcome(self, data: dict[str, Any]) -> None:
-        self.outcome_json = json.dumps(data, ensure_ascii=False)
 
 
 class SQLiteManager:
@@ -448,13 +391,12 @@ class SQLiteManager:
         record_id: str,
         question: str,
         answer: str = "",
-        source: HistoryWriteSource = "chat",
+        source: str = "chat",
         session_id: str = "",
         skill: str = "",
         sources: list[str] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> HistoryRecord:
-        source = validate_history_write_source(source)
         with self.session() as sess:
             record = HistoryRecord(
                 record_id=record_id,
