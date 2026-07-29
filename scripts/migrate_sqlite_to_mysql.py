@@ -53,8 +53,6 @@ TABLE_ORDER = [
     "users",
     "farms",
     "fields",
-    "trajectory_files",
-    "trajectory_points",
 ]
 
 
@@ -176,7 +174,6 @@ def create_mysql_tables(drop_existing: bool = False) -> None:
     from app.core.sqlite import Base
     from app.models.user import User  # noqa: F401
     from app.models.farm import Farm, Field  # noqa: F401
-    from app.models.trajectory import TrajectoryFile, TrajectoryPoint  # noqa: F401
 
     engine = get_mysql_db_engine()
     try:

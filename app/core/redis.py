@@ -171,28 +171,5 @@ class RedisManager:
             logger.warning(f"Redis INCR 失败 key={key}: {e}")
             return None
 
-    # ==================== 缓存键生成 ====================
-
-    @staticmethod
-    def trajectory_list_key(field_id: int) -> str:
-        """生成轨迹列表缓存键."""
-        return f"trajectory:list:field:{field_id}"
-
-    @staticmethod
-    def trajectory_points_key(file_id: int) -> str:
-        """生成轨迹点缓存键."""
-        return f"trajectory:points:file:{file_id}"
-
-    @staticmethod
-    def trajectory_stats_key(file_id: int) -> str:
-        """生成轨迹统计缓存键."""
-        return f"trajectory:stats:file:{file_id}"
-
-    @staticmethod
-    def trajectory_file_key(file_id: int) -> str:
-        """生成轨迹文件元数据缓存键."""
-        return f"trajectory:file:{file_id}"
-
-
 # 全局单例
 redis_manager = RedisManager()

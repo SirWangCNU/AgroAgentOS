@@ -12,8 +12,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from app.services.user_context.farm_context import build_farm_summary
-from app.services.user_context.intent import QueryIntent, detect_intent
-from app.services.user_context.trajectory_context import build_trajectory_context
+from app.services.user_context.intent import detect_intent
 
 # 上下文注入量上限 (字符)
 _MAX_CONTEXT_CHARS = 6000
@@ -49,14 +48,6 @@ class UserContextService:
             if farm_ctx:
                 parts.append(farm_ctx)
 
-        # 2. 轨迹作业数据 (按需注入)
-        if intent.has_trajectory:
-            traj_ctx = build_trajectory_context(
-                self.db, self.user_id, time_range=intent.time_range
-            )
-            if traj_ctx:
-                parts.append(traj_ctx)
-
         # 拼接并截断
         context = "\n\n".join(parts)
         if len(context) > _MAX_CONTEXT_CHARS:
@@ -65,8 +56,7 @@ class UserContextService:
         if context:
             logger.info(
                 f"[UserContext] user={self.user_id} "
-                f"farm={intent.has_farm} traj={intent.has_trajectory} "
-                f"chars={len(context)}"
+                f"farm={intent.has_farm} chars={len(context)}"
             )
         return context
 

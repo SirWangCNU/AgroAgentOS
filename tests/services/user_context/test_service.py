@@ -1,14 +1,11 @@
 """UserContextService 集成测试."""
 
-from datetime import datetime
-
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.sqlite import Base
 from app.models.farm import Farm, Field
-from app.models.trajectory import TrajectoryFile
 from app.services.user_context.service import UserContextService, get_user_context
 
 
@@ -35,24 +32,6 @@ def _setup_full_data(db_session):
         status="planting",
     )
     db_session.add(field)
-    db_session.flush()
-
-    traj = TrajectoryFile(
-        field_id=field.id,
-        filename="旋耕作业.xlsx",
-        machine_id="JD-1001",
-        point_count=500,
-        start_time=datetime(2026, 5, 28),
-        end_time=datetime(2026, 5, 28, 2),
-        total_distance_m=5000.0,
-        work_distance_m=4500.0,
-        work_area_mu=28.5,
-        avg_depth=18.2,
-        avg_speed=4.2,
-        depth_std=2.1,
-        work_width=2.0,
-    )
-    db_session.add(traj)
     db_session.commit()
 
 
@@ -73,24 +52,6 @@ class TestUserContextService:
         assert "阳光农场" in result
         assert "A1地块" in result
         assert "小麦" in result
-
-    def test_trajectory_context_on_demand(self, db_session):
-        _setup_full_data(db_session)
-
-        svc = UserContextService(db_session, user_id=1)
-        result = svc.get_context("A1地块最近作业质量怎么样")
-        assert "近期作业数据" in result
-        assert "18.2cm" in result
-        assert "旋耕作业.xlsx" in result
-
-    def test_farm_and_trajectory_combined(self, db_session):
-        _setup_full_data(db_session)
-
-        svc = UserContextService(db_session, user_id=1)
-        result = svc.get_context("我农场A1地块的旋耕深度合适吗")
-        # 应同时包含农场和轨迹数据
-        assert "阳光农场" in result
-        assert "近期作业数据" in result
 
     def test_context_truncation(self, db_session):
         """超长上下文截断."""

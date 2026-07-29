@@ -250,7 +250,7 @@ async def stream_chat(
     else:
         diagnosis_context = "(暂无最近诊断报告)"
 
-    # ---------- 注入用户业务数据 (农场/轨迹) ----------
+    # ---------- 注入用户业务数据（农场） ----------
     user_context = ""
     if user_id:
         logger.info(f"[rag] 开始获取用户上下文: user_id={user_id}")
