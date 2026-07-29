@@ -21,6 +21,12 @@ from typing import Any, Dict, List, Optional
 import httpx
 from loguru import logger
 
+from app.schemas.weather import (
+    FarmWeatherAlert,
+    FarmWeatherCurrent,
+    FarmWeatherSummary,
+)
+
 
 # ============================================================
 # 数据模型
@@ -607,3 +613,69 @@ def reset_weather_service() -> None:
     if _weather_service:
         asyncio.get_event_loop().create_task(_weather_service.close())
     _weather_service = None
+
+
+async def get_farm_weather_summary(farm: "Farm") -> FarmWeatherSummary:
+    """获取农场管理页所需的实时天气与风险摘要。
+
+    农场未设置坐标、天气服务回退为 Mock 或请求异常时，均不把数据伪装成
+    实时天气返回给页面。
+    """
+    if farm.latitude is None or farm.longitude is None:
+        return FarmWeatherSummary(
+            available=False,
+            reason="FARM_LOCATION_REQUIRED",
+        )
+
+    try:
+        service = get_weather_service()
+        current_result = await service.get_weather_by_coordinates(
+            farm.latitude, farm.longitude
+        )
+        if current_result.source == "mock":
+            return FarmWeatherSummary(
+                available=False,
+                reason="WEATHER_SERVICE_UNAVAILABLE",
+            )
+
+        location = (farm.location or current_result.current.location).strip()
+        if not location:
+            return FarmWeatherSummary(
+                available=False,
+                reason="WEATHER_SERVICE_UNAVAILABLE",
+            )
+
+        forecast_result = await service.get_forecast_with_alerts(location)
+        if forecast_result.source == "mock":
+            return FarmWeatherSummary(
+                available=False,
+                reason="WEATHER_SERVICE_UNAVAILABLE",
+            )
+
+        current = current_result.current
+        return FarmWeatherSummary(
+            available=True,
+            current=FarmWeatherCurrent(
+                condition=current.condition,
+                temperature=current.temperature,
+                humidity=current.humidity,
+                wind_speed=current.wind_speed,
+                wind_level=current.wind_level,
+                update_time=current.update_time,
+            ),
+            alerts=[
+                FarmWeatherAlert(
+                    alert_type=alert.alert_type,
+                    date=alert.date,
+                    severity=alert.severity,
+                )
+                for alert in forecast_result.alerts
+            ],
+            source=current_result.source,
+        )
+    except Exception as exc:
+        logger.warning(f"[WeatherService] 农场天气摘要获取失败: {exc}")
+        return FarmWeatherSummary(
+            available=False,
+            reason="WEATHER_SERVICE_UNAVAILABLE",
+        )

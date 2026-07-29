@@ -43,6 +43,35 @@ class WeatherForecastResult(BaseModel):
     source: str = Field(default="mock", description="数据来源")
 
 
+class FarmWeatherCurrent(BaseModel):
+    """农场管理页需要的实时天气字段。"""
+
+    condition: str
+    temperature: float
+    humidity: int
+    wind_speed: float
+    wind_level: int
+    update_time: str = ""
+
+
+class FarmWeatherAlert(BaseModel):
+    """农场管理页展示的客观天气风险。"""
+
+    alert_type: str
+    date: str
+    severity: str
+
+
+class FarmWeatherSummary(BaseModel):
+    """按农场位置聚合的天气摘要，不包含农业行动建议。"""
+
+    available: bool
+    reason: Optional[str] = None
+    current: Optional[FarmWeatherCurrent] = None
+    alerts: List[FarmWeatherAlert] = Field(default_factory=list)
+    source: Optional[str] = None
+
+
 # ============================================================
 # 节气提醒
 # ============================================================
