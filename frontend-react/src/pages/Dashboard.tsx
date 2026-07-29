@@ -34,7 +34,7 @@ const TOOLS = [
   {
     icon: Tractor,
     label: "农场管理",
-    desc: "农场、地块与作业轨迹",
+    desc: "农场位置、地块与天气风险",
     path: "/workspace/farms",
     color: "text-accent-green",
     bg: "bg-accent-green/10",

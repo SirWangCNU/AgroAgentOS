@@ -1,362 +1,274 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { LatLngLiteral } from "leaflet";
 import {
-  Tractor,
-  Plus,
-  Trash2,
-  MapPin,
-  ChevronRight,
-  FileText,
-  Ruler,
-  Gauge,
-  Wheat,
-  Upload,
-  BarChart3,
+  AlertTriangle,
+  CloudSun,
+  Edit3,
+  Leaf,
   Loader2,
+  MapPin,
+  Navigation,
+  Plus,
+  Save,
+  Sprout,
+  ThermometerSun,
+  Trash2,
+  Tractor,
+  Wind,
+  X,
 } from "lucide-react";
 import {
-  getFarms,
-  getFarmDetail,
   createFarm,
   createField,
   deleteFarm,
-  getTrajectories,
-  getTrajectoryPoints,
-  uploadTrajectory,
-  deleteTrajectory,
+  deleteField,
+  getFarmDetail,
+  getFarmWeather,
+  getFarms,
+  updateFarm,
 } from "../api/farms";
-import { useUIStore } from "../stores/ui";
+import FarmMap, { type FarmMapMarker } from "../components/map/FarmMap";
 import WorkspaceLayout from "../components/layout/WorkspaceLayout";
 import EmptyState from "../components/ui/EmptyState";
-import LoadingGrid from "../components/ui/LoadingGrid";
-import FarmMap from "../components/map/FarmMap";
-import TrajectoryAnalysis from "../components/farm/TrajectoryAnalysis";
-import type { Field, TrajectoryFile, TrajectoryPoint } from "../types/farm";
+import { useUIStore } from "../stores/ui";
+import type { Farm, FarmInput, Field, FieldInput, FieldStatus } from "../types/farm";
+import type { FarmWeatherAlert, FarmWeatherSummary } from "../types/weather";
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+const statusStyle: Record<FieldStatus, { label: string; className: string }> = {
+  idle: { label: "空闲", className: "bg-slate-100 text-slate-600" },
+  planting: { label: "种植中", className: "bg-emerald-100 text-emerald-700" },
+  fallow: { label: "休耕", className: "bg-amber-100 text-amber-700" },
+};
+
+const riskStyle: Record<string, string> = {
+  高: "border-rose-200 bg-rose-50 text-rose-700",
+  中: "border-amber-200 bg-amber-50 text-amber-700",
+  低: "border-sky-200 bg-sky-50 text-sky-700",
+};
+
+const formInputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100";
+const modalSubmitClass = "w-full rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function Farms() {
-  const showToast = useUIStore((s) => s.showToast);
   const queryClient = useQueryClient();
+  const showToast = useUIStore((state) => state.showToast);
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
-  const [selectedFieldId, setSelectedFieldId] = useState<number | null>(null);
-  const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
-  const [trajectoryPoints, setTrajectoryPoints] = useState<TrajectoryPoint[]>([]);
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [isLocationEditing, setIsLocationEditing] = useState(false);
+  const [draftPosition, setDraftPosition] = useState<LatLngLiteral | null>(null);
+  const [isCreateFarmOpen, setIsCreateFarmOpen] = useState(false);
+  const [isCreateFieldOpen, setIsCreateFieldOpen] = useState(false);
 
-  // Modal states
-  const [createFarmOpen, setCreateFarmOpen] = useState(false);
-  const [createFieldOpen, setCreateFieldOpen] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const farmsQuery = useQuery({ queryKey: ["farms"], queryFn: getFarms });
+  const farms = farmsQuery.data ?? [];
+  const activeFarmId = selectedFarmId ?? farms[0]?.id ?? null;
+  const activeFarm = farms.find((farm) => farm.id === activeFarmId) ?? null;
 
-  const { data: farms, isLoading } = useQuery({
-    queryKey: ["farms"],
-    queryFn: getFarms,
+  const fieldsQuery = useQuery({
+    queryKey: ["fields", activeFarmId],
+    queryFn: () => getFarmDetail(activeFarmId!),
+    enabled: activeFarmId !== null,
+  });
+  const weatherQuery = useQuery({
+    queryKey: ["farm-weather", activeFarmId],
+    queryFn: () => getFarmWeather(activeFarmId!),
+    enabled:
+      activeFarmId !== null &&
+      activeFarm?.latitude !== null &&
+      activeFarm?.latitude !== undefined &&
+      activeFarm?.longitude !== null &&
+      activeFarm?.longitude !== undefined,
+    staleTime: 30 * 60 * 1000,
   });
 
-  const { data: fields } = useQuery({
-    queryKey: ["fields", selectedFarmId],
-    queryFn: () => getFarmDetail(selectedFarmId!),
-    enabled: !!selectedFarmId,
+  const savePositionMutation = useMutation({
+    mutationFn: (position: LatLngLiteral) =>
+      updateFarm(activeFarmId!, {
+        latitude: position.lat,
+        longitude: position.lng,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["farms"] });
+      await queryClient.invalidateQueries({ queryKey: ["farm-weather", activeFarmId] });
+      setIsLocationEditing(false);
+      setDraftPosition(null);
+      showToast("农场位置已保存", "success");
+    },
+    onError: (error: unknown) => showToast(errorMessage(error, "位置保存失败"), "error"),
   });
 
-  const { data: trajectories } = useQuery({
-    queryKey: ["trajectories", selectedFieldId],
-    queryFn: () => getTrajectories(selectedFieldId!),
-    enabled: !!selectedFieldId,
-  });
-
-  const deleteMutation = useMutation({
+  const deleteFarmMutation = useMutation({
     mutationFn: deleteFarm,
-    onSuccess: () => {
-      showToast("删除成功", "success");
-      queryClient.invalidateQueries({ queryKey: ["farms"] });
-      setSelectedFarmId(null);
+    onSuccess: async (_, deletedFarmId) => {
+      await queryClient.invalidateQueries({ queryKey: ["farms"] });
+      if (deletedFarmId === activeFarmId) setSelectedFarmId(null);
+      setIsLocationEditing(false);
+      setDraftPosition(null);
+      showToast("农场及其地块已删除", "success");
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (error: unknown) => showToast(errorMessage(error, "删除农场失败"), "error"),
   });
 
-  const deleteTrajectoryMutation = useMutation({
-    mutationFn: deleteTrajectory,
-    onSuccess: () => {
-      showToast("轨迹删除成功", "success");
-      queryClient.invalidateQueries({ queryKey: ["trajectories"] });
-      setSelectedFileId(null);
-      setTrajectoryPoints([]);
+  const deleteFieldMutation = useMutation({
+    mutationFn: deleteField,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["fields", activeFarmId] });
+      await queryClient.invalidateQueries({ queryKey: ["farms"] });
+      showToast("地块已删除", "success");
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (error: unknown) => showToast(errorMessage(error, "删除地块失败"), "error"),
   });
 
-  const handleLoadTrajectory = async (file: TrajectoryFile) => {
-    try {
-      setSelectedFileId(file.id);
-      setShowAnalysis(false);
-      const points = await getTrajectoryPoints(file.id);
-      setTrajectoryPoints(points);
-    } catch (err: any) {
-      showToast(`加载轨迹失败: ${err.message}`, "error");
-    }
+  const mapMarkers: FarmMapMarker[] = farms.map((farm) => ({
+    id: farm.id,
+    name: farm.name,
+    location: farm.location,
+    area_mu: farm.area_mu,
+    latitude: farm.latitude,
+    longitude: farm.longitude,
+  }));
+
+  const selectFarm = (farmId: number) => {
+    setSelectedFarmId(farmId);
+    setIsLocationEditing(false);
+    setDraftPosition(null);
   };
 
-  const farmMarkers =
-    farms?.map((f) => ({
-      id: f.id,
-      name: f.name,
-      location: f.location,
-      area_mu: f.area_mu,
-      latitude: f.latitude,
-      longitude: f.longitude,
-    })) || [];
+  const startLocationEditing = () => {
+    if (!activeFarm) return;
+    if (activeFarm.latitude !== null && activeFarm.longitude !== null) {
+      setDraftPosition({ lat: activeFarm.latitude, lng: activeFarm.longitude });
+    } else {
+      setDraftPosition(null);
+    }
+    setIsLocationEditing(true);
+  };
+
+  const locateCurrentPosition = () => {
+    if (!navigator.geolocation) {
+      showToast("当前浏览器不支持定位，请直接点击地图设置位置", "info");
+      return;
+    }
+    setIsLocationEditing(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setDraftPosition({ lat: position.coords.latitude, lng: position.coords.longitude });
+      },
+      () => showToast("定位未完成，请直接点击地图设置位置", "info"),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+  };
+
+  const cancelLocationEditing = () => {
+    setIsLocationEditing(false);
+    setDraftPosition(null);
+  };
 
   return (
     <>
       <WorkspaceLayout
         title="农场管理"
         icon={Tractor}
-        iconColor="text-accent-green"
-        description="管理农场、地块和作业轨迹"
+        iconColor="text-emerald-700"
+        description="查看农场位置与天气风险"
         fullWidth
         action={
           <button
-            onClick={() => setCreateFarmOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors"
+            onClick={() => setIsCreateFarmOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900"
           >
-            <Plus className="w-4 h-4" /> 新建农场
+            <Plus className="h-4 w-4" /> 新增农场
           </button>
         }
       >
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 relative" style={{ height: "calc(100vh - 180px)" }}>
-          {/* Left panel — above map */}
-          <div className="lg:col-span-4 flex flex-col gap-4 min-h-0 overflow-y-auto relative z-10">
-            {/* Farm list */}
-            <div className="bg-bg-card rounded-xl border border-border flex-shrink-0">
-              <div className="px-4 py-3 border-b border-border">
-                <h3 className="text-sm font-semibold text-text-primary">农场列表</h3>
-              </div>
-              <div className="p-2 space-y-1 max-h-48 overflow-y-auto">
-                {isLoading ? (
-                  <LoadingGrid rows={3} height="h-16" />
-                ) : farms?.length ? (
-                  farms.map((farm) => (
-                    <div
-                      key={farm.id}
-                      onClick={() => {
-                        setSelectedFarmId(farm.id);
-                        setSelectedFieldId(null);
-                        setSelectedFileId(null);
-                        setTrajectoryPoints([]);
-                      }}
-                      className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${
-                        selectedFarmId === farm.id
-                          ? "bg-primary/10 border border-primary/30"
-                          : "hover:bg-bg-hover border border-transparent"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{farm.name}</div>
-                        <div className="text-xs text-text-muted mt-0.5 flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {farm.location} · {farm.area_mu} 亩
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm(`确定删除 "${farm.name}"？`))
-                              deleteMutation.mutate(farm.id);
-                          }}
-                          className="p-1 text-text-muted hover:text-accent-red rounded"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                        <ChevronRight className="w-4 h-4 text-text-muted" />
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState icon={Tractor} title="暂无农场" description="点击右上角创建您的第一个农场" />
-                )}
-              </div>
-            </div>
-
-            {/* Field list */}
-            {selectedFarmId && (
-              <div className="bg-bg-card rounded-xl border border-border flex-shrink-0">
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-text-primary">地块列表</h3>
-                  <button
-                    onClick={() => setCreateFieldOpen(true)}
-                    className="flex items-center gap-1 px-2 py-1 text-xs text-accent-blue border border-accent-blue/20 rounded-lg hover:bg-accent-blue/5 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" /> 添加地块
-                  </button>
-                </div>
-                <div className="p-2 space-y-1 max-h-48 overflow-y-auto">
-                  {fields?.length ? (
-                    fields.map((field) => (
-                      <div
-                        key={field.id}
-                        onClick={() => {
-                          setSelectedFieldId(field.id);
-                          setSelectedFileId(null);
-                          setTrajectoryPoints([]);
-                        }}
-                        className={`p-3 rounded-lg cursor-pointer transition-all ${
-                          selectedFieldId === field.id
-                            ? "bg-accent-blue/10 border border-accent-blue/30"
-                            : "hover:bg-bg-hover border border-transparent"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm font-medium">{field.name}</div>
-                          <StatusBadge status={field.status} />
-                        </div>
-                        <div className="text-xs text-text-muted mt-1 flex items-center gap-2">
-                          {field.current_crop && (
-                            <span className="flex items-center gap-0.5">
-                              <Wheat className="w-3 h-3" /> {field.current_crop}
-                            </span>
-                          )}
-                          <span>{field.area_mu} 亩</span>
-                          <span>{field.soil_type}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <EmptyState icon={MapPin} title="暂无地块" />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Trajectory list */}
-            {selectedFieldId && (
-              <div className="bg-bg-card rounded-xl border border-border flex-shrink-0">
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-text-primary">作业轨迹</h3>
-                  <button
-                    onClick={() => setUploadOpen(true)}
-                    className="flex items-center gap-1 px-2 py-1 text-xs text-primary border border-primary/20 rounded-lg hover:bg-primary/5 transition-colors"
-                  >
-                    <Upload className="w-3 h-3" /> 上传
-                  </button>
-                </div>
-                <div className="p-2 space-y-1 max-h-60 overflow-y-auto">
-                  {trajectories?.length ? (
-                    trajectories.map((traj) => (
-                      <div
-                        key={traj.id}
-                        className={`p-3 rounded-lg transition-all ${
-                          selectedFileId === traj.id
-                            ? "bg-accent-amber/10 border border-accent-amber/30"
-                            : "hover:bg-bg-hover border border-transparent"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <button
-                            onClick={() => handleLoadTrajectory(traj)}
-                            className="flex-1 text-left min-w-0"
-                          >
-                            <div className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-text-muted flex-shrink-0" />
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium truncate">{traj.filename}</div>
-                                <div className="text-xs text-text-muted flex items-center gap-2 mt-0.5">
-                                  <span className="flex items-center gap-0.5">
-                                    <Ruler className="w-3 h-3" />
-                                    {(traj.total_distance_m / 1000).toFixed(1)}km
-                                  </span>
-                                  <span className="flex items-center gap-0.5">
-                                    <Gauge className="w-3 h-3" />
-                                    {traj.avg_speed.toFixed(1)}m/s
-                                  </span>
-                                  <span>{traj.work_area_mu.toFixed(1)}亩</span>
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {selectedFileId === traj.id && (
-                              <button
-                                onClick={() => setShowAnalysis(!showAnalysis)}
-                                className="p-1 text-text-muted hover:text-primary rounded"
-                                title="查看分析"
-                              >
-                                <BarChart3 className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`确定删除 "${traj.filename}"？`))
-                                  deleteTrajectoryMutation.mutate(traj.id);
-                              }}
-                              className="p-1 text-text-muted hover:text-accent-red rounded"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <EmptyState icon={FileText} title="暂无轨迹数据" description="点击上传按钮导入 Excel 轨迹文件" />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Analysis panel */}
-            {selectedFileId && showAnalysis && (
-              <div className="bg-bg-card rounded-xl border border-border p-4">
-                <TrajectoryAnalysis fileId={selectedFileId} />
-              </div>
-            )}
-          </div>
-
-          {/* Right — map */}
-          <div className="lg:col-span-8 min-h-0">
-            <FarmMap
-              farms={farmMarkers}
-              selectedFarmId={selectedFarmId}
-              trajectoryPoints={trajectoryPoints}
-              onFarmClick={(id) => {
-                setSelectedFarmId(id);
-                setSelectedFieldId(null);
-                setSelectedFileId(null);
-                setTrajectoryPoints([]);
-              }}
+        <div className="grid min-h-[calc(100vh-178px)] grid-cols-[320px_minmax(0,1fr)] gap-5">
+          <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
+            <FarmSelector
+              farms={farms}
+              selectedFarmId={activeFarmId}
+              isLoading={farmsQuery.isLoading}
+              onSelect={selectFarm}
             />
-          </div>
+            {activeFarm ? (
+              <>
+                <FarmSummary
+                  farm={activeFarm}
+                  isEditing={isLocationEditing}
+                  isSaving={savePositionMutation.isPending}
+                  hasDraft={draftPosition !== null}
+                  onEditLocation={startLocationEditing}
+                  onLocate={locateCurrentPosition}
+                  onSave={() => draftPosition && savePositionMutation.mutate(draftPosition)}
+                  onCancel={cancelLocationEditing}
+                  onDelete={() => {
+                    if (window.confirm(`确定删除“${activeFarm.name}”吗？其地块也会一并删除。`)) {
+                      deleteFarmMutation.mutate(activeFarm.id);
+                    }
+                  }}
+                />
+                <WeatherPanel
+                  summary={weatherQuery.data}
+                  isLoading={weatherQuery.isLoading}
+                  isError={weatherQuery.isError}
+                  hasLocation={activeFarm.latitude !== null && activeFarm.longitude !== null}
+                />
+                <FieldList
+                  fields={fieldsQuery.data ?? []}
+                  isLoading={fieldsQuery.isLoading}
+                  onCreate={() => setIsCreateFieldOpen(true)}
+                  onDelete={(field) => {
+                    if (window.confirm(`确定删除地块“${field.name}”吗？`)) deleteFieldMutation.mutate(field.id);
+                  }}
+                />
+              </>
+            ) : (
+              <EmptyState
+                icon={Sprout}
+                title="还没有农场"
+                description="创建第一个农场后，即可在地图上标记位置并查看天气。"
+                action={
+                  <button onClick={() => setIsCreateFarmOpen(true)} className="rounded-lg bg-emerald-800 px-3 py-2 text-xs font-semibold text-white">
+                    创建第一个农场
+                  </button>
+                }
+              />
+            )}
+          </aside>
+
+          <section className="min-w-0">
+            <FarmMap
+              farms={mapMarkers}
+              selectedFarmId={activeFarmId}
+              isEditing={isLocationEditing}
+              draftPosition={draftPosition}
+              onFarmClick={selectFarm}
+              onDraftPositionChange={setDraftPosition}
+            />
+          </section>
         </div>
       </WorkspaceLayout>
 
-      {/* Modals — rendered outside WorkspaceLayout to avoid overflow clipping */}
-      {createFarmOpen && (
+      {isCreateFarmOpen && (
         <CreateFarmModal
-          onClose={() => setCreateFarmOpen(false)}
-          onSuccess={() => {
-            setCreateFarmOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["farms"] });
+          onClose={() => setIsCreateFarmOpen(false)}
+          onSuccess={async () => {
+            setIsCreateFarmOpen(false);
+            await queryClient.invalidateQueries({ queryKey: ["farms"] });
           }}
         />
       )}
-      {uploadOpen && selectedFieldId && (
-        <UploadTrajectoryModal
-          fieldId={selectedFieldId}
-          onClose={() => setUploadOpen(false)}
-          onSuccess={() => {
-            setUploadOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["trajectories"] });
-          }}
-        />
-      )}
-      {createFieldOpen && selectedFarmId && (
+      {isCreateFieldOpen && activeFarmId !== null && (
         <CreateFieldModal
-          farmId={selectedFarmId}
-          onClose={() => setCreateFieldOpen(false)}
-          onSuccess={() => {
-            setCreateFieldOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["fields", selectedFarmId] });
+          farmId={activeFarmId}
+          onClose={() => setIsCreateFieldOpen(false)}
+          onSuccess={async () => {
+            setIsCreateFieldOpen(false);
+            await queryClient.invalidateQueries({ queryKey: ["fields", activeFarmId] });
+            await queryClient.invalidateQueries({ queryKey: ["farms"] });
           }}
         />
       )}
@@ -364,501 +276,61 @@ export default function Farms() {
   );
 }
 
-function StatusBadge({ status }: { status: Field["status"] }) {
-  const config = {
-    idle: { label: "空闲", cls: "bg-gray-100 text-gray-600" },
-    planting: { label: "种植中", cls: "bg-green-100 text-green-700" },
-    fallow: { label: "休耕", cls: "bg-amber-100 text-amber-700" },
-  };
-  const c = config[status] || config.idle;
-  return <span className={`px-1.5 py-0.5 text-xs rounded ${c.cls}`}>{c.label}</span>;
-}
-
-/* ==================== Create Field Modal ==================== */
-
-function CreateFieldModal({
-  farmId,
-  onClose,
-  onSuccess,
-}: {
-  farmId: number;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const showToast = useUIStore((s) => s.showToast);
-  const [form, setForm] = useState({
-    name: "",
-    area_mu: 0,
-    soil_type: "",
-    current_crop: "",
-    status: "idle" as "idle" | "planting" | "fallow",
-    notes: "",
-  });
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      createField(farmId, {
-        ...form,
-        planting_date: null as any,
-        expected_harvest: null as any,
-        growth_stage: "",
-      }),
-    onSuccess: () => {
-      showToast("地块创建成功", "success");
-      onSuccess();
-    },
-    onError: (err: any) => showToast(err.message, "error"),
-  });
-
+function FarmSelector({ farms, selectedFarmId, isLoading, onSelect }: { farms: Farm[]; selectedFarmId: number | null; isLoading: boolean; onSelect: (farmId: number) => void }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-bg-card rounded-2xl shadow-2xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-bg-hover/50">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-accent-blue/10">
-              <MapPin className="w-4 h-4 text-accent-blue" />
-            </div>
-            <h3 className="text-base font-semibold text-text-primary">添加地块</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg transition-colors"
-          >
-            ✕
-          </button>
+    <section className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-emerald-900/10 px-4 py-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-700">我的农场</p>
+          <h2 className="mt-0.5 text-sm font-semibold text-slate-900">选择当前农场</h2>
         </div>
-
-        {/* Body */}
-        <div className="px-6 py-5 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              地块名称 <span className="text-accent-red">*</span>
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="如：1号大棚、东区地块"
-              className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                面积 (亩)
-              </label>
-              <input
-                type="number"
-                value={form.area_mu || ""}
-                onChange={(e) => setForm({ ...form, area_mu: Number(e.target.value) })}
-                placeholder="0"
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                土壤类型
-              </label>
-              <input
-                value={form.soil_type}
-                onChange={(e) => setForm({ ...form, soil_type: e.target.value })}
-                placeholder="如：壤土、沙土"
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                当前作物
-              </label>
-              <input
-                value={form.current_crop}
-                onChange={(e) => setForm({ ...form, current_crop: e.target.value })}
-                placeholder="如：番茄、水稻"
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                状态
-              </label>
-              <div className="flex gap-1.5">
-                {[
-                  { value: "idle", label: "空闲" },
-                  { value: "planting", label: "种植中" },
-                  { value: "fallow", label: "休耕" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setForm({ ...form, status: opt.value as any })}
-                    className={`flex-1 px-2 py-2 text-xs rounded-lg border transition-all ${
-                      form.status === opt.value
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border text-text-secondary hover:border-primary/50"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              备注
-            </label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="地块补充信息..."
-              rows={2}
-              className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all resize-none"
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-bg-hover/30">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-text-secondary border border-border rounded-xl hover:bg-bg-hover transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={!form.name || mutation.isPending}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-accent-blue text-white rounded-xl hover:opacity-90 disabled:opacity-50 transition-colors"
-          >
-            {mutation.isPending && <Loader2 className="w-3.5 h-3.5 spinner" />}
-            {mutation.isPending ? "创建中..." : "创建地块"}
-          </button>
-        </div>
+        <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{farms.length}</span>
       </div>
-    </div>
+      <div className="max-h-52 space-y-1 overflow-y-auto p-2">
+        {isLoading ? <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-emerald-700" /></div> : farms.map((farm) => (
+          <button key={farm.id} onClick={() => onSelect(farm.id)} className={`w-full rounded-xl px-3 py-2.5 text-left transition ${farm.id === selectedFarmId ? "bg-emerald-800 text-white shadow-sm" : "text-slate-700 hover:bg-emerald-50"}`}>
+            <div className="truncate text-sm font-semibold">{farm.name}</div>
+            <div className={`mt-1 flex items-center gap-1 text-xs ${farm.id === selectedFarmId ? "text-emerald-100" : "text-slate-500"}`}><MapPin className="h-3 w-3" />{farm.location || "位置未设置"} · {farm.area_mu} 亩</div>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
-/* ==================== Create Farm Modal ==================== */
-
-function CreateFarmModal({
-  onClose,
-  onSuccess,
-}: {
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const showToast = useUIStore((s) => s.showToast);
-  const [form, setForm] = useState({
-    name: "",
-    location: "",
-    area_mu: 0,
-    latitude: 0,
-    longitude: 0,
-    description: "",
-  });
-
-  const mutation = useMutation({
-    mutationFn: () => createFarm(form),
-    onSuccess: () => {
-      showToast("创建成功", "success");
-      onSuccess();
-    },
-    onError: (err: any) => showToast(err.message, "error"),
-  });
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-bg-card rounded-2xl shadow-2xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-bg-hover/50">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-primary/10">
-              <Plus className="w-4 h-4 text-primary" />
-            </div>
-            <h3 className="text-base font-semibold text-text-primary">新建农场</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 py-5 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              农场名称 <span className="text-accent-red">*</span>
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="如：张庄有机农场"
-              className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              位置
-            </label>
-            <input
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              placeholder="如：山东省寿光市"
-              className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                面积 (亩)
-              </label>
-              <input
-                type="number"
-                value={form.area_mu || ""}
-                onChange={(e) => setForm({ ...form, area_mu: Number(e.target.value) })}
-                placeholder="0"
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                纬度
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={form.latitude || ""}
-                onChange={(e) => setForm({ ...form, latitude: Number(e.target.value) })}
-                placeholder="36.0671"
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                经度
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={form.longitude || ""}
-                onChange={(e) => setForm({ ...form, longitude: Number(e.target.value) })}
-                placeholder="118.7854"
-                className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              描述
-            </label>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="农场基本情况描述..."
-              rows={2}
-              className="w-full px-3 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all resize-none"
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-bg-hover/30">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-text-secondary border border-border rounded-xl hover:bg-bg-hover transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={!form.name || mutation.isPending}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-colors"
-          >
-            {mutation.isPending && <Loader2 className="w-3.5 h-3.5 spinner" />}
-            {mutation.isPending ? "创建中..." : "创建"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function FarmSummary({ farm, isEditing, isSaving, hasDraft, onEditLocation, onLocate, onSave, onCancel, onDelete }: { farm: Farm; isEditing: boolean; isSaving: boolean; hasDraft: boolean; onEditLocation: () => void; onLocate: () => void; onSave: () => void; onCancel: () => void; onDelete: () => void }) {
+  return <section className="rounded-2xl border border-emerald-900/10 bg-[#f7faf5] p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-700">当前农场</p><h2 className="mt-1 text-lg font-bold text-slate-900">{farm.name}</h2></div><button onClick={onDelete} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title="删除农场"><Trash2 className="h-4 w-4" /></button></div><div className="mt-3 space-y-2 text-xs text-slate-600"><div className="flex gap-2"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />{farm.location || "尚未设置位置"}</div><div className="flex gap-2"><Leaf className="h-3.5 w-3.5 shrink-0 text-emerald-700" />总面积 {farm.area_mu} 亩</div></div>{isEditing ? <div className="mt-4 grid grid-cols-2 gap-2"><button onClick={onLocate} className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs font-semibold text-emerald-800"><Navigation className="h-3.5 w-3.5" />定位到我</button><button onClick={onCancel} className="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-600"><X className="h-3.5 w-3.5" />取消</button><button disabled={!hasDraft || isSaving} onClick={onSave} className="col-span-2 inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-800 px-2 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}{isSaving ? "保存中" : "保存位置"}</button></div> : <button onClick={onEditLocation} className="mt-4 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs font-semibold text-emerald-800"><Edit3 className="h-3.5 w-3.5" />{farm.latitude === null || farm.longitude === null ? "设置农场位置" : "调整农场位置"}</button>}</section>;
 }
 
-/* ==================== Upload Trajectory Modal ==================== */
-
-function UploadTrajectoryModal({
-  fieldId,
-  onClose,
-  onSuccess,
-}: {
-  fieldId: number;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const showToast = useUIStore((s) => s.showToast);
-  const [file, setFile] = useState<File | null>(null);
-  const [coordSystem, setCoordSystem] = useState("auto");
-  const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      await uploadTrajectory(fieldId, file, coordSystem);
-      showToast("轨迹上传成功", "success");
-      onSuccess();
-    } catch (err: any) {
-      showToast(`上传失败: ${err.message}`, "error");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped && (dropped.name.endsWith(".xlsx") || dropped.name.endsWith(".xls"))) {
-      setFile(dropped);
-    } else {
-      showToast("请上传 .xlsx 或 .xls 文件", "error");
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-bg-card rounded-2xl shadow-2xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-bg-hover/50">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-accent-amber/10">
-              <Upload className="w-4 h-4 text-accent-amber" />
-            </div>
-            <h3 className="text-base font-semibold text-text-primary">上传轨迹文件</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded-lg transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 py-5 space-y-5">
-          {/* Drag & drop area */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
-              选择文件
-            </label>
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
-                dragOver
-                  ? "border-primary bg-primary/5"
-                  : file
-                  ? "border-accent-green/50 bg-accent-green/5"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-              {file ? (
-                <div className="flex items-center justify-center gap-2">
-                  <FileText className="w-5 h-5 text-accent-green" />
-                  <div>
-                    <div className="text-sm font-medium text-text-primary">{file.name}</div>
-                    <div className="text-xs text-text-muted">{(file.size / 1024).toFixed(1)} KB</div>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                    className="ml-2 text-xs text-accent-red hover:underline"
-                  >
-                    移除
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Upload className="w-8 h-8 text-text-muted mx-auto mb-2" />
-                  <div className="text-sm text-text-secondary">点击或拖拽文件到此处</div>
-                  <div className="text-xs text-text-muted mt-1">支持 .xlsx、.xls 格式</div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Coord system */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
-              坐标系
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { value: "auto", label: "自动检测", desc: "智能识别坐标系" },
-                { value: "wgs84", label: "WGS-84", desc: "GPS 原始坐标" },
-                { value: "gcj02", label: "GCJ-02", desc: "高德/腾讯地图坐标" },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setCoordSystem(opt.value)}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    coordSystem === opt.value
-                      ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                      : "border-border hover:border-primary/50"
-                  }`}
-                >
-                  <div className={`text-sm font-medium ${coordSystem === opt.value ? "text-primary" : "text-text-primary"}`}>
-                    {opt.label}
-                  </div>
-                  <div className="text-xs text-text-muted mt-0.5">{opt.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-xs text-text-muted bg-bg-hover rounded-lg px-3 py-2">
-            <span className="font-medium">Excel 格式要求：</span>
-            必须包含经度、纬度列。可选列：速度、作业状态、深度、时间、幅宽、农机编号。
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-bg-hover/30">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-text-secondary border border-border rounded-xl hover:bg-bg-hover transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={!file || uploading}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-colors"
-          >
-            {uploading && <Loader2 className="w-3.5 h-3.5 spinner" />}
-            {uploading ? "上传中..." : "上传"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function WeatherPanel({ summary, isLoading, isError, hasLocation }: { summary: FarmWeatherSummary | undefined; isLoading: boolean; isError: boolean; hasLocation: boolean }) {
+  if (!hasLocation) return <section className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/50 p-4"><div className="flex gap-2"><CloudSun className="h-5 w-5 text-emerald-700" /><div><h2 className="text-sm font-semibold text-emerald-950">设置位置后查看天气</h2><p className="mt-1 text-xs leading-5 text-emerald-800">天气与风险会根据农场标记位置实时查询。</p></div></div></section>;
+  if (isLoading) return <section className="flex items-center gap-2 rounded-2xl border border-emerald-900/10 bg-white p-4 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin text-emerald-700" />正在获取农场天气</section>;
+  if (isError || !summary?.available || !summary.current) return <section className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex gap-2"><AlertTriangle className="h-5 w-5 text-amber-600" /><div><h2 className="text-sm font-semibold text-slate-900">天气暂不可用</h2><p className="mt-1 text-xs leading-5 text-slate-500">{summary?.reason === "WEATHER_SERVICE_UNAVAILABLE" ? "天气服务未配置或暂时不可用。" : "稍后可重新进入页面查询。"}</p></div></div></section>;
+  return <section className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-white shadow-sm"><div className="border-b border-emerald-900/10 bg-[#edf6ed] px-4 py-3"><p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-700">实时天气</p><div className="mt-1 flex items-end justify-between"><h2 className="text-2xl font-bold text-emerald-950">{summary.current.temperature}°</h2><span className="text-sm font-semibold text-emerald-800">{summary.current.condition}</span></div><div className="mt-2 flex gap-3 text-xs text-emerald-900"><span className="inline-flex items-center gap-1"><ThermometerSun className="h-3.5 w-3.5" />湿度 {summary.current.humidity}%</span><span className="inline-flex items-center gap-1"><Wind className="h-3.5 w-3.5" />{summary.current.wind_level} 级风</span></div></div><div className="p-3"><p className="mb-2 text-xs font-medium text-slate-500">天气风险</p><RiskList alerts={summary.alerts} /><p className="mt-3 text-[11px] text-slate-400">更新于 {summary.current.update_time || "--"}</p></div></section>;
 }
+
+function RiskList({ alerts }: { alerts: FarmWeatherAlert[] }) {
+  if (!alerts.length) return <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">当前未发现明显天气风险</div>;
+  return <div className="space-y-2">{alerts.map((alert) => <div key={`${alert.alert_type}-${alert.date}`} className={`flex items-center justify-between rounded-lg border px-2.5 py-2 text-xs ${riskStyle[alert.severity] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}><span>{alert.alert_type} · {alert.date}</span><strong>{alert.severity}风险</strong></div>)}</div>;
+}
+
+function FieldList({ fields, isLoading, onCreate, onDelete }: { fields: Field[]; isLoading: boolean; onCreate: () => void; onDelete: (field: Field) => void }) {
+  return <section className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-emerald-900/10 px-4 py-3"><div><p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-700">地块档案</p><h2 className="mt-0.5 text-sm font-semibold text-slate-900">简单管理，不增加流程</h2></div><button onClick={onCreate} className="rounded-lg bg-emerald-50 p-2 text-emerald-800 transition hover:bg-emerald-100" title="添加地块"><Plus className="h-4 w-4" /></button></div><div className="max-h-64 space-y-1 overflow-y-auto p-2">{isLoading ? <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-emerald-700" /></div> : fields.length ? fields.map((field) => <div key={field.id} className="flex items-center justify-between rounded-xl px-2.5 py-2.5 hover:bg-slate-50"><div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-800">{field.name}</div><div className="mt-1 text-xs text-slate-500">{field.current_crop || "未填写作物"} · {field.area_mu} 亩</div></div><div className="ml-2 flex items-center gap-1"><span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusStyle[field.status].className}`}>{statusStyle[field.status].label}</span><button onClick={() => onDelete(field)} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="删除地块"><Trash2 className="h-3.5 w-3.5" /></button></div></div>) : <div className="px-2 py-7 text-center text-xs text-slate-500">暂无地块，添加后可记录作物和面积。</div>}</div></section>;
+}
+
+function CreateFarmModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => Promise<void> }) {
+  const showToast = useUIStore((state) => state.showToast);
+  const [form, setForm] = useState<FarmInput>({ name: "", location: "", latitude: null, longitude: null, area_mu: 0, description: "" });
+  const mutation = useMutation({ mutationFn: () => createFarm(form), onSuccess: () => { showToast("农场创建成功，请在地图上设置位置", "success"); void onSuccess(); }, onError: (error: unknown) => showToast(errorMessage(error, "创建农场失败"), "error") });
+  return <Modal title="新增农场" onClose={onClose}><FormLabel label="农场名称"><input autoFocus value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="如：东山农场" className={formInputClass} /></FormLabel><div className="grid grid-cols-2 gap-3"><FormLabel label="位置说明"><input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="如：寿光市" className={formInputClass} /></FormLabel><FormLabel label="面积（亩）"><input type="number" min="0" value={form.area_mu || ""} onChange={(event) => setForm({ ...form, area_mu: Number(event.target.value) })} className={formInputClass} /></FormLabel></div><FormLabel label="备注"><textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={3} className={`${formInputClass} resize-none`} /></FormLabel><button disabled={!form.name.trim() || mutation.isPending} onClick={() => mutation.mutate()} className={modalSubmitClass}>{mutation.isPending ? "创建中" : "创建农场"}</button></Modal>;
+}
+
+function CreateFieldModal({ farmId, onClose, onSuccess }: { farmId: number; onClose: () => void; onSuccess: () => Promise<void> }) {
+  const showToast = useUIStore((state) => state.showToast);
+  const [form, setForm] = useState<FieldInput>({ name: "", area_mu: 0, current_crop: "", status: "idle", notes: "" });
+  const mutation = useMutation({ mutationFn: () => createField(farmId, form), onSuccess: () => { showToast("地块创建成功", "success"); void onSuccess(); }, onError: (error: unknown) => showToast(errorMessage(error, "创建地块失败"), "error") });
+  return <Modal title="添加地块" onClose={onClose}><FormLabel label="地块名称"><input autoFocus value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="如：东侧一号田" className={formInputClass} /></FormLabel><div className="grid grid-cols-2 gap-3"><FormLabel label="当前作物"><input value={form.current_crop} onChange={(event) => setForm({ ...form, current_crop: event.target.value })} placeholder="如：玉米" className={formInputClass} /></FormLabel><FormLabel label="面积（亩）"><input type="number" min="0" value={form.area_mu || ""} onChange={(event) => setForm({ ...form, area_mu: Number(event.target.value) })} className={formInputClass} /></FormLabel></div><FormLabel label="状态"><select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as FieldStatus })} className={formInputClass}><option value="idle">空闲</option><option value="planting">种植中</option><option value="fallow">休耕</option></select></FormLabel><FormLabel label="备注"><textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} rows={3} className={`${formInputClass} resize-none`} /></FormLabel><button disabled={!form.name.trim() || mutation.isPending} onClick={() => mutation.mutate()} className={modalSubmitClass}>{mutation.isPending ? "创建中" : "创建地块"}</button></Modal>;
+}
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) { return <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4"><button aria-label="关闭弹窗" className="absolute inset-0 bg-slate-950/35" onClick={onClose} /><div className="relative w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-bold text-slate-900">{title}</h2><button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div><div className="space-y-4">{children}</div></div></div>; }
+function FormLabel({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm font-medium text-slate-700"><span className="mb-1.5 block">{label}</span>{children}</label>; }

@@ -1,29 +1,18 @@
 import { useEffect, useRef } from "react";
+import { LocateFixed, MapPin } from "lucide-react";
 import {
-  MapContainer,
-  TileLayer,
   LayersControl,
+  MapContainer,
   Marker,
   Popup,
-  CircleMarker,
+  TileLayer,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
-import L from "leaflet";
+import L, { type LatLngLiteral } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { TrajectoryPoint } from "../../types/farm";
 
-// Fix Leaflet default marker icons in bundlers
-const iconDefaultProto = L.Icon.Default.prototype as unknown as {
-  _getIconUrl?: string;
-};
-delete iconDefaultProto._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
-
-const farmIcon = new L.Icon({
+const defaultIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
@@ -33,159 +22,115 @@ const farmIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-const selectedIcon = new L.Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [30, 49],
-  iconAnchor: [15, 49],
-  popupAnchor: [1, -40],
-  shadowSize: [49, 49],
+const selectedIcon = new L.DivIcon({
+  className: "",
+  html: '<span style="display:block;width:32px;height:32px;border-radius:999px;background:#1d6b45;border:4px solid #e4f3e7;box-shadow:0 5px 14px rgba(29,107,69,.35)"></span>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
 });
 
-// Work status colors
-const STATUS_COLORS: Record<string, string> = {
-  working: "#22c55e",     // green
-  transporting: "#3b82f6", // blue
-  idle: "#94a3b8",        // gray
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  working: "作业中",
-  transporting: "运输中",
-  idle: "空闲",
-};
-
-interface FarmMarker {
+export interface FarmMapMarker {
   id: number;
   name: string;
   location: string;
   area_mu: number;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface FarmMapProps {
-  farms: FarmMarker[];
-  selectedFarmId?: number | null;
-  trajectoryPoints?: TrajectoryPoint[];
-  onFarmClick?: (farmId: number) => void;
+  farms: FarmMapMarker[];
+  selectedFarmId: number | null;
+  isEditing: boolean;
+  draftPosition: LatLngLiteral | null;
+  onFarmClick: (farmId: number) => void;
+  onDraftPositionChange: (position: LatLngLiteral) => void;
 }
 
-/** Fly to selected farm */
-function FlyToFarm({ farm }: { farm: FarmMarker | undefined }) {
+function FlyToFarm({ farm }: { farm: FarmMapMarker | undefined }) {
   const map = useMap();
-  const prevId = useRef<number | null>(null);
+  const previousFarmId = useRef<number | null>(null);
 
   useEffect(() => {
-    if (farm && farm.latitude && farm.longitude && farm.id !== prevId.current) {
-      map.flyTo([farm.latitude, farm.longitude], 13, { duration: 1 });
-      prevId.current = farm.id;
+    if (
+      farm &&
+      farm.latitude !== null &&
+      farm.longitude !== null &&
+      farm.id !== previousFarmId.current
+    ) {
+      map.flyTo([farm.latitude, farm.longitude], 14, { duration: 0.65 });
+      previousFarmId.current = farm.id;
     }
   }, [farm, map]);
 
   return null;
 }
 
-/** Fit bounds to trajectory points */
-function FitTrajectory({ points }: { points: TrajectoryPoint[] }) {
-  const map = useMap();
-  const prevLen = useRef(0);
-
-  useEffect(() => {
-    if (points.length > 0 && points.length !== prevLen.current) {
-      const bounds = L.latLngBounds(
-        points.map((p) => [p.latitude, p.longitude] as [number, number])
-      );
-      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
-      prevLen.current = points.length;
-    }
-  }, [points, map]);
-
+function DraftLocationHandler({
+  enabled,
+  onChange,
+}: {
+  enabled: boolean;
+  onChange: (position: LatLngLiteral) => void;
+}) {
+  useMapEvents({
+    click(event) {
+      if (enabled) onChange(event.latlng);
+    },
+  });
   return null;
 }
 
 export default function FarmMap({
   farms,
   selectedFarmId,
-  trajectoryPoints = [],
+  isEditing,
+  draftPosition,
   onFarmClick,
+  onDraftPositionChange,
 }: FarmMapProps) {
-  const selectedFarm = farms.find((f) => f.id === selectedFarmId);
-
-  const center: [number, number] = selectedFarm
-    ? [selectedFarm.latitude, selectedFarm.longitude]
-    : [35.86, 104.19];
-
-  const zoom = selectedFarm ? 13 : 4;
+  const selectedFarm = farms.find((farm) => farm.id === selectedFarmId);
+  const center: [number, number] =
+    selectedFarm?.latitude != null && selectedFarm?.longitude != null
+      ? [selectedFarm.latitude, selectedFarm.longitude]
+      : [35.86, 104.19];
 
   return (
-    <div className="w-full h-full rounded-xl overflow-hidden border border-border map-isolation">
-      <MapContainer
-        center={center}
-        zoom={zoom}
-        className="w-full h-full"
-        scrollWheelZoom={true}
-      >
+    <div className="relative h-full min-h-[560px] overflow-hidden rounded-2xl border border-emerald-900/10 bg-[#eaf1e7] shadow-[0_18px_50px_rgba(41,71,48,0.12)] map-isolation">
+      <MapContainer center={center} zoom={selectedFarm?.latitude != null ? 14 : 4} className="h-full w-full" scrollWheelZoom>
         <LayersControl position="topright">
-          {/* Standard map */}
-          <LayersControl.BaseLayer checked name="地图">
+          <LayersControl.BaseLayer checked name="地形地图">
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
           </LayersControl.BaseLayer>
-
-          {/* Satellite (Gaode) */}
-          <LayersControl.BaseLayer name="卫星">
+          <LayersControl.BaseLayer name="卫星地图">
             <TileLayer
-              attribution='&copy; 高德地图'
-              url="https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}"
-              subdomains={["1", "2", "3", "4"]}
-              maxZoom={18}
+              attribution="Tiles &copy; Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             />
-          </LayersControl.BaseLayer>
-
-          {/* Satellite + labels (hybrid) */}
-          <LayersControl.BaseLayer name="混合">
-            <>
-              <TileLayer
-                attribution='&copy; 高德地图'
-                url="https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}"
-                subdomains={["1", "2", "3", "4"]}
-                maxZoom={18}
-              />
-              <TileLayer
-                attribution='&copy; 高德地图'
-                url="https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}"
-                subdomains={["1", "2", "3", "4"]}
-                maxZoom={18}
-              />
-            </>
           </LayersControl.BaseLayer>
         </LayersControl>
 
         <FlyToFarm farm={selectedFarm} />
-        <FitTrajectory points={trajectoryPoints} />
+        <DraftLocationHandler enabled={isEditing} onChange={onDraftPositionChange} />
 
-        {/* Farm markers */}
         {farms.map((farm) => {
-          if (!farm.latitude || !farm.longitude) return null;
-          const isSelected = farm.id === selectedFarmId;
+          if (farm.latitude === null || farm.longitude === null) return null;
+          const selected = farm.id === selectedFarmId;
           return (
             <Marker
               key={farm.id}
               position={[farm.latitude, farm.longitude]}
-              icon={isSelected ? selectedIcon : farmIcon}
-              eventHandlers={{
-                click: () => onFarmClick?.(farm.id),
-              }}
+              icon={selected ? selectedIcon : defaultIcon}
+              eventHandlers={{ click: () => onFarmClick(farm.id) }}
             >
               <Popup>
-                <div className="text-sm">
+                <div className="min-w-40 text-sm text-slate-800">
                   <div className="font-semibold">{farm.name}</div>
-                  <div className="text-gray-500 text-xs mt-0.5">
-                    {farm.location} · {farm.area_mu} 亩
+                  <div className="mt-1 text-xs text-slate-500">
+                    {farm.location || "位置待补充"} · {farm.area_mu} 亩
                   </div>
                 </div>
               </Popup>
@@ -193,70 +138,36 @@ export default function FarmMap({
           );
         })}
 
-        {/* Trajectory points — small dots with popups */}
-        {trajectoryPoints.length > 0 &&
-          trajectoryPoints.map((pt, i) => {
-            const isFirst = i === 0;
-            const isLast = i === trajectoryPoints.length - 1;
-            // 只显示起点、终点以及每第 3 个点，避免过密连成线
-            if (!isFirst && !isLast && i % 3 !== 0) return null;
-
-            const color = STATUS_COLORS[pt.work_status] || STATUS_COLORS.idle;
-
-            return (
-              <CircleMarker
-                key={`pt-${i}`}
-                center={[pt.latitude, pt.longitude]}
-                radius={isFirst || isLast ? 6 : 3}
-                pathOptions={{
-                  color: isFirst ? "#16a34a" : isLast ? "#ef4444" : color,
-                  fillColor: isFirst ? "#22c55e" : isLast ? "#f87171" : color,
-                  fillOpacity: 0.9,
-                  weight: isFirst || isLast ? 2 : 1,
-                }}
-              >
-                <Popup>
-                  <div className="text-xs space-y-1 min-w-[160px]">
-                    <div className="font-semibold text-sm">
-                      {isFirst ? "🟢 起点" : isLast ? "🔴 终点" : `📍 轨迹点 #${pt.seq}`}
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                      <span className="text-gray-500">经度</span>
-                      <span className="font-mono">{pt.longitude.toFixed(6)}</span>
-                      <span className="text-gray-500">纬度</span>
-                      <span className="font-mono">{pt.latitude.toFixed(6)}</span>
-                      <span className="text-gray-500">状态</span>
-                      <span style={{ color }}>{STATUS_LABELS[pt.work_status] || pt.work_status}</span>
-                      <span className="text-gray-500">速度</span>
-                      <span>{pt.speed.toFixed(1)} km/h</span>
-                      {pt.depth > 0 && (
-                        <>
-                          <span className="text-gray-500">深度</span>
-                          <span>{pt.depth.toFixed(1)} cm</span>
-                        </>
-                      )}
-                      {pt.gps_time && (
-                        <>
-                          <span className="text-gray-500">时间</span>
-                          <span>{formatTime(pt.gps_time)}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            );
-          })}
+        {isEditing && draftPosition && (
+          <Marker
+            position={draftPosition}
+            icon={selectedIcon}
+            draggable
+            eventHandlers={{
+              dragend: (event) => onDraftPositionChange(event.target.getLatLng()),
+            }}
+          >
+            <Popup>拖动标记或点击地图，确定农场位置</Popup>
+          </Marker>
+        )}
       </MapContainer>
+
+      <div className="pointer-events-none absolute left-4 top-4 z-[500] max-w-[250px] rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur">
+        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
+          <MapPin className="h-4 w-4 text-emerald-700" />
+          {isEditing ? "正在调整农场位置" : "农场位置总览"}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-slate-600">
+          {isEditing ? "点击地图或拖动圆点，确认后再保存。" : "点击标记即可切换当前农场。"}
+        </p>
+      </div>
+
+      {isEditing && (
+        <div className="pointer-events-none absolute bottom-4 left-4 z-[500] flex items-center gap-2 rounded-lg bg-emerald-950 px-3 py-2 text-xs text-white shadow-lg">
+          <LocateFixed className="h-3.5 w-3.5" />
+          位置尚未保存
+        </div>
+      )}
     </div>
   );
-}
-
-function formatTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  } catch {
-    return iso;
-  }
 }

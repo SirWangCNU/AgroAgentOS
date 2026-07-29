@@ -29,3 +29,26 @@ export interface WeatherLocationConfig {
   timeout_ms: number;
   high_accuracy: boolean;
 }
+
+export interface FarmWeatherCurrent {
+  condition: string;
+  temperature: number;
+  humidity: number;
+  wind_speed: number;
+  wind_level: number;
+  update_time: string;
+}
+
+export interface FarmWeatherAlert {
+  alert_type: string;
+  date: string;
+  severity: string;
+}
+
+export interface FarmWeatherSummary {
+  available: boolean;
+  reason: "FARM_LOCATION_REQUIRED" | "WEATHER_SERVICE_UNAVAILABLE" | null;
+  current: FarmWeatherCurrent | null;
+  alerts: FarmWeatherAlert[];
+  source: string | null;
+}
