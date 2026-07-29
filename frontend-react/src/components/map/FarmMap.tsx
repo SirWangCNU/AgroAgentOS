@@ -11,6 +11,7 @@ import {
 } from "react-leaflet";
 import L, { type LatLngLiteral } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { gcj02ToWgs84, wgs84ToGcj02 } from "../../lib/coordinates";
 
 const defaultIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -28,6 +29,14 @@ const selectedIcon = new L.DivIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 16],
 });
+
+function toMapCoordinate(position: LatLngLiteral): LatLngLiteral {
+  return wgs84ToGcj02(position);
+}
+
+function toStoredCoordinate(position: LatLngLiteral): LatLngLiteral {
+  return gcj02ToWgs84(position);
+}
 
 export interface FarmMapMarker {
   id: number;
@@ -58,7 +67,8 @@ function FlyToFarm({ farm }: { farm: FarmMapMarker | undefined }) {
       farm.longitude !== null &&
       farm.id !== previousFarmId.current
     ) {
-      map.flyTo([farm.latitude, farm.longitude], 14, { duration: 0.65 });
+      const position = toMapCoordinate({ lat: farm.latitude, lng: farm.longitude });
+      map.flyTo([position.lat, position.lng], 14, { duration: 0.65 });
       previousFarmId.current = farm.id;
     }
   }, [farm, map]);
@@ -75,7 +85,7 @@ function DraftLocationHandler({
 }) {
   useMapEvents({
     click(event) {
-      if (enabled) onChange(event.latlng);
+      if (enabled) onChange(toStoredCoordinate(event.latlng));
     },
   });
   return null;
@@ -90,25 +100,39 @@ export default function FarmMap({
   onDraftPositionChange,
 }: FarmMapProps) {
   const selectedFarm = farms.find((farm) => farm.id === selectedFarmId);
-  const center: [number, number] =
+  const selectedFarmPosition =
     selectedFarm?.latitude != null && selectedFarm?.longitude != null
-      ? [selectedFarm.latitude, selectedFarm.longitude]
-      : [35.86, 104.19];
+      ? toMapCoordinate({ lat: selectedFarm.latitude, lng: selectedFarm.longitude })
+      : null;
+  const center: [number, number] = selectedFarmPosition
+    ? [selectedFarmPosition.lat, selectedFarmPosition.lng]
+    : [35.86, 104.19];
+  const mapDraftPosition = draftPosition ? toMapCoordinate(draftPosition) : null;
 
   return (
     <div className="relative h-full min-h-[560px] overflow-hidden rounded-2xl border border-emerald-900/10 bg-[#eaf1e7] shadow-[0_18px_50px_rgba(41,71,48,0.12)] map-isolation">
-      <MapContainer center={center} zoom={selectedFarm?.latitude != null ? 14 : 4} className="h-full w-full" scrollWheelZoom>
+      <MapContainer
+        center={center}
+        zoom={selectedFarm?.latitude != null ? 14 : 4}
+        maxZoom={18}
+        className="h-full w-full"
+        scrollWheelZoom
+      >
         <LayersControl position="topright">
-          <LayersControl.BaseLayer checked name="地形地图">
+          <LayersControl.BaseLayer checked name="高德地图">
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="&copy; 高德地图"
+              url="https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}"
+              subdomains={["1", "2", "3", "4"]}
+              maxZoom={18}
             />
           </LayersControl.BaseLayer>
-          <LayersControl.BaseLayer name="卫星地图">
+          <LayersControl.BaseLayer name="高德卫星">
             <TileLayer
-              attribution="Tiles &copy; Esri"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution="&copy; 高德地图"
+              url="https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}"
+              subdomains={["1", "2", "3", "4"]}
+              maxZoom={18}
             />
           </LayersControl.BaseLayer>
         </LayersControl>
@@ -122,7 +146,7 @@ export default function FarmMap({
           return (
             <Marker
               key={farm.id}
-              position={[farm.latitude, farm.longitude]}
+              position={toMapCoordinate({ lat: farm.latitude, lng: farm.longitude })}
               icon={selected ? selectedIcon : defaultIcon}
               eventHandlers={{ click: () => onFarmClick(farm.id) }}
             >
@@ -138,13 +162,13 @@ export default function FarmMap({
           );
         })}
 
-        {isEditing && draftPosition && (
+        {isEditing && mapDraftPosition && (
           <Marker
-            position={draftPosition}
+            position={mapDraftPosition}
             icon={selectedIcon}
             draggable
             eventHandlers={{
-              dragend: (event) => onDraftPositionChange(event.target.getLatLng()),
+              dragend: (event) => onDraftPositionChange(toStoredCoordinate(event.target.getLatLng())),
             }}
           >
             <Popup>拖动标记或点击地图，确定农场位置</Popup>
