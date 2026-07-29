@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 
 from app.models.farm import Farm
+from app.models.user import User
+from app.schemas.weather import FarmWeatherSummary
 from app.services.weather_service import (
     DailyForecastDetail,
     WeatherData,
@@ -119,3 +121,32 @@ async def test_live_weather_summary_returns_metrics_and_risk_without_advice(
     assert "advice" not in result.model_dump()
     assert fake.coordinate_calls == [(36.1, 118.1)]
     assert fake.forecast_locations == ["寿光"]
+
+
+@pytest.mark.asyncio
+async def test_farm_weather_endpoint_uses_the_current_users_farm(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """接口若忽略当前用户，会让任意登录用户读取其他农场的天气。"""
+    from app.api.v1 import farms as farms_api
+
+    farm = Farm(id=12, user_id=7, name="北地", latitude=36.1, longitude=118.1)
+    current_user = User(id=7, username="farmer", email="farmer@example.com", hashed_password="hash")
+    captured: dict[str, int] = {}
+
+    def fake_get_farm(farm_id: int, user_id: int) -> Farm:
+        captured["farm_id"] = farm_id
+        captured["user_id"] = user_id
+        return farm
+
+    async def fake_summary(_: Farm) -> FarmWeatherSummary:
+        return FarmWeatherSummary(available=False, reason="FARM_LOCATION_REQUIRED")
+
+    monkeypatch.setattr(farms_api.farm_service, "get_farm", fake_get_farm)
+    monkeypatch.setattr(farms_api, "get_farm_weather_summary", fake_summary)
+
+    response = await farms_api.get_farm_weather(12, current_user)
+
+    assert captured == {"farm_id": 12, "user_id": 7}
+    assert response.code == "SUCCESS"
+    assert response.data.reason == "FARM_LOCATION_REQUIRED"
