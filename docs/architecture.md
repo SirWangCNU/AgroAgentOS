@@ -430,7 +430,6 @@ interface HealthStore {
 | `/` , `/chat` | ChatPage | 主聊天界面（RAG 问答） |
 | `/chat/:sessionId` | ChatPage | 指定会话聊天 |
 | `/workspace` | Dashboard | 工作台仪表盘 |
-| `/workspace/weather` | WeatherPage | 天气咨询服务 |
 | `/workspace/farms` | FarmsPage | 农场管理（含地图） |
 | `/workspace/knowledge` | KnowledgePage | 知识库管理 |
 | `/workspace/marketing` | MarketingPage | 营销内容生成 |
@@ -495,7 +494,6 @@ async function* consumeSSE(url: string, options?: RequestInit): AsyncGenerator<S
 | `/history` | GET | 查询历史记录 | ✅ |
 | `/observability` | GET | Agent 可观测性数据 | ✅ |
 | `/diagnosis` | GET | 诊断记录 | ✅ |
-| `/weather` | GET | 天气查询 | ✅ |
 | `/auth` | POST/GET | JWT 认证（登录、用户管理） | 部分 |
 | `/farms` | GET/POST/PUT/DELETE | 农场位置、地块与天气风险管理 | ✅ |
 | `/image` | POST | YOLO 病虫害图像识别 | ✅ |
