@@ -1,10 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Database,
   Cpu,
-  CloudSun,
   Tractor,
   BookOpen,
   Megaphone,
@@ -19,18 +17,9 @@ import {
 import { useAuthStore } from "../stores/auth";
 import { useHealthStore } from "../stores/health";
 import { useConversationStore } from "../stores/conversation";
-import { getWeather } from "../api/weather";
 import StatCard from "../components/ui/StatCard";
 
 const TOOLS = [
-  {
-    icon: CloudSun,
-    label: "天气查询",
-    desc: "实时天气与农事建议",
-    path: "/workspace/weather",
-    color: "text-accent-amber",
-    bg: "bg-accent-amber/10",
-  },
   {
     icon: Tractor,
     label: "农场管理",
@@ -96,12 +85,6 @@ export default function Dashboard() {
   const skills = useHealthStore((s) => s.skills);
   const conversations = useConversationStore((s) => s.conversations);
 
-  const { data: weather } = useQuery({
-    queryKey: ["weather", "dashboard"],
-    queryFn: () => getWeather("北京"),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const recentConversations = conversations.slice(0, 4);
 
   return (
@@ -137,13 +120,6 @@ export default function Dashboard() {
             label="可用技能"
             value={`${skills.length} 个`}
             color="text-accent-purple"
-          />
-          <StatCard
-            icon={CloudSun}
-            label="今日天气"
-            value={weather ? `${weather.current.temperature}°` : "..."}
-            color="text-accent-amber"
-            sub={weather?.current.condition}
           />
         </div>
 
@@ -233,31 +209,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Quick weather summary */}
-            {weather && (
-              <div className="mt-4 bg-bg-card rounded-xl border border-border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-text-muted">
-                      {weather.current.location}
-                    </div>
-                    <div className="text-2xl font-bold mt-1">
-                      {weather.current.temperature}°
-                    </div>
-                    <div className="text-sm text-text-secondary">
-                      {weather.current.condition}
-                    </div>
-                  </div>
-                  <CloudSun className="w-12 h-12 text-accent-amber opacity-60" />
-                </div>
-                <button
-                  onClick={() => navigate("/workspace/weather")}
-                  className="mt-3 w-full text-xs text-primary hover:underline text-center"
-                >
-                  查看详细天气 →
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>

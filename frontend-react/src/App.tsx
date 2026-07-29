@@ -4,7 +4,6 @@ import AppLayout from "./components/layout/AppLayout";
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
 import Dashboard from "./pages/Dashboard";
-import Weather from "./pages/Weather";
 import Farms from "./pages/Farms";
 import Knowledge from "./pages/Knowledge";
 import Marketing from "./pages/Marketing";
@@ -38,7 +37,6 @@ export default function App() {
 
             {/* Workspace (Dashboard = landing page for /workspace) */}
             <Route path="/workspace" element={<Dashboard />} />
-            <Route path="/workspace/weather" element={<Weather />} />
             <Route path="/workspace/farms" element={<Farms />} />
             <Route path="/workspace/knowledge" element={<Knowledge />} />
             <Route path="/workspace/marketing" element={<Marketing />} />

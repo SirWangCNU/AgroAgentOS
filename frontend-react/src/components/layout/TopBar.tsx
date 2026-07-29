@@ -5,7 +5,6 @@ import {
   ChevronDown,
   LogOut,
   LayoutDashboard,
-  CloudSun,
   Tractor,
   BookOpen,
   Megaphone,
@@ -19,11 +18,9 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
-import WeatherBadge from "./WeatherBadge";
 
 const WORKSPACE_ITEMS = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/workspace" },
-  { icon: CloudSun, label: "天气查询", path: "/workspace/weather" },
   { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
   { icon: BookOpen, label: "智能体技能和知识库", path: "/workspace/knowledge" },
   { icon: Megaphone, label: "营销生成", path: "/workspace/marketing" },
@@ -134,10 +131,6 @@ export default function TopBar() {
           )}
         </div>
 
-        {/* Weather badge */}
-        <WeatherBadge />
-
-        {/* Divider */}
         <div className="w-px h-5 bg-border mx-1" />
 
         {/* User avatar — 直接跳转个人中心 */}
