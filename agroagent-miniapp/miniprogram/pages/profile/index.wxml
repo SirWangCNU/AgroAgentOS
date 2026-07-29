@@ -5,33 +5,8 @@
     <view class="pr">👤 {{user.role}}</view>
   </view>
 
-  <!-- 账号同步区（绑定/已绑定 Web 账号）-->
-  <view class="bind-card">
-    <view class="bind-head">
-      <text class="bind-title">账号同步</text>
-      <text class="bind-tag" wx:if="{{user.bound}}">已绑定</text>
-      <text class="bind-tag bind-tag-off" wx:else>未绑定</text>
-    </view>
-    <view class="bind-desc" wx:if="{{user.bound}}">
-      已绑定 Web 账号 <text class="bind-name">{{user.bound_username}}</text>，数据已同步
-    </view>
-    <view class="bind-desc" wx:else>
-      绑定 Web 账号后，在小程序和网页端看到同一份数据（对话、农场、诊断记录）
-    </view>
-    <view class="bind-actions">
-      <view class="bind-btn" wx:if="{{!user.bound}}" bindtap="onOpenBind">🔗 绑定 Web 账号</view>
-    </view>
-  </view>
-
   <view class="sg" wx:for="{{groups}}" wx:for-item="group" wx:key="index">
-    <view
-      class="si"
-      wx:for="{{group}}"
-      wx:for-item="item"
-      wx:key="id"
-      data-id="{{item.id}}"
-      bindtap="onItem"
-    >
+    <view class="si" wx:for="{{group}}" wx:for-item="item" wx:key="id" data-id="{{item.id}}" bindtap="onItem">
       <view class="sic" style="background: {{item.color}}">{{item.icon}}</view>
       <view class="sc2">
         <text class="st3">{{item.title}}</text>
@@ -42,35 +17,8 @@
   </view>
 
   <view class="logout" bindtap="onLogout">退出登录</view>
-
   <view class="ai2">
     <view class="av2">AgroAgentOS v1.0.0</view>
     <view class="an">智农协同平台</view>
-  </view>
-
-  <!-- 绑定弹窗 -->
-  <view class="mask" wx:if="{{bindDialog}}" bindtap="onCloseBind">
-    <view class="dialog" catchtap>
-      <view class="dialog-title">输入绑定码</view>
-      <view class="dialog-desc">
-        请在电脑打开网页版 → 头像 → 个人中心 → 生成绑定码，然后在下方输入 6 位数字
-      </view>
-      <input
-        class="dialog-input"
-        type="number"
-        maxlength="6"
-        placeholder="6 位绑定码"
-        value="{{bindCode}}"
-        bindinput="onBindCodeInput"
-        focus="{{true}}"
-      />
-      <view wx:if="{{bindError}}" class="dialog-error">{{bindError}}</view>
-      <view class="dialog-actions">
-        <view class="dialog-btn dialog-btn-cancel" bindtap="onCloseBind">取消</view>
-        <view class="dialog-btn dialog-btn-ok {{bindLoading ? 'dialog-btn-loading' : ''}}" bindtap="onConfirmBind">
-          {{bindLoading ? '绑定中…' : '确认绑定'}}
-        </view>
-      </view>
-    </view>
   </view>
 </view>
