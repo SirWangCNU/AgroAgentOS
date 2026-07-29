@@ -291,7 +291,6 @@ async def lifespan(app: FastAPI):
 | 进程监控 | psutil | 系统资源监控 |
 | Token 计数 | tiktoken | Token 用量统计 |
 | Redis 客户端 | redis | 会话缓存 |
-| Excel 处理 | openpyxl | 农机轨迹数据导入 |
 | 图表生成 | matplotlib | 数据可视化 |
 | 图像推理 | onnxruntime + Pillow | YOLO 病虫害识别 |
 | 密码加密 | bcrypt | 用户密码哈希 |
@@ -498,8 +497,7 @@ async function* consumeSSE(url: string, options?: RequestInit): AsyncGenerator<S
 | `/diagnosis` | GET | 诊断记录 | ✅ |
 | `/weather` | GET | 天气查询 | ✅ |
 | `/auth` | POST/GET | JWT 认证（登录、用户管理） | 部分 |
-| `/farms` | GET/POST/PUT/DELETE | 农场与地块管理 | ✅ |
-| `/trajectories` | GET/POST | 农机轨迹数据 | ✅ |
+| `/farms` | GET/POST/PUT/DELETE | 农场位置、地块与天气风险管理 | ✅ |
 | `/image` | POST | YOLO 病虫害图像识别 | ✅ |
 | `/sessions` | GET/POST/DELETE | 聊天会话 CRUD | ✅ |
 | `/webhook` | POST | Webhook 端点 | ❌ |
@@ -547,14 +545,7 @@ async function* consumeSSE(url: string, options?: RequestInit): AsyncGenerator<S
 | 模型 | 表名 | 字段 |
 |------|------|------|
 | `Farm` | `farms` | id, name, location, latitude, longitude, area_mu, user_id, created_at |
-| `Field` | `fields` | id, farm_id(FK), soil_type, current_crop, planting_date, growth_stage, boundary(GeoJSON), created_at |
-
-#### 农机轨迹
-
-| 模型 | 表名 | 字段 |
-|------|------|------|
-| `TrajectoryFile` | `trajectory_files` | id, filename, user_id, point_count, created_at |
-| `TrajectoryPoint` | `trajectory_points` | id, file_id(FK), latitude, longitude, speed, depth, work_status, timestamp |
+| `Field` | `fields` | id, farm_id(FK), name, area_mu, current_crop, status, notes, created_at |
 
 ### 7.2 向量数据库（Milvus）
 
