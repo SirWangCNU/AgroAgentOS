@@ -2,11 +2,36 @@ import { API_BASE, STORAGE_KEYS } from "../lib/constants";
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
+}
+
+function extractErrorMessage(text: string): { message: string; code?: string } {
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object") {
+      // 优先使用后端统一响应格式的外层 message
+      if (typeof parsed.message === "string" && parsed.message) {
+        return { message: parsed.message, code: parsed.code };
+      }
+      // 兼容嵌套 data.message
+      if (parsed.data && typeof parsed.data.message === "string" && parsed.data.message) {
+        return { message: parsed.data.message, code: parsed.data.code };
+      }
+      // 兼容 { error: "..." }
+      if (typeof parsed.error === "string" && parsed.error) {
+        return { message: parsed.error };
+      }
+    }
+  } catch {
+    // 非 JSON 时直接返回原文
+  }
+  return { message: text };
 }
 
 export async function authFetch<T = unknown>(
@@ -34,7 +59,8 @@ export async function authFetch<T = unknown>(
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
-    throw new ApiError(resp.status, text || `HTTP ${resp.status}`);
+    const { message, code } = extractErrorMessage(text);
+    throw new ApiError(resp.status, message || `HTTP ${resp.status}`, code);
   }
 
   return resp.json();

@@ -1,8 +1,7 @@
 """农场和地块业务服务."""
 
-from typing import Optional
-
 from loguru import logger
+from sqlalchemy.orm import Session
 
 from app.core.sqlite import sqlite_manager
 from app.exceptions import AppException
@@ -13,6 +12,12 @@ from app.schemas.farm import (
     FieldCreateRequest,
     FieldUpdateRequest,
 )
+
+
+def _refresh_and_detach(sess: Session, instance):
+    sess.refresh(instance)
+    sess.expunge(instance)
+    return instance
 
 
 # ==================== 农场 CRUD ====================
@@ -33,7 +38,7 @@ def create_farm(user_id: int, data: FarmCreateRequest) -> Farm:
         sess.add(farm)
         sess.flush()
         farm_id = farm.id
-        sess.expunge(farm)
+        _refresh_and_detach(sess, farm)
         logger.info(f"[Farm] 创建农场: id={farm_id} user={user_id} name={data.name}")
         return farm
 
@@ -74,7 +79,7 @@ def update_farm(farm_id: int, user_id: int, data: FarmUpdateRequest) -> Farm:
         for key, value in update_data.items():
             setattr(farm, key, value)
         sess.flush()
-        sess.expunge(farm)
+        _refresh_and_detach(sess, farm)
         logger.info(f"[Farm] 更新农场: id={farm_id} fields={list(update_data.keys())}")
         return farm
 
@@ -122,7 +127,7 @@ def create_field(farm_id: int, user_id: int, data: FieldCreateRequest) -> Field:
         sess.add(field)
         sess.flush()
         field_id = field.id
-        sess.expunge(field)
+        _refresh_and_detach(sess, field)
         logger.info(f"[Field] 创建地块: id={field_id} farm={farm_id} name={data.name}")
         return field
 
@@ -169,7 +174,7 @@ def update_field(field_id: int, user_id: int, data: FieldUpdateRequest) -> Field
         for key, value in update_data.items():
             setattr(field, key, value)
         sess.flush()
-        sess.expunge(field)
+        _refresh_and_detach(sess, field)
         logger.info(f"[Field] 更新地块: id={field_id} fields={list(update_data.keys())}")
         return field
 

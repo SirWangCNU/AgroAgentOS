@@ -6,7 +6,6 @@ import {
   Tractor,
   BookOpen,
   Megaphone,
-  Bug,
   Users,
   MessageSquare,
   Sprout,
@@ -43,14 +42,6 @@ const TOOLS = [
     path: "/workspace/marketing",
     color: "text-accent-purple",
     bg: "bg-accent-purple/10",
-  },
-  {
-    icon: Bug,
-    label: "病虫害诊断",
-    desc: "基于症状描述智能诊断",
-    path: "/workspace/pest",
-    color: "text-accent-red",
-    bg: "bg-accent-red/10",
   },
   {
     icon: TrendingUp,

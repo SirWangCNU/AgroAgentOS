@@ -78,7 +78,6 @@ export default function History() {
             <option value="chat">智能问答</option>
             <option value="weather">天气</option>
             <option value="marketing">营销</option>
-            <option value="pest">病虫害</option>
           </select>
           <button
             onClick={() =>

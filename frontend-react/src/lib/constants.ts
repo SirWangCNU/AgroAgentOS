@@ -21,7 +21,6 @@ export const NAV_ITEMS: Array<{
   { path: "/knowledge", label: "智能体技能和知识库", icon: "BookOpen" },
   { path: "/history", label: "历史记录", icon: "History" },
   { path: "/marketing", label: "营销生成", icon: "Megaphone" },
-  { path: "/pest", label: "病虫害诊断", icon: "Bug" },
   { path: "/market", label: "市场行情", icon: "TrendingUp" },
   { path: "/users", label: "用户管理", icon: "Users", adminOnly: true },
 ];
