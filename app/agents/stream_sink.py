@@ -2,13 +2,13 @@
 
 LangGraph graph.astream() 只产出节点级事件, Executor 内部 LLM 的 token 级流式
 没有官方出口. 这里用 ContextVar + asyncio.Queue 把 token 从 tool_runner
-外送给 aiops_service, 让前端能看到 Executor 正在生成文字, 减少空白等待.
+外送给当前流式响应消费者, 让前端能看到 Executor 正在生成文字, 减少空白等待.
 
 用法:
-  - aiops_service 在启动 graph.astream 前调 set_sink(queue), 然后把 graph.astream
+  - 调用方在启动 graph.astream 前调 set_sink(queue), 然后把 graph.astream
     包成 Task (Task 自动复制当前 context, 所以 tool_runner 里 get_sink() 拿得到).
   - tool_runner 每次流式输出调 await emit({...}).
-  - aiops_service 主循环 merge 自己的 "node event" 和 queue 里的 "token event",
+  - 调用方 merge 自己的 "node event" 和 queue 里的 "token event",
     统一 yield 给 SSE.
 """
 
@@ -41,7 +41,7 @@ _emit_count = 0
 
 
 async def emit(event: Dict[str, Any]) -> None:
-    """把事件推到 aiops_service 的中转队列. 队列不存在或满了, 静默丢弃."""
+    """把事件推到当前调用方的中转队列. 队列不存在或满了, 静默丢弃."""
     global _miss_count, _emit_count
     from loguru import logger  # 放函数内避免循环 import
 

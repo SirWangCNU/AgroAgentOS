@@ -16,7 +16,7 @@ class ChatRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "session_id": "session-001",
-                "question": "Redis 内存使用率过高怎么处理?",
+                "question": "水稻叶片出现褐色斑点应该怎么处理？",
                 "top_k": 3,
                 "web_search": False,
                 "mcp_tools": True,

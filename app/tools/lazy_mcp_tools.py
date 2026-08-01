@@ -70,7 +70,7 @@ def create_lazy_mcp_tools(allowed_tool_names: Set[str]) -> List[BaseTool]:
 
         Args:
             tool_name: 要执行的 MCP 工具名, 必须先通过 mcp_search_tools 发现。
-            arguments_json: JSON 字符串形式的工具参数, 例如 {"query":"CPU 高"}。
+            arguments_json: JSON 字符串形式的工具参数，例如 {"query":"水稻稻瘟病"}。
 
         Returns:
             真实 MCP 工具的执行结果。

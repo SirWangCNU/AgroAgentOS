@@ -5,7 +5,7 @@
 
 设计理念:
   - 把"为什么走到这条出口"从藏在日志正文升级成结构化字段
-  - 5-6 条兜底分支不再都进同一个 _force_summary 出口, 排障一眼定位
+  - 5-6 条兜底分支不再都进同一个 _force_summary 出口，便于定位流程状态
   - 前端用 transition_history 渲染时间线, 演示可观测性
   - 未来加 cc-haha 那样的真正恢复策略 (collapse/compact/escalate) 只是加常量
 
@@ -24,9 +24,9 @@ from typing import TypedDict
 # ============================================================
 
 # === Skill Router ===
-ROUTER_OUT_OF_SCOPE = "router_out_of_scope"        # 非 OnCall 输入, 直接终止 (response 已填)
+ROUTER_OUT_OF_SCOPE = "router_out_of_scope"        # 非农业输入, 直接终止 (response 已填)
 ROUTER_LLM_FAILED = "router_llm_failed"            # Router LLM 异常, 走规则兜底
-ROUTER_FALLBACK_GENERIC = "router_fallback_generic"  # LLM 返回未知 skill, 回退 generic
+ROUTER_FALLBACK_DEFAULT = "router_fallback_default"  # LLM 返回未知 skill, 回退农业默认 Skill
 ROUTER_OK = "router_ok"                            # 正常选定 skill
 
 # === Planner ===

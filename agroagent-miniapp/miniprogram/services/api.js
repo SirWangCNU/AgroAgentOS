@@ -23,9 +23,6 @@ const api = {
   // ===== 农场 =====
   listFarms: () => request({ url: '/farms', method: 'GET' }),
 
-  // ===== 诊断记录 =====
-  listDiagnosis: () => request({ url: '/diagnosis/records', method: 'GET' }),
-
   // ===== 图片上传（病虫害识别）=====
   // 后端接口: POST /api/v1/image/analyze (multipart, 字段名 file)
   analyzeImage: (filePath) =>

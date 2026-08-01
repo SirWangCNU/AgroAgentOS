@@ -83,7 +83,7 @@ def filter_tools_for_skill(
       - decisions:     运行时 tool_runner 用 (ask -> 走审批, allow -> 直接调)
 
     Args:
-        selected_skill_name: SkillRouter 选定的 skill (None -> generic_oncall 兜底)
+        selected_skill_name: SkillRouter 选定的 skill (None -> agriculture_qa 兜底)
         tools: get_all_tools() 给的全量工具列表
         mode: 权限模式 (read_only / normal / ask_destructive / bypass)
 
@@ -91,7 +91,7 @@ def filter_tools_for_skill(
         (visible_tools, decisions_for_all_skill_tools)
     """
     registry = get_skill_registry()
-    skill = registry.get_or_generic(selected_skill_name)
+    skill = registry.get_or_default(selected_skill_name)
     allowed = set(skill.allowed_tools)
 
     if not allowed:
@@ -102,7 +102,7 @@ def filter_tools_for_skill(
 
     # ---- Step 1: 组装 Skill 可见工具集 ----
     # 策略 (2026-05-02): 除 Skill allowed_tools 外, 把所有 "只读工具" 也纳入候选,
-    # 目的是避免 Skill 漏配某个查询工具导致诊断时无法获取真实数据.
+    # 目的是避免 Skill 漏配某个查询工具导致农业分析时无法获取真实数据.
     # 写/通知/高危工具仍然必须显式列在 allowed_tools 里才能出现.
     available_names = {tool.name for tool in tools}
     skill_tools: List[BaseTool] = []

@@ -1,11 +1,11 @@
-"""诊断历史记录服务 (SQLite-based).
+"""农业问答历史记录服务 (SQLite-based).
 
 存储结构:
   - SQLite Table: history_records (record_id, question, answer, source, session_id, skill, ...)
 
 设计:
   - 持久化存储，永久保留历史记录
-  - 记录来源: "chat" (RAG Copilot) 或 "aiops" (智能诊断)
+  - 记录来源: chat / weather / marketing 等农业业务场景
   - 单条回答截断到 12KB, 防极端情况撑爆数据库
   - 使用 SQLiteManager 进行数据操作
   - 单条记录最大 12KB
@@ -61,7 +61,7 @@ async def add_record(
 
 
 async def upload_record_to_kb(record_id: str) -> bool:
-    """将历史记录上传到 RAG 知识库 (Milvus 向量库).
+    """将农业问答历史上传到 RAG 知识库 (Milvus 向量库).
 
     由用户在诊断完成后手动调用此接口上传到知识库。
 
@@ -80,23 +80,23 @@ async def upload_record_to_kb(record_id: str) -> bool:
             logger.warning(f"[history] 记录没有有效报告 record_id={record_id}")
             return False
 
-        title = f"【诊断记录】{record.skill or '通用'} - {record.question[:50]}..."
+        title = f"【农业问答】{record.skill or '通用'} - {record.question[:50]}..."
         content = f"""# {title}
 
 ## 问题
 {record.question}
 
-## 诊断报告
+## 回答
 {record.answer}
 
 ---
-来源: 智能运维诊断系统
+来源: AgroAgentOS 农业智能问答
 记录ID: {record_id}
 时间: {record.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if record.created_at else 'N/A'}
 """
-        chunks = split_markdown(content, source=f"diagnosis:{record_id}")
+        chunks = split_markdown(content, source=f"history:{record_id}")
         if not chunks:
-            logger.warning(f"[history] 诊断报告分块为空 record_id={record_id}")
+            logger.warning(f"[history] 农业问答分块为空 record_id={record_id}")
             return False
 
         for chunk in chunks:
@@ -108,7 +108,7 @@ async def upload_record_to_kb(record_id: str) -> bool:
         vs.add_documents(chunks)
 
         sqlite_manager.update_history_kb_uploaded(record_id, True)
-        logger.info(f"[history] 诊断报告已上传知识库 record_id={record_id}, chunks={len(chunks)}")
+        logger.info(f"[history] 农业问答已上传知识库 record_id={record_id}, chunks={len(chunks)}")
         return True
 
     except Exception as e:

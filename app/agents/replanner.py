@@ -111,9 +111,9 @@ def _ensure_report_time(report: str, current_time: str) -> str:
     line = f"**生成时间**: {current_time}"
     if re.search(r"^\*\*生成时间\*\*:.*$", report, flags=re.MULTILINE):
         return re.sub(r"^\*\*生成时间\*\*:.*$", line, report, count=1, flags=re.MULTILINE)
-    if report.startswith("# 故障诊断报告"):
-        return report.replace("# 故障诊断报告", f"# 故障诊断报告\n{line}", 1)
-    return f"# 故障诊断报告\n{line}\n\n{report}"
+    if report.startswith("# 农业分析报告"):
+        return report.replace("# 农业分析报告", f"# 农业分析报告\n{line}", 1)
+    return f"# 农业分析报告\n{line}\n\n{report}"
 
 
 def _build_skill_context(
@@ -379,7 +379,7 @@ async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
             "replanner",
             REPLANNER_FINISHED_OK,
             f"report_len={len(report)}",
-            decision_summary=f"诊断完成，共执行 {len(past_steps)} 步，生成报告 {len(report)} 字符",
+            decision_summary=f"农业分析完成，共执行 {len(past_steps)} 步，生成结果 {len(report)} 字符",
         )
         history = [blocked_transition, finished_transition] if blocked_transition else [finished_transition]
         return {
@@ -421,16 +421,16 @@ def _force_summary(
 ) -> str:
     """硬兜底: 当 LLM 决策失败或超步数, 用模板生成简单报告."""
     if not past_steps:
-        return f"# 故障诊断报告\n**生成时间**: {current_time}\n\n## 问题\n{user_input}\n\n## 结论\n诊断流程异常终止, 未能收集到有效信息, 请人工介入。"
+        return f"# 农业分析结果\n**生成时间**: {current_time}\n\n## 用户问题\n{user_input}\n\n## 说明\n分析流程异常终止，暂未收集到足够信息，请补充作物、地区、生育期或现场症状后重试。"
 
     sections = [
-        "# 故障诊断报告\n",
+        "# 农业分析结果\n",
         f"**生成时间**: {current_time}\n",
-        f"## 问题\n{user_input}\n",
+        f"## 用户问题\n{user_input}\n",
         "## 收集到的信息\n",
     ]
     for i, (step, result) in enumerate(past_steps, 1):
         snippet = result[:300].replace("\n", " ")
         sections.append(f"**{i}. {step}**\n{snippet}\n")
-    sections.append("## 结论\n基于以上信息, 建议进一步人工确认根因和处置方案。")
+    sections.append("## 建议\n请结合当地气象、田间观察和农技人员意见核实后再采取措施。")
     return "\n".join(sections)

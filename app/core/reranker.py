@@ -5,7 +5,7 @@
 向量检索 (bi-encoder) 把 query 和 doc 分别编码成向量后算 cosine, 这是一次"粗排":
   - 优点: 预先算好 doc 向量, 查询时只算 query 向量 + 一次 ANN 搜索, 延迟低
   - 局限: query 和 doc 从未在同一个模型上下文中交互过, 对细粒度语义差异不敏感
-         (比如 "Redis 内存占用高" vs "Redis 内存泄漏排查", 向量很接近但问的是不同事)
+         （比如“水稻叶斑病”与“水稻稻瘟病”，向量很接近但防治重点不同）
 
 Reranker (cross-encoder) 把 (query, doc) 作为一对一起送进模型, 能捕捉精细的语义关联:
   - 优点: 准确度显著高于 bi-encoder (Anthropic 实测 top-20 失败率从 3.7% 降到 1.9%)
@@ -19,7 +19,7 @@ Reranker (cross-encoder) 把 (query, doc) 作为一对一起送进模型, 能捕
 ======================
   - 复用项目已有的 DashScope API Key, 不引入新依赖、新凭证
   - 不需要本地模型权重 (BGE-reranker 模型 500MB+, 冷启动慢)
-  - gte-rerank-v2 是通义实验室多语言模型, 对中英混合 SOP 文档友好
+  - gte-rerank-v2 是通义实验室多语言模型，对中英混合农业资料友好
   - 局限: 需联网访问 DashScope; 网络故障/超时会自动降级 (见 rerank_docs)
 
 降级策略

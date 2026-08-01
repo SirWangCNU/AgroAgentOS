@@ -32,7 +32,7 @@ mcp = FastMCP(name="WebSearchServer")
 _BLOCKED_KEYWORDS = (
     "动漫", "漫画", "电影", "电视剧", "番剧", "小说", "二次元",
     "游戏", "刀剑神域", "原神", "崩坏",
-    "天气", "旅游", "美食", "菜谱", "星座", "八卦",
+    "旅游", "美食", "菜谱", "星座", "八卦",
     "明星", "娱乐", "色情", "成人",
     "政治", "选举", "翻墙", "vpn",
     "身份证", "手机号", "护照", "信用卡", "password", "passwd",
@@ -84,8 +84,8 @@ def _check_rate_limit() -> str:
 @mcp.tool(
     name="web_search",
     description=(
-        "联网搜索互联网, 获取官方文档/技术资料/错误码说明等外部知识。"
-        "仅用于 OnCall 运维诊断, 严禁用于娱乐/八卦/隐私查询; "
+        "联网搜索农业、天气、市场、政策和科研资料等外部知识。"
+        "仅用于农业生产与经营问题, 严禁用于娱乐/八卦/隐私查询; "
         "query 必须脱敏, 不能含 IP / token / 手机号 / 身份证等敏感信息。"
     ),
 )
@@ -93,14 +93,14 @@ def web_search(query: str, max_results: int = 5) -> str:
     """联网搜索, 受黑名单 / 脱敏 / 限频三层硬约束保护."""
     query = (query or "").strip()
     if not query:
-        return "[web_search] query 为空, 请提供具体的运维/技术问题"
+        return "[web_search] query 为空, 请提供具体的农业问题"
     if len(query) > 200:
         return "[web_search] query 过长 (>200 字符), 请精简为关键关键词"
 
     blocked = _check_blocklist(query)
     if blocked:
         logger.warning(f"[web_search] BLOCK 黑名单: {blocked} | query={query!r}")
-        return f"[web_search] 已拒绝: {blocked}. 本工具仅服务于 OnCall 运维诊断."
+        return f"[web_search] 已拒绝: {blocked}. 本工具仅服务于农业生产与经营问题."
 
     sensitive = _check_sensitive(query)
     if sensitive:

@@ -5,10 +5,10 @@
 
 适用场景:
   - 未来新增长任务 Skill 时使用, 例如长报告、联网研究、跨语言通告
-  - 当前默认 7 个 OnCall Skill 均走 inline, 避免不必要的子图开销
+  - 当前农业 Skill 默认走 inline, 避免不必要的子图开销
 
 设计要点:
-  - 子图复用主图 build_aiops_graph(), 通过 state.inside_fork=True 防止无限递归 fork
+  - 子图复用主图 build_agriculture_graph(), 通过 state.inside_fork=True 防止无限递归 fork
   - 子图的 input 拼成 "用户问题 + Skill playbook" 让 Planner 直接基于 playbook 拆步
   - 子图异常 → 主线 response 设为 fallback 提示, 不中断整个 SSE 流
 
@@ -50,19 +50,19 @@ async def fork_skill_node(state: PlanExecuteState) -> PlanExecuteState:
           - transition_history: fork_success 或 fork_failed
     """
     # 延迟 import 避免循环 (graph -> fork_runner -> graph)
-    from app.agents.graph import build_aiops_graph
+    from app.agents.graph import build_agriculture_graph
 
     user_input = state.get("input", "")
     skill_name = state.get("selected_skill", "")
     registry = get_skill_registry()
-    skill = registry.get_or_generic(skill_name)
+    skill = registry.get_or_default(skill_name)
 
     logger.info(
         f"[ForkSkill] 启动 fork 子图: skill={skill.name} "
         f"display={skill.display_name} max_iters={skill.fork_max_iters}"
     )
 
-    sub_graph = build_aiops_graph()
+    sub_graph = build_agriculture_graph()
     sub_input = (
         f"# 主对话用户问题\n{user_input}\n\n"
         f"# 你需要按以下 Playbook 完成: {skill.display_name}\n"

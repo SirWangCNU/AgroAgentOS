@@ -29,8 +29,6 @@ from app.config import settings
 # 复用 sqlite.py 中定义的 ORM 模型和 Base
 from app.core.sqlite import (
     Base,
-    AgentExecutionLog,
-    AgentRun,
     BusinessRecord,
     ChatMessage,
     ChatSession,
@@ -218,36 +216,6 @@ class DatabaseManager:
             if session:
                 session.title = title
                 sess.flush()
-
-    # ==================== 执行日志方法 ====================
-
-    def save_execution_log(
-        self,
-        session_id: str | None,
-        skill_name: str | None,
-        step_index: int,
-        action: str,
-        tool_name: str | None = None,
-        result: str | None = None,
-        error: str | None = None,
-        duration_ms: int | None = None,
-    ) -> AgentExecutionLog:
-        """保存 Agent 执行日志."""
-        with self.session() as sess:
-            log = AgentExecutionLog(
-                session_id=session_id,
-                skill_name=skill_name,
-                step_index=step_index,
-                action=action,
-                tool_name=tool_name,
-                result=result,
-                error=error,
-                duration_ms=duration_ms,
-            )
-            sess.add(log)
-            sess.flush()
-            sess.expunge(log)
-            return log
 
     # ==================== 历史记录方法 ====================
 

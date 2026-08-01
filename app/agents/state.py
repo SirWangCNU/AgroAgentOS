@@ -35,7 +35,7 @@ class PlanExecuteState(TypedDict, total=False):
     """Plan-Execute 多智能体的共享状态.
 
     字段说明:
-        input:           用户原始问题/告警 (不变)
+        input:           用户原始农业问题 (不变)
         selected_skill:  Skill Router 选中的 skill name (snake_case)
         skill_reason:    Router 选择该 Skill 的一句话理由 (可观测/调试用)
         plan:            待执行的步骤列表 (Replanner 会更新)
@@ -75,13 +75,13 @@ class PlanExecuteState(TypedDict, total=False):
 # Planner 的结构化输出
 # ============================================================
 class Plan(BaseModel):
-    """诊断计划: 一组待执行的步骤."""
+    """农业分析计划: 一组待执行的步骤."""
 
     steps: List[str] = Field(
         ...,
         description=(
             "按顺序执行的步骤列表, 4-6 步为宜. "
-            "每步必须可以通过工具调用 (查日志/查指标/查知识库) 完成, "
+            "每步必须可以通过工具调用 (查天气/查市场/查知识库) 完成, "
             "或基于已有信息直接推理。"
         ),
     )
@@ -104,7 +104,7 @@ class Act(BaseModel):
     is_finished: bool = Field(
         ...,
         description=(
-            "诊断流程是否完成. "
+            "农业分析流程是否完成. "
             "true = 已收集到足够信息, 可以生成最终报告; "
             "false = 还需继续执行剩余步骤"
         ),
@@ -119,8 +119,8 @@ class Act(BaseModel):
     response: str = Field(
         default="",
         description=(
-            "完整的诊断报告 Markdown (仅当 is_finished=true 时有值). "
-            "包含问题概述、根因分析、关键证据、处置建议、结论"
+            "完整的农业分析报告 Markdown (仅当 is_finished=true 时有值). "
+            "包含问题概述、已知信息、综合分析、农事建议、结论"
         ),
     )
     # ===== Skill reroute (Supervisor + Handoff) =====
@@ -131,8 +131,8 @@ class Act(BaseModel):
         description=(
             "是否建议切换 Skill 重新规划. "
             "仅在以下情况设 true: "
-            "(1) 当前 Skill 的关键证据明确不成立 (例: host_resource_diagnosis 但 CPU/内存/磁盘全部正常); "
-            "(2) 工具结果明显指向另一个故障域 (例: 查 CPU 时发现 Redis 内存 98%); "
+            "(1) 当前 Skill 与作物或农业场景明确不匹配; "
+            "(2) 工具结果明显指向另一个农业领域 (例如天气问题实际是病虫害); "
             "(3) 当前 Skill 的关键工具全部不可用. "
             "其他情况一律走 is_finished 或继续 replan, 不要设 true."
         ),

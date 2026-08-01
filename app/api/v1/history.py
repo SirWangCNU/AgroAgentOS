@@ -59,7 +59,7 @@ async def delete_history_record(record_id: str) -> ApiResponse:
 async def upload_to_knowledge_base(record_id: str) -> ApiResponse:
     """将历史记录上传到 RAG 知识库 (Milvus 向量库).
 
-    将诊断报告格式化为 Markdown 文档并分块存储，供后续 RAG 检索使用。
+    将农业问答格式化为 Markdown 文档并分块存储，供后续 RAG 检索使用。
     """
     record = await history_service.get_record(record_id)
     if record is None:
@@ -69,7 +69,7 @@ async def upload_to_knowledge_base(record_id: str) -> ApiResponse:
         return ApiResponse.error(code="ALREADY_UPLOADED", message="该记录已上传过知识库")
 
     if not record.get("answer"):
-        return ApiResponse.error(code="NO_ANSWER", message="该记录没有诊断报告，无法上传")
+        return ApiResponse.error(code="NO_ANSWER", message="该记录没有回答，无法上传")
 
     success = await history_service.upload_record_to_kb(record_id)
     if not success:
@@ -86,7 +86,7 @@ async def clear_history(source: str | None = None) -> ApiResponse:
     """清空历史记录，默认清空全部来源.
 
     Query:
-        source: 可选，按来源筛选清空 (chat/aiops)
+        source: 可选，按农业业务来源筛选清空
     """
     count = await history_service.clear_records(source=source)
     return ApiResponse.success(data={"deleted_count": count})

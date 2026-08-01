@@ -1,4 +1,4 @@
-"""Planner 节点: 把用户问题拆解为多步诊断计划.
+"""Planner 节点：把用户农业问题拆解为多步分析计划。
 
 设计要点:
   - 使用 with_structured_output(Plan) 强制 LLM 返回 Pydantic 对象
@@ -32,9 +32,9 @@ async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
     skill_name = state.get("selected_skill", "")
     collaboration_skills = state.get("collaboration_skills", [])
 
-    # 取选定 Skill, 找不到时回退到 generic_oncall (registry 保证 fallback 存在)
+    # 取选定 Skill, 找不到时回退到 agriculture_qa
     registry = get_skill_registry()
-    skill = registry.get_or_generic(skill_name)
+    skill = registry.get_or_default(skill_name)
 
     is_reroute = state.get("pending_reroute", False)
 

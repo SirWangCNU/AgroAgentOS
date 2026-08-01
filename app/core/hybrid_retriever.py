@@ -3,10 +3,10 @@
 为什么要加 Hybrid Search
 ======================
 纯向量检索在语义泛化上强, 但有两个典型失手场景:
-  1) **精确 token 匹配丢失**: 用户输入 "ERR_CONN_REFUSED" 或 "redis.exception.TimeoutError",
-     这些是固定字符串 / 错误码 / 服务名, 向量编码会把它们"揉"进语义空间, 反而不如
+  1) **精确 token 匹配丢失**: 用户输入农药登记号、品种编号或拉丁学名，
+     这些是固定字符串，向量编码会把它们"揉"进语义空间，反而不如
      BM25 这种基于词频的算法精确命中.
-  2) **罕见长尾词**: 比如内部自定义的组件名 "oncall-dispatcher", 训练语料里几乎没有,
+  2) **罕见长尾词**: 比如地方品种名或少见病原名称，训练语料里几乎没有，
      embedding 质量差; BM25 不依赖语义, 见字如面.
 
 Hybrid 策略: 让 BM25 (sparse) 和 Vector (dense) 各出候选, 再用 RRF 融合去重排名.
@@ -22,9 +22,9 @@ Hybrid 策略: 让 BM25 (sparse) 和 Vector (dense) 各出候选, 再用 RRF 融
 为什么中文不用 jieba 分词
 ======================
   - 向量检索已经覆盖了中文语义, BM25 的核心价值是"捕获向量漏掉的精确 token".
-    这些 token 基本是英文 / 数字 / 错误码, 按字切 + 英文按空格切已经够用.
+    这些 token 基本是英文、数字、登记号或拉丁学名，按字切 + 英文按空格切已经够用.
   - 省掉 jieba 依赖 (几 MB + 词典加载耗时), 启动更轻.
-  - 局限: 纯中文长句 (比如"数据库连接池满了怎么办") 在 BM25 那一路会被打散成单字,
+  - 局限: 纯中文长句（比如“水稻叶片出现褐色斑点怎么办”）在 BM25 那一路会被打散成单字，
     recall 会略差; 但这种场景本来就是向量的强项, 整体不影响.
 
 索引刷新
@@ -69,11 +69,11 @@ def _tokenize(text: str) -> List[str]:
     """轻量分词: 英文按 token 切 (保留 dot/dash/underscore), 中文按字.
 
     Examples:
-        _tokenize("Redis 内存 98% OOM")
-        -> ["redis", "内", "存", "98", "oom"]
+        _tokenize("玉米 叶龄 6.5")
+        -> ["玉", "米", "叶", "龄", "6.5"]
 
-        _tokenize("ERR_CONN_REFUSED 怎么办")
-        -> ["err_conn_refused", "怎", "么", "办"]
+        _tokenize("Fusarium graminearum 防治")
+        -> ["fusarium", "graminearum", "防", "治"]
     """
     if not text:
         return []

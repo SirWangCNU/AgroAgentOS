@@ -1,5 +1,5 @@
 # ============================================================
-# Multi-Agent AIOps Platform - 生产依赖 (LangChain v1.x)
+# AgroAgentOS 农业多智能体平台 - 生产依赖 (LangChain v1.x)
 # ============================================================
 # 升级时间: 2025-10 (LangChain v1.0 发布后)
 # 安装: pip install -r requirements.txt --upgrade

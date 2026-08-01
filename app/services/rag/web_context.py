@@ -1,7 +1,7 @@
 """RAG Chat 的联网搜索上下文构造.
 
 策略:
-  - 联网仅允许搜索 "前面诊断报告里出现过的实体/术语" (white-list by reference)
+  - 联网查询仅围绕用户农业问题和当前会话中的实体/术语构建
   - 命中黑名单 / 敏感词直接拒
   - 真正的 provider 调度走 app.core.web_search
 """
@@ -16,7 +16,6 @@ from loguru import logger
 
 from app.config import settings
 from app.core.web_search import format_results, get_provider, search
-import app.services.chat_memory as chat_memory
 
 
 _SENSITIVE_WEB_PATTERNS = (
@@ -32,21 +31,18 @@ _BLOCKED_WEB_KEYWORDS = (
 )
 
 
-_REPORT_TERM_RE = re.compile(
+_QUERY_TERM_RE = re.compile(
     r"""
     [A-Za-z][A-Za-z0-9_.\-]{1,}
     |
-    [A-Za-z0-9_.\-]*\.exe
-    |
-    [\u4e00-\u9fffA-Za-z0-9_.\-]*(?:进程|服务|程序|工具|容器|镜像|实例|虚拟机|内存|磁盘|CPU)[\u4e00-\u9fffA-Za-z0-9_.\-]*
+    [\u4e00-\u9fffA-Za-z0-9_.\-]*(?:作物|品种|病害|虫害|农药|肥料|土壤|天气|气象|市场|价格|补贴|政策)[\u4e00-\u9fffA-Za-z0-9_.\-]*
     """,
     re.IGNORECASE | re.VERBOSE,
 )
 
-_REPORT_TERM_STOPWORDS = {
+_QUERY_TERM_STOPWORDS = {
     "什么", "怎么", "为什么", "刚刚", "刚才", "之前", "前面", "说的", "这个", "那个",
-    "帮我", "一下", "可以", "联网", "搜索", "查询", "诊断", "报告", "问题", "原因",
-    "cpu", "gpu", "ram", "mb", "gb", "kb", "ms", "pid",
+    "帮我", "一下", "可以", "联网", "搜索", "查询", "分析", "结果", "问题", "原因",
     "what", "why", "how", "the", "and", "for", "with", "this", "that",
 }
 
@@ -94,14 +90,14 @@ def _web_query_block_reason(text: str) -> str:
     return ""
 
 
-def _extract_report_terms(text: str) -> set[str]:
+def _extract_query_terms(text: str) -> set[str]:
     terms: set[str] = set()
-    for raw in _REPORT_TERM_RE.findall(text or ""):
+    for raw in _QUERY_TERM_RE.findall(text or ""):
         term = raw.strip("`'\"“”‘’,。！？；：:;,.()()[]【】<>《》")
         if not term:
             continue
         lower = term.lower()
-        if len(lower) < 2 or lower in _REPORT_TERM_STOPWORDS:
+        if len(lower) < 2 or lower in _QUERY_TERM_STOPWORDS:
             continue
         if lower.isdigit():
             continue
@@ -114,14 +110,10 @@ def build_restricted_web_query(
     *,
     summary: str,
     recent_messages: list[dict[str, Any]],
-    extra_reports: list[str] | None = None,
 ) -> tuple[str, list[str], str]:
     """联网 query 校验器.
 
-    联网仅允许搜索 "前面诊断报告里出现过的实体/术语". 报告范围:
-      - RAG Chat 历史里 assistant 角色发的内容 (本会话内)
-      - summary (压缩后的历史)
-      - extra_reports: 调用方注入的额外语料 (例如来自 AIOps 诊断模块写入 Redis 的最近报告)
+    联网查询只允许农业主题，并从当前问题中提取检索主题。
     """
     block_reason = _web_query_block_reason(rewritten_question)
     if block_reason:
@@ -133,7 +125,7 @@ def build_restricted_web_query(
 
     topics = _extract_web_topics(rewritten_question)
     if not topics:
-        topics = list(_extract_report_terms(query))[:3]
+        topics = list(_extract_query_terms(query))[:3]
 
     return query[:180].strip(), topics, ""
 
@@ -158,18 +150,10 @@ async def build_web_context(
         reason = "联网搜索未启用: RAG_CHAT_WEB_SEARCH_ENABLED=false"
         return f"({reason})", [], [], reason
 
-    try:
-        recent_reports = await chat_memory.get_recent_diagnosis_reports(limit=3)
-    except Exception as e:
-        logger.warning(f"[rag-web] 读取最近诊断报告失败: {type(e).__name__}: {e}")
-        recent_reports = []
-    extra_reports = [r.get("report") or "" for r in recent_reports if r.get("report")]
-
     query, topics, blocked = build_restricted_web_query(
         rewritten_question,
         summary=summary,
         recent_messages=recent_messages,
-        extra_reports=extra_reports,
     )
     if not query:
         logger.info(f"[rag-web] skip | topics={topics} | reason={blocked}")

@@ -26,7 +26,19 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.middleware import setup_middlewares
-from app.api.v1 import aiops, auth, chat, diagnosis, documents, farms, health, history, image, market, observability, sessions, skills, video, webhook
+from app.api.v1 import (
+    auth,
+    chat,
+    documents,
+    farms,
+    health,
+    history,
+    image,
+    market,
+    sessions,
+    skills,
+    video,
+)
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
 from app.core.database import database_manager
@@ -158,13 +170,9 @@ API_PREFIX = "/api/v1"
 
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(chat.router, prefix=API_PREFIX)
-app.include_router(aiops.router, prefix=API_PREFIX)
 app.include_router(documents.router, prefix=API_PREFIX)
 app.include_router(skills.router, prefix=API_PREFIX)
-app.include_router(webhook.router, prefix=API_PREFIX)
 app.include_router(history.router, prefix=API_PREFIX)
-app.include_router(observability.router, prefix=API_PREFIX)
-app.include_router(diagnosis.router, prefix=API_PREFIX)
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(farms.router, prefix=API_PREFIX)
 app.include_router(image.router, prefix=API_PREFIX)

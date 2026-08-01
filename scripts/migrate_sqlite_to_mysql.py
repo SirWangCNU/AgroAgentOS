@@ -43,13 +43,11 @@ from app.config import settings
 TABLE_ORDER = [
     "chat_sessions",
     "chat_messages",
-    "agent_execution_logs",
     "history_records",
     "business_records",
     "weather_queries",
     "marketing_tasks",
     "pest_diagnoses",
-    "agent_runs",
     "users",
     "farms",
     "fields",

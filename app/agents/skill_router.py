@@ -10,17 +10,17 @@ from app.core.llm import get_chat_llm
 from app.core.structured import ainvoke_structured
 from app.runtime.agent_harness import get_agent_harness
 from app.runtime.transitions import (
-    ROUTER_FALLBACK_GENERIC,
+    ROUTER_FALLBACK_DEFAULT,
     ROUTER_LLM_FAILED,
     ROUTER_OK,
     ROUTER_OUT_OF_SCOPE,
     make_transition,
 )
-from app.skills.registry import GENERIC_SKILL_NAME, get_skill_registry
+from app.skills.registry import DEFAULT_SKILL_NAME, get_skill_registry
 
 
 class SkillChoice(BaseModel):
-    is_oncall: bool = Field(default=True, description="用户输入是否属于农业领域范围")
+    is_agriculture: bool = Field(default=True, description="用户输入是否属于农业领域范围")
     skill_name: str = Field(..., description="选中的 Skill name (snake_case), 必须是给定菜单中已存在的项")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="路由置信度, 0 到 1")
     reason: str = Field(default="", description="一句话说明为什么选这个 Skill, 用于可观测")
@@ -164,7 +164,7 @@ def _build_router_fallback_result(user_input: str) -> PlanExecuteState:
         reason = "Router LLM 调用失败后, 规则兜底判断为非农业输入"
         logger.info(f"[Router] fallback 非农业输入, 直接结束: {user_input[:100]!r}")
         return {
-            "selected_skill": GENERIC_SKILL_NAME,
+            "selected_skill": DEFAULT_SKILL_NAME,
             "skill_reason": reason,
             "plan": [],
             "response": _build_out_of_scope_response(user_input),
@@ -173,8 +173,8 @@ def _build_router_fallback_result(user_input: str) -> PlanExecuteState:
     # 尝试检测协同技能
     collab_skills = _detect_collaboration_skills(user_input)
     return {
-        "selected_skill": GENERIC_SKILL_NAME,
-        "skill_reason": "Router LLM 调用失败后, 规则兜底放行到 generic_oncall",
+        "selected_skill": DEFAULT_SKILL_NAME,
+        "skill_reason": "Router LLM 调用失败后, 规则兜底放行到 agriculture_qa",
         "collaboration_skills": collab_skills,
     }
 
@@ -188,11 +188,11 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
         logger.warning("[Router] SkillRegistry 为空, 跳过路由")
         return {"selected_skill": "", "skill_reason": "registry empty"}
 
-    non_generic = [n for n in available if n != GENERIC_SKILL_NAME]
-    if not non_generic:
-        logger.info("[Router] 仅有兜底 Skill, 直接选择 generic_oncall")
+    non_default = [n for n in available if n != DEFAULT_SKILL_NAME]
+    if not non_default:
+        logger.info("[Router] 仅有兜底 Skill, 直接选择 agriculture_qa")
         return {
-            "selected_skill": GENERIC_SKILL_NAME,
+            "selected_skill": DEFAULT_SKILL_NAME,
             "skill_reason": "no specific skill defined, fallback to generic",
         }
 
@@ -202,7 +202,7 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
     messages = harness.build_skill_router_messages(
         menu=registry.to_router_menu(),
         user_input=user_input,
-        generic=GENERIC_SKILL_NAME,
+        default_skill=DEFAULT_SKILL_NAME,
     )
 
     try:
@@ -220,14 +220,14 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
         result["transition_history"] = [make_transition("skill_router", ROUTER_LLM_FAILED, detail)]
         return result
 
-    if not choice.is_oncall:
+    if not choice.is_agriculture:
         reason = choice.reason or "Router 判断输入不属于农业领域范围"
         logger.info(
             f"[Router] LLM 判断非农业, 直接结束: confidence={choice.confidence}, input={user_input[:100]!r}"
         )
         logger.info(f"[transition] node=skill_router reason={ROUTER_OUT_OF_SCOPE}")
         return {
-            "selected_skill": GENERIC_SKILL_NAME,
+            "selected_skill": DEFAULT_SKILL_NAME,
             "skill_reason": reason,
             "plan": [],
             "response": _build_out_of_scope_response(user_input),
@@ -253,10 +253,10 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
 
     fallback_used = False
     if chosen not in available:
-        logger.warning(f"[Router] LLM 返回不存在的 skill {chosen!r}, 回退到 {GENERIC_SKILL_NAME}")
-        logger.warning(f"[transition] node=skill_router reason={ROUTER_FALLBACK_GENERIC} unknown={chosen!r}")
+        logger.warning(f"[Router] LLM 返回不存在的 skill {chosen!r}, 回退到 {DEFAULT_SKILL_NAME}")
+        logger.warning(f"[transition] node=skill_router reason={ROUTER_FALLBACK_DEFAULT} unknown={chosen!r}")
         unknown = chosen
-        chosen = GENERIC_SKILL_NAME
+        chosen = DEFAULT_SKILL_NAME
         fallback_used = True
 
     skill = registry.get(chosen)
@@ -268,8 +268,8 @@ async def skill_router_node(state: PlanExecuteState) -> PlanExecuteState:
     if fallback_used:
         transition = make_transition(
             "skill_router",
-            ROUTER_FALLBACK_GENERIC,
-            f"LLM 返回未知 skill={unknown!r}, 回退到 {GENERIC_SKILL_NAME}",
+            ROUTER_FALLBACK_DEFAULT,
+            f"LLM 返回未知 skill={unknown!r}, 回退到 {DEFAULT_SKILL_NAME}",
         )
     else:
         transition = make_transition(

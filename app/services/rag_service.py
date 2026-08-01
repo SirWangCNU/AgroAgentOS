@@ -32,10 +32,9 @@ from app.services.user_context import get_user_context
 from app.tools.mcp_loader import get_all_tools
 from app.tools.meta import get_meta
 import app.services.history_service as history_service
-from app.services.diagnosis_recorder import diagnosis_recorder
 
 
-# RAG chat 不应该让 LLM 调诊断专用工具 / 写工具 / 元工具,
+# RAG chat 不应该让 LLM 调用其他业务专用工具、写工具或元工具，
 # 只暴露"看一眼系统状态"这种纯只读 + 用户可理解的工具.
 _RAG_TOOL_EXCLUDE = {
     "search_knowledge_base",  # 已经在前置 retrieve 阶段做了, 不让 LLM 重复调
@@ -43,9 +42,6 @@ _RAG_TOOL_EXCLUDE = {
     "get_current_time",       # 没必要
     "mcp_search_tools",       # Lazy MCP 元工具
     "mcp_execute_tool",
-    "delegate_to_evidence_collector",   # 诊断专用 subagent
-    "delegate_to_kb_researcher",
-    "delegate_to_report_writer",
 }
 
 
@@ -234,22 +230,6 @@ async def stream_chat(
         f"(hybrid={settings.rag_hybrid_enabled}, rerank={settings.rag_rerank_enabled})"
     )
 
-    # ---------- 注入最近 AIOps 诊断报告 (跨 session, 走 Redis) ----------
-    # 不依赖联网开关, 让 "刚才那个 vmmem 是什么" 这种指代追问也能找到答案.
-    # 只取 1 份, 单份截断 1200 字 (报告头 TL;DR 已足够); 想看更早请去 AIOps 页面.
-    try:
-        recent_reports = await chat_memory.get_recent_diagnosis_reports(limit=1)
-    except Exception as e:
-        logger.warning(f"[rag] 读取最近诊断报告失败: {type(e).__name__}: {e}")
-        recent_reports = []
-    if recent_reports:
-        diagnosis_context = "\n\n---\n\n".join(
-            f"[诊断 @ {r.get('ts', '')}]\n{(r.get('report') or '')[:1200]}"
-            for r in recent_reports
-        )
-    else:
-        diagnosis_context = "(暂无最近诊断报告)"
-
     # ---------- 注入用户业务数据（农场） ----------
     user_context = ""
     if user_id:
@@ -287,7 +267,6 @@ async def stream_chat(
     harness = get_agent_harness()
     user_prompt = harness.build_rag_user_prompt(
         summary=summary,
-        diagnosis_context=diagnosis_context,
         user_context=user_context,
         context=context,
         web_context=web_context,
@@ -388,7 +367,7 @@ async def stream_chat(
                     input_tokens  += int(ev.get("input_tokens")  or 0)
                     output_tokens += int(ev.get("output_tokens") or 0)
                     total_tokens  += int(ev.get("total_tokens")  or 0)
-                # 其他事件 (step_start 等) 直接忽略, 不让 RAG chat 看到诊断专用字段
+                # 其他事件（step_start 等）直接忽略，不向 RAG chat 暴露 Agent 内部字段。
 
             # runner 完成, 拿 result 做兜底
             try:
@@ -464,9 +443,9 @@ async def stream_chat(
     except Exception as exc:
         logger.warning(f"[rag] memory 写入失败: {type(exc).__name__}: {exc}")
 
-    # ---------- 写入历史记录 (使用新的 diagnosis_recorder) ----------
+    # ---------- 写入农业问答历史 ----------
     try:
-        await diagnosis_recorder.record_diagnosis(
+        await history_service.add_record(
             question=question,
             answer=full_answer,
             source="chat",

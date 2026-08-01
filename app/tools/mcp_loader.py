@@ -71,32 +71,24 @@ def get_all_tools() -> List[BaseTool]:
     # 延迟 import 避免循环 (meta -> tools.__init__ -> mcp_loader)
     from app.tools.meta import warn_unregistered_tools
 
-    # §5: subagent delegate 工具 (delegate_to_evidence_collector 等)
-    # 延迟 import: subagents.runner 内部依赖 mcp_loader, 避免循环
-    from app.agents.subagents.runner import get_subagent_tools
-
     local = get_local_tools()
     mcp = mcp_client_manager.tools
-    subagents = get_subagent_tools()
 
-    # 同名去重: 本地 > MCP > Subagent (本地实现永远可用, 不依赖 MCP 进程)
+    # 同名去重: 本地 > MCP (本地实现永远可用, 不依赖 MCP 进程)
     # LangChain create_agent 不允许同名工具, 这里提前合并.
     seen: set[str] = set()
     all_tools: list[BaseTool] = []
     mcp_skipped = 0
-    for t in list(local) + list(mcp) + list(subagents):
+    for t in list(local) + list(mcp):
         if t.name in seen:
             mcp_skipped += 1
             continue
         seen.add(t.name)
         all_tools.append(t)
     if mcp_skipped:
-        logger.debug(f"工具集合: 跳过 {mcp_skipped} 个 MCP/Subagent 重名工具 (本地优先)")
+        logger.debug(f"工具集合: 跳过 {mcp_skipped} 个 MCP 重名工具 (本地优先)")
 
-    logger.info(
-        f"工具集合: 本地={len(local)} + MCP={len(mcp)} + Subagent={len(subagents)} "
-        f"-> 去重后 {len(all_tools)} 个"
-    )
+    logger.info(f"工具集合: 本地={len(local)} + MCP={len(mcp)} -> 去重后 {len(all_tools)} 个")
     for t in all_tools:
         logger.debug(f"  tool: {t.name} - {(t.description or '')[:60]}")
 

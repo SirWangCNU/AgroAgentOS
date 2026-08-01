@@ -91,11 +91,10 @@ class Settings(BaseSettings):
     rag_chat_web_search_max_results: int = Field(default=3, description="RAG Chat 联网搜索最大结果数")
     rag_chat_web_search_keywords: str = Field(
         default=(
-            "redis,mysql,postgresql,mongodb,elasticsearch,kafka,rocketmq,rabbitmq,"
-            "nginx,linux,docker,kubernetes,k8s,prometheus,grafana,jvm,java,python,"
-            "go,nodejs,fastapi,langchain,langgraph,milvus,etcd,minio"
+            "农业,农作物,种植,栽培,播种,育苗,施肥,灌溉,土壤,病害,虫害,农药,"
+            "水稻,小麦,玉米,大豆,蔬菜,果树,天气,气象,市场,农产品,价格,补贴,政策"
         ),
-        description="RAG Chat 允许触发联网搜索的技术主题词, 英文逗号分隔",
+        description="RAG Chat 允许触发联网搜索的农业主题词，英文逗号分隔",
     )
 
     # ==================== RAG 高级检索 (Hybrid Search + Reranker) ====================
@@ -176,7 +175,7 @@ class Settings(BaseSettings):
             "证据不足时 (past_steps < 该值) 即使 LLM 想切也会被阻止."
         ),
     )
-    agent_max_concurrency: int = Field(default=2, description="AIOps Agent 最大并发诊断数")
+    agent_max_concurrency: int = Field(default=2, description="农业 Agent 最大并发任务数")
     rag_max_concurrency: int = Field(default=5, description="RAG Chat 最大并发请求数")
     guardrails_block_high_risk_tools: bool = Field(
         default=True,
@@ -217,7 +216,7 @@ class Settings(BaseSettings):
     )
     executor_max_parallel: int = Field(
         default=6,
-        description="Executor 单批工具并行上限 (cc-haha 默认 10, OnCall 保守取 6)",
+        description="Executor 单批工具并行上限",
     )
     agent_executor_model: str = Field(
         default="",
@@ -232,7 +231,7 @@ class Settings(BaseSettings):
         description=(
             "最终报告合成使用的模型. 留空则走 dashscope_chat_model (推荐 pro). "
             "Replanner 用 flash 做快速决策, 决策 is_finished=true 后再用 report_model "
-            "单独写一份高质量的 5 段 SRE 报告, 质量 / 速度两头兼顾."
+            "单独生成高质量农业分析结果，兼顾质量和响应速度。"
         ),
     )
     agent_planner_model: str = Field(
@@ -282,12 +281,6 @@ class Settings(BaseSettings):
     open_websearch_timeout_sec: float = Field(
         default=15.0,
         description="open-webSearch HTTP 调用超时秒数",
-    )
-
-    # ==================== Docker 管理 ====================
-    docker_allow_restart: bool = Field(
-        default=False,
-        description="是否允许 Agent 调用 docker_restart (危险写操作, 默认禁用)",
     )
 
     # ==================== 本地 LLM 兜底 (断网/无 API key 时使用) ====================

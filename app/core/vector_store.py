@@ -62,7 +62,7 @@ def get_vector_store() -> Milvus:
         embedding_function=get_embeddings(),
         collection_name=settings.milvus_collection,
         connection_args={"uri": uri},
-        # 字段名约定 (与原 OnCall 项目保持一致, 方便迁移数据)
+        # 字段名沿用现有 Milvus collection，避免破坏已导入的农业知识数据。
         primary_field="pk",
         text_field="content",
         vector_field="vector",
@@ -92,7 +92,7 @@ def safe_similarity_search(
     Args:
         query: 查询文本
         k: 返回 top-k (None 用 settings.rag_top_k)
-        filter: Milvus 过滤表达式, 例如 "metadata['source'] == 'oncall.md'"
+        filter: Milvus 过滤表达式，例如 "metadata['source'] == 'rice_disease.md'"
 
     Returns:
         List[Document]: 匹配的文档列表; collection 不存在或查询失败返回 []

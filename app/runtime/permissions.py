@@ -40,7 +40,7 @@ class PermissionMode(str, Enum):
     """运行时权限模式.
 
     通过 settings.permission_mode (env: PERMISSION_MODE) 或 state["permission_mode"]
-    在每次诊断会话粒度切换. 默认 NORMAL.
+    可按每次 Agent 任务切换，默认 NORMAL。
     """
 
     READ_ONLY = "read_only"
@@ -127,12 +127,9 @@ def evaluate_permission(
     meta = get_meta(tool_name)  # 未登记工具走保守默认 (read_only=False)
 
     # ---- Layer 0: Skill 硬墙 (任何 mode 都不能绕过) ----
-    # 策略调整 (2026-05-02): 只读查询工具 (ToolMeta.read_only=True) 豁免 Skill 白名单,
-    # 允许任何 Skill 下使用. 动机:
-    #   - 诊断类 Skill 经常漏写某个本机指标工具 (如 list_top_processes), 会导致 Agent
-    #     调用时被硬墙挡住, 诊断报告只能编造 "未提供 MCP 工具".
-    #   - 只读工具无副作用, 放开跨 Skill 使用是安全的.
-    #   - 写/通知/高危工具仍然严格受 Skill 白名单 + Guardrails + Mode 多层控制.
+    # 只读查询工具（ToolMeta.read_only=True）允许跨 Skill 使用，避免农业 Skill
+    # 因漏配通用查询工具而无法补充知识、天气或市场信息。
+    # 写入、通知和高风险工具仍受 Skill 白名单、Guardrails 与 Mode 多层控制。
     # 输入感知: 某些工具 (如 Bash) read_only 取决于入参, 用 effective_read_only 判断.
     if tool_name not in skill_allowed and not meta.effective_read_only(tool_input):
         return PermissionDecision(
@@ -186,7 +183,7 @@ def evaluate_permission(
         )
 
     # ---- Layer 3: 参数级规则 (占位, MVP 不实现) ----
-    # TODO: 支持 "Bash(git *)" / "docker_restart(container=nginx)" 这类规则
+    # TODO: 支持按工具参数定义更细粒度的业务权限规则。
 
     # ---- Allow ----
     return PermissionDecision(

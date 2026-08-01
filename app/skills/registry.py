@@ -3,7 +3,7 @@
 设计:
   - 文件布局: app/skills/definitions/<skill_name>/SKILL.md
   - 进程级 lru_cache 单例 (启动时加载一次, 后续从内存取)
-  - 强制要求兜底 Skill `generic_oncall` 存在, 保证 Router 永远有 fallback
+  - 强制要求农业兜底 Skill `agriculture_qa` 存在, 保证 Router 永远有 fallback
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.skills.models import Skill
 _DEFINITIONS_DIR = Path(__file__).parent / "definitions"
 
 # 兜底 Skill 名: Router 选不出来时使用
-GENERIC_SKILL_NAME = "generic_oncall"
+DEFAULT_SKILL_NAME = "agriculture_qa"
 
 
 class SkillRegistry:
@@ -39,21 +39,21 @@ class SkillRegistry:
     def get(self, name: str) -> Optional[Skill]:
         return self._skills.get(name)
 
-    def get_or_generic(self, name: Optional[str]) -> Skill:
-        """取指定 Skill, 不存在时回退到 generic_oncall.
+    def get_or_default(self, name: Optional[str]) -> Skill:
+        """取指定 Skill, 不存在时回退到农业问答 Skill.
 
         Raises:
             RuntimeError: 兜底 Skill 也缺失 (规约错误)
         """
         if name and name in self._skills:
             return self._skills[name]
-        generic = self._skills.get(GENERIC_SKILL_NAME)
-        if generic is None:
+        default_skill = self._skills.get(DEFAULT_SKILL_NAME)
+        if default_skill is None:
             raise RuntimeError(
-                f"兜底 Skill {GENERIC_SKILL_NAME!r} 缺失, "
-                f"请确认 app/skills/definitions/{GENERIC_SKILL_NAME}/SKILL.md 存在"
+                f"兜底 Skill {DEFAULT_SKILL_NAME!r} 缺失, "
+                f"请确认 app/skills/definitions/{DEFAULT_SKILL_NAME}/SKILL.md 存在"
             )
-        return generic
+        return default_skill
 
     def to_router_menu(self) -> str:
         """生成给 Router LLM 看的全部 Skill 菜单 (Markdown)."""
@@ -91,8 +91,8 @@ def get_skill_registry() -> SkillRegistry:
     logger.info(
         f"[Skill] 已加载 {len(skills)} 个 Skill: {list(skills.keys())}"
     )
-    if GENERIC_SKILL_NAME not in skills:
+    if DEFAULT_SKILL_NAME not in skills:
         logger.warning(
-            f"[Skill] 兜底 Skill {GENERIC_SKILL_NAME!r} 缺失, Router 失败时无法回退"
+            f"[Skill] 兜底 Skill {DEFAULT_SKILL_NAME!r} 缺失, Router 失败时无法回退"
         )
     return SkillRegistry(skills)

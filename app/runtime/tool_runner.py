@@ -35,7 +35,7 @@ from app.tools.meta import get_meta
 # 常量
 # ============================================================
 DEFAULT_MAX_ITERS = 6      # LLM <-> tool 往返上限 (防死循环)
-DEFAULT_MAX_PARALLEL = 6   # 单批并发上限 (cc-haha 默认 10, OnCall 保守取 6)
+DEFAULT_MAX_PARALLEL = 6   # 单批并发上限
 
 
 # ============================================================
@@ -156,7 +156,7 @@ async def _safe_invoke_tool(
         f"safe={meta.concurrency_safe} read_only={meta.read_only} "
         f"elapsed={elapsed_ms:.0f}ms result_chars={len(content)}"
     )
-    # 把工具调用事件旁路给 aiops_service, 前端"诊断监控"面板会实时展示.
+    # 把工具调用事件旁路给当前流式响应消费者.
     await emit_stream({
         "type": "tool_call",
         "name": name,
@@ -240,7 +240,7 @@ async def run_parallel_agent(
 
     # ===== ReAct loop =====
     for round_idx in range(max_iters):
-        # 用 astream 替代 ainvoke, 把 token 经 emit_stream 推给 aiops_service,
+        # 用 astream 替代 ainvoke, 把 token 经 emit_stream 推给流式响应消费者,
         # 让前端在等待期间看到模型正在生成. 工具调用的 tool_calls 也会在
         # accumulated chunk 的最后一帧给出, 和 ainvoke 等价.
         acc: Optional[AIMessage] = None

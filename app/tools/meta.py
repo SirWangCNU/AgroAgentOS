@@ -206,15 +206,6 @@ TOOL_META: Dict[str, ToolMeta] = {
         search_hint="mcp execute call 调用工具",
     ),
 
-    # ===== 二级 Agent (Subagent) delegate 工具 =====
-    "delegate_to_kb_researcher": ToolMeta(
-        read_only=True,
-        concurrency_safe=True,
-        side_effect="network",  # 内部可能联网
-        risk_level="medium",
-        max_result_chars=6000,
-        search_hint="knowledge research 知识检索 农业知识",
-    ),
 }
 
 

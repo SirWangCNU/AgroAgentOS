@@ -6,7 +6,7 @@
   - 向后兼容: 导出 sqlite_manager 作为 database_manager 的别名
 
 数据库设计原则:
-  - 独立于原 AIOps 项目，全新农业场景
+  - 以农业问答和农场业务为核心，不包含服务器运维功能
   - 支持农业问答、天气查询、营销生成、病虫害诊断等业务
 
 注意:
@@ -79,21 +79,6 @@ class ChatMessage(Base):
 
     def set_extra(self, data: dict[str, Any]) -> None:
         self.extra_json = json.dumps(data, ensure_ascii=False, default=str)
-
-
-class AgentExecutionLog(Base):
-    __tablename__ = "agent_execution_logs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(String(128), nullable=True, index=True)
-    skill_name = Column(String(128), nullable=True, index=True)
-    step_index = Column(Integer, nullable=False)
-    action = Column(String(64), nullable=False)
-    tool_name = Column(String(128), nullable=True)
-    result = Column(Text, nullable=True)
-    error = Column(Text, nullable=True)
-    duration_ms = Column(Integer, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=func.now())
 
 
 class HistoryRecord(Base):
@@ -216,42 +201,6 @@ class PestDiagnosis(Base):
     created_at = Column(DateTime, nullable=False, default=func.now())
 
 
-class AgentRun(Base):
-    """Agent 运行记录表 - 记录每次诊断的详细信息."""
-
-    __tablename__ = "agent_runs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    run_id = Column(String(64), unique=True, nullable=False, index=True)
-    session_id = Column(String(128), nullable=True, index=True)
-    query = Column(Text, nullable=True)
-    selected_skill = Column(String(128), nullable=True, index=True)
-    status = Column(String(32), nullable=True, default="running")  # running/completed/failed
-    total_steps = Column(Integer, nullable=True, default=0)
-    total_tool_calls = Column(Integer, nullable=True, default=0)
-    total_tokens = Column(Integer, nullable=True, default=0)
-    input_tokens = Column(Integer, nullable=True, default=0)
-    output_tokens = Column(Integer, nullable=True, default=0)
-    total_ms = Column(Integer, nullable=True, default=0)
-    model_used = Column(String(128), nullable=True)
-    reroute_count = Column(Integer, nullable=True, default=0)
-    transitions_json = Column(Text, nullable=True)  # Full transition_history as JSON
-    report_preview = Column(Text, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=func.now())
-
-    @property
-    def transitions(self) -> list[dict[str, Any]]:
-        if not self.transitions_json:
-            return []
-        try:
-            return json.loads(self.transitions_json)
-        except Exception:
-            return []
-
-    def set_transitions(self, data: list[dict[str, Any]]) -> None:
-        self.transitions_json = json.dumps(data, ensure_ascii=False, default=str)
-
-
 class SQLiteManager:
     def __init__(self) -> None:
         self._engine: Engine | None = None
@@ -358,33 +307,6 @@ class SQLiteManager:
             if session:
                 session.title = title
                 sess.flush()
-
-    def save_execution_log(
-        self,
-        session_id: str | None,
-        skill_name: str | None,
-        step_index: int,
-        action: str,
-        tool_name: str | None = None,
-        result: str | None = None,
-        error: str | None = None,
-        duration_ms: int | None = None,
-    ) -> AgentExecutionLog:
-        with self.session() as sess:
-            log = AgentExecutionLog(
-                session_id=session_id,
-                skill_name=skill_name,
-                step_index=step_index,
-                action=action,
-                tool_name=tool_name,
-                result=result,
-                error=error,
-                duration_ms=duration_ms,
-            )
-            sess.add(log)
-            sess.flush()
-            sess.expunge(log)
-            return log
 
     def save_history_record(
         self,
