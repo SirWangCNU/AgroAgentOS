@@ -2,13 +2,13 @@ import { authFetch } from "./client";
 import type { ApiResponse, PaginatedData } from "../types/api";
 
 export interface HistoryRecord {
-  id: number;
+  id: string;
   source: string;
   question: string;
   answer: string;
   skill: string;
-  uploaded_to_kb: boolean;
-  created_at: string;
+  knowledge_base_uploaded: boolean;
+  ts_iso: string;
 }
 
 export async function getHistory(
@@ -26,11 +26,11 @@ export async function clearHistory(): Promise<void> {
   await authFetch<ApiResponse>("/history", { method: "DELETE" });
 }
 
-export async function deleteHistoryItem(id: number): Promise<void> {
+export async function deleteHistoryItem(id: string): Promise<void> {
   await authFetch<ApiResponse>(`/history/${id}`, { method: "DELETE" });
 }
 
-export async function uploadHistoryToKb(id: number): Promise<void> {
+export async function uploadHistoryToKb(id: string): Promise<void> {
   await authFetch<ApiResponse>(`/history/${id}/upload-kb`, {
     method: "POST",
   });

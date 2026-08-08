@@ -1,0 +1,91 @@
+{
+  "input": "E:\\GithubProgram\\AgroAgentOS\\.codex-tmp\\business-plan\\template.docx",
+  "fonts_by_char_count": {
+    "\u65b9\u6b63\u4eff\u5b8b_GBK": 80,
+    "\u65b9\u6b63\u5c0f\u6807\u5b8b_GBK": 25,
+    "\u9ed1\u4f53": 24,
+    "\u5fae\u8f6f\u96c5\u9ed1": 23,
+    "\u65b9\u6b63\u9ed1\u4f53_GBK": 10,
+    "\u6977\u4f53": 9,
+    "\u5b8b\u4f53": 5
+  },
+  "direct_run_formatting_runs": 295,
+  "direct_paragraph_formatting_paragraphs": 127,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 10,
+      "text": "\u9879\u76ee\u540d\u79f0\uff1a_________________________",
+      "style": "Normal"
+    },
+    {
+      "para_index": 135,
+      "text": "\u8d5b      \u9053\uff1a",
+      "style": "Normal"
+    },
+    {
+      "para_index": 136,
+      "text": "\u73b0\u4ee3\u670d\u52a1\u4e0e\u793e\u4f1a\u6cbb\u7406",
+      "style": "Normal"
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 1,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 6,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 7,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 8,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 9,
+        "text": "",
+        "style": "Normal"
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 10,
+        "run_text": "\u9879\u76ee\u540d\u79f0\uff1a",
+        "style": "Normal"
+      },
+      {
+        "para_index": 10,
+        "run_text": "_________________________",
+        "style": "Normal"
+      },
+      {
+        "para_index": 23,
+        "run_text": "\u76ee",
+        "style": "\u76ee\u5f55"
+      },
+      {
+        "para_index": 23,
+        "run_text": "    ",
+        "style": "\u76ee\u5f55"
+      },
+      {
+        "para_index": 23,
+        "run_text": "\u5f55",
+        "style": "\u76ee\u5f55"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

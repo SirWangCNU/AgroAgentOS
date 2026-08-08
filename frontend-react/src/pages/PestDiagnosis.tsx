@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { chatStream } from "../api/chat";
 import { consumeSSE } from "../api/client";
+import { getErrorMessage } from "../api/client";
+import { createSession } from "../api/sessions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import WorkspaceLayout from "../components/layout/WorkspaceLayout";
@@ -29,6 +31,7 @@ export default function PestDiagnosis() {
   const [affectedPart, setAffectedPart] = useState("leaf");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const handleDiagnose = async () => {
     if (!cropType || !symptoms) return;
@@ -38,8 +41,14 @@ export default function PestDiagnosis() {
     const question = `请诊断以下病虫害：\n作物：${cropType}\n症状：${symptoms}\n发病部位：${affectedPart}\n请给出详细的诊断和防治方案。`;
 
     try {
+      let activeSessionId = sessionId;
+      if (!activeSessionId) {
+        const session = await createSession("病虫害诊断");
+        activeSessionId = session.id;
+        setSessionId(activeSessionId);
+      }
       const resp = await chatStream({
-        session_id: "pest-diagnosis",
+        session_id: activeSessionId,
         question,
         top_k: 3,
         web_search: false,
@@ -53,8 +62,8 @@ export default function PestDiagnosis() {
           setResult(content);
         }
       }
-    } catch (err: any) {
-      setResult(`诊断失败: ${err.message}`);
+    } catch (err: unknown) {
+      setResult(`诊断失败: ${getErrorMessage(err, "未知错误")}`);
     } finally {
       setLoading(false);
     }

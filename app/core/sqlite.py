@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Generator
 
 from loguru import logger
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine, event, func
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, event, func
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -81,11 +81,30 @@ class ChatMessage(Base):
         self.extra_json = json.dumps(data, ensure_ascii=False, default=str)
 
 
+class ChatSessionMessage(Base):
+    """会话页面使用的持久化消息。"""
+
+    __tablename__ = "chat_session_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(
+        String(128),
+        ForeignKey("chat_sessions.session_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    image_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=func.now())
+
+
 class HistoryRecord(Base):
     __tablename__ = "history_records"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     record_id = Column(String(32), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, nullable=True, index=True)
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=True)
     source = Column(String(32), nullable=False, index=True)
@@ -311,6 +330,7 @@ class SQLiteManager:
     def save_history_record(
         self,
         record_id: str,
+        user_id: int,
         question: str,
         answer: str = "",
         source: str = "chat",
@@ -322,6 +342,7 @@ class SQLiteManager:
         with self.session() as sess:
             record = HistoryRecord(
                 record_id=record_id,
+                user_id=user_id,
                 question=question,
                 answer=answer,
                 source=source,
@@ -339,12 +360,13 @@ class SQLiteManager:
 
     def get_history_records(
         self,
+        user_id: int,
         page: int = 1,
         page_size: int = 20,
         source: str | None = None,
     ) -> tuple[list[HistoryRecord], int]:
         with self.session() as sess:
-            query = sess.query(HistoryRecord)
+            query = sess.query(HistoryRecord).filter(HistoryRecord.user_id == user_id)
             if source:
                 query = query.filter(HistoryRecord.source == source)
             total = query.count()
@@ -357,7 +379,15 @@ class SQLiteManager:
             )
             return records, total
 
-    def get_history_record(self, record_id: str) -> HistoryRecord | None:
+    def get_history_record(self, record_id: str, user_id: int) -> HistoryRecord | None:
+        with self.session() as sess:
+            return (
+                sess.query(HistoryRecord)
+                .filter(HistoryRecord.record_id == record_id, HistoryRecord.user_id == user_id)
+                .first()
+            )
+
+    def get_history_record_for_admin(self, record_id: str) -> HistoryRecord | None:
         with self.session() as sess:
             return sess.query(HistoryRecord).filter(HistoryRecord.record_id == record_id).first()
 
@@ -368,18 +398,22 @@ class SQLiteManager:
                 record.knowledge_base_uploaded = 1 if uploaded else 0
                 sess.flush()
 
-    def delete_history_record(self, record_id: str) -> bool:
+    def delete_history_record(self, record_id: str, user_id: int) -> bool:
         with self.session() as sess:
-            record = sess.query(HistoryRecord).filter(HistoryRecord.record_id == record_id).first()
+            record = (
+                sess.query(HistoryRecord)
+                .filter(HistoryRecord.record_id == record_id, HistoryRecord.user_id == user_id)
+                .first()
+            )
             if record:
                 sess.delete(record)
                 sess.flush()
                 return True
             return False
 
-    def clear_history_records(self, source: str | None = None) -> int:
+    def clear_history_records(self, user_id: int, source: str | None = None) -> int:
         with self.session() as sess:
-            query = sess.query(HistoryRecord)
+            query = sess.query(HistoryRecord).filter(HistoryRecord.user_id == user_id)
             if source:
                 query = query.filter(HistoryRecord.source == source)
             count = query.delete()

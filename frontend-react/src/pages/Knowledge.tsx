@@ -15,6 +15,7 @@ import { uploadDocument, getDocuments, deleteDocument } from "../api/knowledge";
 import { getSkills } from "../api/health";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
+import { getErrorMessage } from "../api/client";
 import WorkspaceLayout from "../components/layout/WorkspaceLayout";
 import EmptyState from "../components/ui/EmptyState";
 import LoadingGrid from "../components/ui/LoadingGrid";
@@ -49,7 +50,7 @@ export default function Knowledge() {
       showToast("删除成功", "success");
       queryClient.invalidateQueries({ queryKey: ["documents"] });
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err, "删除失败"), "error"),
   });
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,8 +62,8 @@ export default function Knowledge() {
       const result = await uploadDocument(file);
       showToast(`上传成功，${result.chunks_indexed} 个片段已索引`, "success");
       queryClient.invalidateQueries({ queryKey: ["documents"] });
-    } catch (err: any) {
-      showToast(`上传失败: ${err.message}`, "error");
+    } catch (err: unknown) {
+      showToast(`上传失败: ${getErrorMessage(err, "未知错误")}`, "error");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";

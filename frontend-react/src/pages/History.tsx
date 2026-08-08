@@ -16,6 +16,8 @@ import {
   type HistoryRecord,
 } from "../api/history";
 import { useUIStore } from "../stores/ui";
+import { getErrorMessage } from "../api/client";
+import { useAuthStore } from "../stores/auth";
 import { formatTime } from "../lib/format";
 
 export default function History() {
@@ -23,7 +25,8 @@ export default function History() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [source, setSource] = useState("");
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const isAdmin = useAuthStore((s) => s.isAdmin());
 
   const { data, isLoading } = useQuery({
     queryKey: ["history", page, source],
@@ -52,7 +55,7 @@ export default function History() {
       showToast("已上传至知识库", "success");
       queryClient.invalidateQueries({ queryKey: ["history"] });
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err, "上传失败"), "error"),
   });
 
   const records = data?.records || [];
@@ -117,6 +120,7 @@ export default function History() {
               }
               onDelete={() => deleteMutation.mutate(r.id)}
               onUpload={() => uploadMutation.mutate(r.id)}
+              canUpload={isAdmin}
             />
           ))}
         </div>
@@ -158,12 +162,14 @@ function HistoryCard({
   onToggle,
   onDelete,
   onUpload,
+  canUpload,
 }: {
   record: HistoryRecord;
   expanded: boolean;
   onToggle: () => void;
   onDelete: () => void;
   onUpload: () => void;
+  canUpload: boolean;
 }) {
   return (
     <div className="bg-bg-card rounded-xl border border-border overflow-hidden">
@@ -176,7 +182,7 @@ function HistoryCard({
         </span>
         <span className="flex-1 text-sm truncate">{record.question}</span>
         <span className="text-xs text-text-muted">
-          {formatTime(record.created_at)}
+          {formatTime(record.ts_iso)}
         </span>
         {expanded ? (
           <ChevronUp className="w-4 h-4 text-text-muted" />
@@ -191,7 +197,7 @@ function HistoryCard({
             {record.answer && record.answer.length > 500 && "..."}
           </div>
           <div className="flex items-center gap-2">
-            {!record.uploaded_to_kb && (
+            {canUpload && !record.knowledge_base_uploaded && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();

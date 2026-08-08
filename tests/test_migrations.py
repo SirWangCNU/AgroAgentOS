@@ -41,7 +41,50 @@ def test_upgrade_to_head_removes_trajectory_tables(tmp_path: Path):
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
+        history_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(history_records)")
+        }
 
     assert {"farms", "fields"}.issubset(tables)
+    assert "user_id" in history_columns
     assert "trajectory_points" not in tables
     assert "trajectory_files" not in tables
+
+
+def test_database_at_legacy_head_can_upgrade_to_current_head(tmp_path: Path):
+    """保留旧版数据库修订标记，避免已部署数据库失去升级路径。"""
+    db_path = tmp_path / "legacy-head.db"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "DEBUG": "false",
+            "USE_SQLITE": "true",
+            "SQLITE_DB_PATH": str(db_path),
+        }
+    )
+
+    legacy_upgrade = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "014_retire_farm_flow"],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert legacy_upgrade.returncode == 0, legacy_upgrade.stderr
+
+    current_upgrade = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert current_upgrade.returncode == 0, current_upgrade.stderr
+
+    with sqlite3.connect(db_path) as connection:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(history_records)")
+        }
+    assert "user_id" in columns

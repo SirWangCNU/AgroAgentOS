@@ -7,10 +7,11 @@ POST /api/v1/history/{id}/upload-kb - 上传记录到知识库
 DELETE /api/v1/history            - 清空历史记录
 """
 
-from typing import Any
+from fastapi import APIRouter, Depends
 
-from fastapi import APIRouter, HTTPException
-
+from app.api.deps import get_current_user, require_admin
+from app.core.sqlite import sqlite_manager
+from app.models.user import User
 from app.schemas.common import ApiResponse
 import app.services.history_service as history_service
 
@@ -22,6 +23,7 @@ async def list_history(
     page: int = 1,
     page_size: int = 20,
     source: str | None = None,
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse:
     """分页查询历史记录，默认按时间倒序."""
     if page < 1:
@@ -30,6 +32,7 @@ async def list_history(
         return ApiResponse.error(code="INVALID_PARAM", message="page_size 必须在 1-100 之间")
 
     data = await history_service.list_records(
+        user_id=current_user.id,
         page=page,
         page_size=page_size,
         source=source,
@@ -38,37 +41,46 @@ async def list_history(
 
 
 @router.get("/{record_id}", summary="获取单条历史记录")
-async def get_history_record(record_id: str) -> ApiResponse:
+async def get_history_record(
+    record_id: str,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
     """获取指定 ID 的历史记录详情."""
-    record = await history_service.get_record(record_id)
+    record = await history_service.get_record(record_id, current_user.id)
     if record is None:
         return ApiResponse.error(code="NOT_FOUND", message=f"记录不存在: {record_id}")
     return ApiResponse.success(data=record)
 
 
 @router.delete("/{record_id}", summary="删除单条历史记录")
-async def delete_history_record(record_id: str) -> ApiResponse:
+async def delete_history_record(
+    record_id: str,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
     """删除指定 ID 的历史记录."""
-    deleted = await history_service.delete_record(record_id)
+    deleted = await history_service.delete_record(record_id, current_user.id)
     if not deleted:
         return ApiResponse.error(code="NOT_FOUND", message=f"记录不存在: {record_id}")
     return ApiResponse.success(data={"record_id": record_id})
 
 
 @router.post("/{record_id}/upload-kb", summary="上传历史记录到知识库")
-async def upload_to_knowledge_base(record_id: str) -> ApiResponse:
+async def upload_to_knowledge_base(
+    record_id: str,
+    current_user: User = Depends(require_admin),
+) -> ApiResponse:
     """将历史记录上传到 RAG 知识库 (Milvus 向量库).
 
     将农业问答格式化为 Markdown 文档并分块存储，供后续 RAG 检索使用。
     """
-    record = await history_service.get_record(record_id)
+    record = sqlite_manager.get_history_record_for_admin(record_id)
     if record is None:
         return ApiResponse.error(code="NOT_FOUND", message=f"记录不存在: {record_id}")
 
-    if record.get("knowledge_base_uploaded"):
+    if record.knowledge_base_uploaded:
         return ApiResponse.error(code="ALREADY_UPLOADED", message="该记录已上传过知识库")
 
-    if not record.get("answer"):
+    if not record.answer:
         return ApiResponse.error(code="NO_ANSWER", message="该记录没有回答，无法上传")
 
     success = await history_service.upload_record_to_kb(record_id)
@@ -82,11 +94,14 @@ async def upload_to_knowledge_base(record_id: str) -> ApiResponse:
 
 
 @router.delete("", summary="清空历史记录")
-async def clear_history(source: str | None = None) -> ApiResponse:
+async def clear_history(
+    source: str | None = None,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
     """清空历史记录，默认清空全部来源.
 
     Query:
         source: 可选，按农业业务来源筛选清空
     """
-    count = await history_service.clear_records(source=source)
+    count = await history_service.clear_records(user_id=current_user.id, source=source)
     return ApiResponse.success(data={"deleted_count": count})

@@ -12,6 +12,7 @@ import {
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
+import { getErrorMessage } from "../api/client";
 import {
   getUsers,
   adminCreateUser,
@@ -35,13 +36,10 @@ export default function Users() {
     role: "user",
   });
 
-  if (!isAdmin) {
-    return <Navigate to="/workspace" replace />;
-  }
-
   const { data, isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: () => getUsers(1, 100),
+    enabled: isAdmin,
   });
 
   const createMutation = useMutation({
@@ -52,7 +50,7 @@ export default function Users() {
       setShowModal(false);
       setForm({ username: "", email: "", password: "", role: "user" });
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err, "创建失败"), "error"),
   });
 
   const toggleMutation = useMutation({
@@ -62,7 +60,7 @@ export default function Users() {
       showToast("用户状态已更新", "success");
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err, "更新失败"), "error"),
   });
 
   const deleteMutation = useMutation({
@@ -71,10 +69,14 @@ export default function Users() {
       showToast("用户已禁用", "success");
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (err: any) => showToast(err.message, "error"),
+    onError: (err: unknown) => showToast(getErrorMessage(err, "删除失败"), "error"),
   });
 
   const users: UserInfo[] = data?.users || [];
+
+  if (!isAdmin) {
+    return <Navigate to="/workspace" replace />;
+  }
 
   return (
     <WorkspaceLayout

@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ==================== 请求模型 ====================
@@ -85,8 +85,7 @@ class FieldInfo(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FarmInfo(BaseModel):
@@ -104,8 +103,7 @@ class FarmInfo(BaseModel):
     updated_at: datetime
     field_count: int = Field(default=0, description="地块数量")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FarmDetail(FarmInfo):

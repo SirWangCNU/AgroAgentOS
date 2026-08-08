@@ -11,6 +11,10 @@ export class ApiError extends Error {
   }
 }
 
+export function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 function extractErrorMessage(text: string): { message: string; code?: string } {
   try {
     const parsed = JSON.parse(text);

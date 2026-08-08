@@ -1,7 +1,7 @@
 """Remove retired trajectory tables.
 
 Revision ID: 007_remove_trajectory_tables
-Revises: 006_add_wx_binding
+Revises: 014_retire_farm_flow
 Create Date: 2026-07-29 21:00:00.000000
 """
 
@@ -12,17 +12,21 @@ import sqlalchemy as sa
 
 
 revision: str = "007_remove_trajectory_tables"
-down_revision: Union[str, Sequence[str], None] = "006_add_wx_binding"
+down_revision: Union[str, Sequence[str], None] = "014_retire_farm_flow"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Drop trajectory points before their parent file table."""
-    op.drop_index("ix_trajectory_points_file_id", table_name="trajectory_points")
-    op.drop_table("trajectory_points")
-    op.drop_index("ix_trajectory_files_field_id", table_name="trajectory_files")
-    op.drop_table("trajectory_files")
+    """Drop trajectory tables when a database still has them."""
+    inspector = sa.inspect(op.get_bind())
+    existing_tables = set(inspector.get_table_names())
+
+    if "trajectory_points" in existing_tables:
+        op.drop_table("trajectory_points")
+
+    if "trajectory_files" in existing_tables:
+        op.drop_table("trajectory_files")
 
 
 def downgrade() -> None:

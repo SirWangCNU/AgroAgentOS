@@ -194,6 +194,19 @@ class SessionService:
         _detail_cache.set(cache_key, result)
         return result
 
+    def session_belongs_to_user(self, session_uuid: str, user_id: int) -> bool:
+        """判断会话是否存在且归当前用户所有。"""
+        with sqlite_manager.session() as sess:
+            return (
+                sess.query(ChatSession.id)
+                .filter(
+                    ChatSession.session_id == session_uuid,
+                    ChatSession.user_id == str(user_id),
+                )
+                .first()
+                is not None
+            )
+
     def update_session(
         self, session_uuid: str, user_id: int, data
     ) -> bool:
@@ -237,14 +250,15 @@ class SessionService:
         return True
 
     def add_message(
-        self, session_uuid: str, role: str, content: str,
+        self, session_uuid: str, user_id: int, role: str, content: str,
         image_url: Optional[str] = None,
     ) -> MessageOut:
         """向会话添加消息."""
         with sqlite_manager.session() as sess:
             # 找到 session 的 integer id
             session = sess.query(ChatSession).filter(
-                ChatSession.session_id == session_uuid
+                ChatSession.session_id == session_uuid,
+                ChatSession.user_id == str(user_id),
             ).first()
             if not session:
                 raise ValueError(f"会话不存在: {session_uuid}")

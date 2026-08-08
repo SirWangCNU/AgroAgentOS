@@ -78,7 +78,7 @@ async def stream_chat(
     question: str,
     *,
     session_id: str = "default",
-    user_id: int | None = None,
+    user_id: int,
     top_k: int | None = None,
     web_search: bool = False,
     mcp_tools: bool = True,
@@ -119,7 +119,7 @@ async def stream_chat(
             "data": data or {},
         }
 
-    session = await chat_memory.load_session(session_id)
+    session = await chat_memory.load_session(user_id, session_id)
     summary = session.get("summary") or "(无)"
     recent_messages = session.get("recent_messages") or []
 
@@ -433,19 +433,20 @@ async def stream_chat(
     # ---------- 收尾: 写 memory + 输出 stats ----------
     try:
         await chat_memory.append_message(
-            session_id, role="user", content=question, rewritten_query=rewritten_question,
+            user_id, session_id, role="user", content=question, rewritten_query=rewritten_question,
         )
         await chat_memory.append_message(
-            session_id, role="assistant", content=full_answer,
+            user_id, session_id, role="assistant", content=full_answer,
             sources=sources + web_sources,
         )
-        await compact_if_needed(session_id)
+        await compact_if_needed(user_id, session_id)
     except Exception as exc:
         logger.warning(f"[rag] memory 写入失败: {type(exc).__name__}: {exc}")
 
     # ---------- 写入农业问答历史 ----------
     try:
         await history_service.add_record(
+            user_id=user_id,
             question=question,
             answer=full_answer,
             source="chat",

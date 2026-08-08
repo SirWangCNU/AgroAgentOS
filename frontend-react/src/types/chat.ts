@@ -24,6 +24,16 @@ export interface ProgressEvent {
   elapsed_ms: number;
 }
 
+export interface ProgressStep {
+  id: string;
+  stage: string;
+  label: string;
+  detail?: string;
+  status: "running" | "done" | "error" | "skipped";
+  elapsed_ms?: number;
+  data?: Record<string, unknown>;
+}
+
 export interface Citation {
   source: string;
   chapter?: string;

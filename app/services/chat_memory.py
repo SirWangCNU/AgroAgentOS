@@ -18,20 +18,21 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _session_digest(session_id: str) -> str:
-    return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
+def _session_digest(user_id: int, session_id: str) -> str:
+    raw = f"{user_id}:{session_id}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
-def _messages_key(session_id: str) -> str:
-    return f"rag:chat:{_session_digest(session_id)}:messages"
+def _messages_key(user_id: int, session_id: str) -> str:
+    return f"rag:chat:{_session_digest(user_id, session_id)}:messages"
 
 
-def _summary_key(session_id: str) -> str:
-    return f"rag:chat:{_session_digest(session_id)}:summary"
+def _summary_key(user_id: int, session_id: str) -> str:
+    return f"rag:chat:{_session_digest(user_id, session_id)}:summary"
 
 
-def _meta_key(session_id: str) -> str:
-    return f"rag:chat:{_session_digest(session_id)}:meta"
+def _meta_key(user_id: int, session_id: str) -> str:
+    return f"rag:chat:{_session_digest(user_id, session_id)}:meta"
 
 
 def _sanitize_message(raw: Any) -> dict[str, Any] | None:
@@ -81,12 +82,12 @@ async def is_available() -> bool:
     return await _get_redis() is not None
 
 
-async def get_messages(session_id: str) -> list[dict[str, Any]]:
+async def get_messages(user_id: int, session_id: str) -> list[dict[str, Any]]:
     client = await _get_redis()
     if client is None:
         return []
     try:
-        rows = await client.lrange(_messages_key(session_id), 0, -1)
+        rows = await client.lrange(_messages_key(user_id, session_id), 0, -1)
         messages: list[dict[str, Any]] = []
         for row in rows:
             try:
@@ -101,8 +102,12 @@ async def get_messages(session_id: str) -> list[dict[str, Any]]:
         return []
 
 
-async def get_recent_messages(session_id: str, turns: int | None = None) -> list[dict[str, Any]]:
-    messages = await get_messages(session_id)
+async def get_recent_messages(
+    user_id: int,
+    session_id: str,
+    turns: int | None = None,
+) -> list[dict[str, Any]]:
+    messages = await get_messages(user_id, session_id)
     keep = max(0, (turns or settings.rag_chat_history_turns) * 2)
     if keep <= 0:
         return []
@@ -110,6 +115,7 @@ async def get_recent_messages(session_id: str, turns: int | None = None) -> list
 
 
 async def append_message(
+    user_id: int,
     session_id: str,
     *,
     role: str,
@@ -131,12 +137,15 @@ async def append_message(
         "sources": sources or [],
     }
     try:
-        messages_key = _messages_key(session_id)
-        summary_key = _summary_key(session_id)
-        meta_key = _meta_key(session_id)
+        messages_key = _messages_key(user_id, session_id)
+        summary_key = _summary_key(user_id, session_id)
+        meta_key = _meta_key(user_id, session_id)
         await client.rpush(messages_key, json.dumps(payload, ensure_ascii=False))
         await client.ltrim(messages_key, -hard_limit, -1)
-        await client.hset(meta_key, mapping={"session_id": session_id, "updated_at": _now_iso()})
+        await client.hset(
+            meta_key,
+            mapping={"session_id": session_id, "user_id": str(user_id), "updated_at": _now_iso()},
+        )
         ttl = max(60, settings.rag_chat_memory_ttl_sec)
         await client.expire(messages_key, ttl)
         await client.expire(summary_key, ttl)
@@ -145,12 +154,16 @@ async def append_message(
         logger.warning(f"[chat-memory] 写入消息失败: {type(e).__name__}: {e}")
 
 
-async def replace_messages(session_id: str, messages: list[dict[str, Any]]) -> None:
+async def replace_messages(
+    user_id: int,
+    session_id: str,
+    messages: list[dict[str, Any]],
+) -> None:
     client = await _get_redis()
     if client is None:
         return
     try:
-        key = _messages_key(session_id)
+        key = _messages_key(user_id, session_id)
         await client.delete(key)
         if messages:
             rows = [json.dumps(m, ensure_ascii=False) for m in messages]
@@ -160,44 +173,48 @@ async def replace_messages(session_id: str, messages: list[dict[str, Any]]) -> N
         logger.warning(f"[chat-memory] 替换消息失败: {type(e).__name__}: {e}")
 
 
-async def get_summary(session_id: str) -> str:
+async def get_summary(user_id: int, session_id: str) -> str:
     client = await _get_redis()
     if client is None:
         return ""
     try:
-        value = await client.get(_summary_key(session_id))
+        value = await client.get(_summary_key(user_id, session_id))
         return value or ""
     except Exception as e:
         logger.warning(f"[chat-memory] 读取摘要失败: {type(e).__name__}: {e}")
         return ""
 
 
-async def set_summary(session_id: str, summary: str) -> None:
+async def set_summary(user_id: int, session_id: str, summary: str) -> None:
     client = await _get_redis()
     if client is None:
         return
     try:
-        key = _summary_key(session_id)
+        key = _summary_key(user_id, session_id)
         await client.set(key, summary[: settings.rag_chat_summary_max_chars])
         await client.expire(key, max(60, settings.rag_chat_memory_ttl_sec))
     except Exception as e:
         logger.warning(f"[chat-memory] 写入摘要失败: {type(e).__name__}: {e}")
 
 
-async def clear_session(session_id: str) -> bool:
+async def clear_session(user_id: int, session_id: str) -> bool:
     client = await _get_redis()
     if client is None:
         return False
     try:
-        await client.delete(_messages_key(session_id), _summary_key(session_id), _meta_key(session_id))
+        await client.delete(
+            _messages_key(user_id, session_id),
+            _summary_key(user_id, session_id),
+            _meta_key(user_id, session_id),
+        )
         return True
     except Exception as e:
         logger.warning(f"[chat-memory] 清空会话失败: {type(e).__name__}: {e}")
         return False
 
 
-async def load_session(session_id: str) -> dict[str, Any]:
-    summary = await get_summary(session_id)
-    messages = await get_messages(session_id)
+async def load_session(user_id: int, session_id: str) -> dict[str, Any]:
+    summary = await get_summary(user_id, session_id)
+    messages = await get_messages(user_id, session_id)
     recent = messages[-max(0, settings.rag_chat_history_turns * 2):]
     return {"summary": summary, "messages": messages, "recent_messages": recent}

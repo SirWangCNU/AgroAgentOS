@@ -1,0 +1,171 @@
+{
+  "input": "E:\\GithubProgram\\AgroAgentOS\\output\\AgroAgentOS_\u7b2c\u5341\u4e94\u5c4a\u6311\u6218\u676f\u5546\u4e1a\u8ba1\u5212\u4e66.docx",
+  "fonts_by_char_count": {
+    "Times New Roman": 11556,
+    "\u65b9\u6b63\u4eff\u5b8b_GBK": 60
+  },
+  "direct_run_formatting_runs": 482,
+  "direct_paragraph_formatting_paragraphs": 438,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 10,
+      "text": "\u9879\u76ee\u540d\u79f0\uff1a  AgroAgentOS\u2014\u2014\u9762\u5411\u4e2d\u5c0f\u519c\u573a\u7684\u591a\u667a\u80fd\u4f53\u667a\u6167\u519c\u670d\u5e73\u53f0",
+      "style": "Normal"
+    },
+    {
+      "para_index": 203,
+      "text": "\u8d5b      \u9053\uff1a",
+      "style": "Normal"
+    },
+    {
+      "para_index": 204,
+      "text": "\u4e61\u6751\u632f\u5174\u548c\u519c\u4e1a\u519c\u6751\u73b0\u4ee3\u5316",
+      "style": "Normal"
+    },
+    {
+      "para_index": 205,
+      "text": "\u80fd\u529b\u5c42",
+      "style": "Normal"
+    },
+    {
+      "para_index": 206,
+      "text": "\u6838\u5fc3\u6a21\u5757",
+      "style": "Normal"
+    },
+    {
+      "para_index": 207,
+      "text": "\u7528\u6237\u83b7\u5f97\u7684\u4ef7\u503c",
+      "style": "Normal"
+    },
+    {
+      "para_index": 208,
+      "text": "\u5f53\u524d\u72b6\u6001",
+      "style": "Normal"
+    },
+    {
+      "para_index": 237,
+      "text": "\u5e02\u573a\u5c42\u7ea7",
+      "style": "Normal"
+    },
+    {
+      "para_index": 238,
+      "text": "\u6d4b\u7b97\u53e3\u5f84",
+      "style": "Normal"
+    },
+    {
+      "para_index": 239,
+      "text": "\u6570\u91cf\u6216\u76ee\u6807",
+      "style": "Normal"
+    },
+    {
+      "para_index": 240,
+      "text": "\u8bf4\u660e",
+      "style": "Normal"
+    },
+    {
+      "para_index": 257,
+      "text": "\u5ba2\u6237\u7c7b\u578b",
+      "style": "Normal"
+    },
+    {
+      "para_index": 258,
+      "text": "\u4e3b\u8981\u75db\u70b9",
+      "style": "Normal"
+    },
+    {
+      "para_index": 259,
+      "text": "\u51b3\u7b56\u5173\u6ce8\u70b9",
+      "style": "Normal"
+    },
+    {
+      "para_index": 260,
+      "text": "\u9879\u76ee\u5207\u5165\u4ea7\u54c1",
+      "style": "Normal"
+    },
+    {
+      "para_index": 281,
+      "text": "\u5bf9\u6bd4\u7ef4\u5ea6",
+      "style": "Normal"
+    },
+    {
+      "para_index": 282,
+      "text": "\u667a\u80fd\u88c5\u5907\u578b\u65b9\u6848",
+      "style": "Normal"
+    },
+    {
+      "para_index": 283,
+      "text": "\u7efc\u5408\u9879\u76ee\u578b\u65b9\u6848",
+      "style": "Normal"
+    },
+    {
+      "para_index": 284,
+      "text": "\u901a\u7528\u5927\u6a21\u578b",
+      "style": "Normal"
+    },
+    {
+      "para_index": 285,
+      "text": "\u4f20\u7edf\u519c\u6280\u670d\u52a1",
+      "style": "Normal"
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 1,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 6,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 7,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 8,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 9,
+        "text": "",
+        "style": "Normal"
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 10,
+        "run_text": "\u9879\u76ee\u540d\u79f0\uff1a  ",
+        "style": "Normal"
+      },
+      {
+        "para_index": 10,
+        "run_text": "AgroAgentOS\u2014\u2014\u9762\u5411\u4e2d\u5c0f\u519c\u573a\u7684\u591a\u667a\u80fd\u4f53\u667a\u6167\u519c\u670d\u5e73\u53f0",
+        "style": "Normal"
+      },
+      {
+        "para_index": 23,
+        "run_text": "\u76ee    \u5f55",
+        "style": "Normal"
+      },
+      {
+        "para_index": 24,
+        "run_text": "\u76ee\u5f55\u5c06\u5728Microsoft Word\u4e2d\u81ea\u52a8\u66f4\u65b0",
+        "style": "Normal"
+      },
+      {
+        "para_index": 27,
+        "run_text": "AgroAgentOS\u662f\u4e00\u6b3e\u9762\u5411\u4e2d\u5c0f\u519c\u573a\u3001\u519c\u6c11\u4e13\u4e1a\u5408\u4f5c\u793e\u53ca\u57fa\u5c42\u519c\u6280\u670d\u52a1\u673a\u6784\u7684\u591a\u667a\u80fd\u4f53\u667a\u6167\u519c\u670d\u5e73\u53f0\uff0c\u81f4\u529b\u4e8e\u901a\u8fc7\u4eba\u5de5\u667a\u80fd\u6280\u672f\u964d\u4f4e\u519c\u4e1a\u6570\u5b57\u5316\u5e94\u7528\u95e8\u69db\uff0c\u4e3a\u519c\u4e1a\u751f\u4ea7\u4e0e\u7ecf\u8425",
+        "style": "Normal"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

@@ -7,43 +7,20 @@ POST /api/v1/chat/stream
 """
 
 import json
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
-from app.core.security import decode_access_token
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.schemas.chat import ChatRequest
 import app.services.chat_memory as chat_memory
 import app.services.rag_service as rag_service
 from app.services.session_service import session_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-_optional_bearer = HTTPBearer(auto_error=False)
-
-
-async def _get_optional_user_id(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer),
-) -> Optional[int]:
-    """从 JWT token 中提取 user_id, 无 token 时返回 None."""
-    if not credentials:
-        logger.warning("[chat] 无 Bearer token, user_id=None (请检查前端是否登录)")
-        return None
-    token_preview = credentials.credentials[:20] + "..." if len(credentials.credentials) > 20 else credentials.credentials
-    logger.info(f"[chat] 收到 Bearer token: {token_preview}")
-    try:
-        payload = decode_access_token(credentials.credentials)
-        sub = payload.get("sub")
-        user_id = int(sub) if sub else None
-        logger.info(f"[chat] JWT 解析成功: payload={payload} -> user_id={user_id}")
-        return user_id
-    except Exception as e:
-        logger.warning(f"[chat] JWT 解析失败: {type(e).__name__}: {e}")
-        return None
-
 
 @router.post(
     "/stream",
@@ -66,14 +43,18 @@ async def _get_optional_user_id(
 )
 async def chat_stream(
     req: ChatRequest,
-    user_id: Optional[int] = Depends(_get_optional_user_id),
+    current_user: User = Depends(get_current_user),
 ) -> EventSourceResponse:
+    user_id = current_user.id
     logger.info(f"[chat] session={req.session_id}, user={user_id}, q={req.question[:60]}...")
+
+    if not session_service.session_belongs_to_user(req.session_id, user_id):
+        raise HTTPException(status_code=404, detail="会话不存在")
 
     # 兜底持久化 user 消息：避免前端 fire-and-forget POST 在 SSE 长连接占用
     # 连接池时偶发丢失，导致 DB 里只有 assistant 消息没有对应的 user 消息。
     # 只在该 session 还没有该条 user 消息时写（按内容去重，幂等）。
-    if user_id is not None and req.session_id and req.question:
+    if req.session_id and req.question:
         try:
             detail = session_service.get_session(req.session_id, user_id)
             if detail is not None:
@@ -83,7 +64,7 @@ async def chat_stream(
                 )
                 if not already_persisted:
                     session_service.add_message(
-                        req.session_id, "user", req.question, image_url=None
+                        req.session_id, user_id, "user", req.question, image_url=None
                     )
                     logger.info(
                         f"[chat] 兜底持久化 user 消息 session={req.session_id} len={len(req.question)}"
@@ -128,8 +109,13 @@ async def chat_stream(
     summary="查看 RAG Chat 会话历史",
     description="返回 Redis 中保存的会话摘要与最近消息。Redis 未启用或不可用时返回空历史。",
 )
-async def get_chat_history(session_id: str) -> dict:
-    session = await chat_memory.load_session(session_id)
+async def get_chat_history(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if not session_service.session_belongs_to_user(session_id, current_user.id):
+        raise HTTPException(status_code=404, detail="会话不存在")
+    session = await chat_memory.load_session(current_user.id, session_id)
     return {
         "session_id": session_id,
         "memory_enabled": await chat_memory.is_available(),
@@ -143,6 +129,11 @@ async def get_chat_history(session_id: str) -> dict:
     summary="清空 RAG Chat 会话记忆",
     description="删除指定 session_id 的 Redis 会话摘要与消息历史。",
 )
-async def clear_chat_session(session_id: str) -> dict:
-    cleared = await chat_memory.clear_session(session_id)
+async def clear_chat_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if not session_service.session_belongs_to_user(session_id, current_user.id):
+        raise HTTPException(status_code=404, detail="会话不存在")
+    cleared = await chat_memory.clear_session(current_user.id, session_id)
     return {"session_id": session_id, "cleared": cleared}

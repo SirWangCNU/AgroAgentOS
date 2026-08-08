@@ -15,7 +15,7 @@
 from functools import lru_cache
 from typing import Any, Dict
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,7 +32,11 @@ class Settings(BaseSettings):
     # ==================== 应用基础 ====================
     app_name: str = Field(default="AgroAgentOS", description="应用名")
     app_version: str = Field(default="1.0.0", description="应用版本")
-    debug: bool = Field(default=False, description="调试模式")
+    debug: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("AGRO_DEBUG", "DEBUG"),
+        description="调试模式。优先使用 AGRO_DEBUG，兼容 DEBUG=true/false。",
+    )
     host: str = Field(default="0.0.0.0", description="监听地址")
     port: int = Field(default=9800, description="监听端口")
 
@@ -414,6 +418,19 @@ class Settings(BaseSettings):
         }
 
     # ==================== 校验 ====================
+    @field_validator("debug", mode="before")
+    @classmethod
+    def _normalize_debug(cls, value: Any) -> bool:
+        """避免宿主环境的非布尔 DEBUG 值阻断应用启动。"""
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "off", ""}:
+                return False
+            return False
+        return bool(value)
+
     @field_validator("dashscope_api_key")
     @classmethod
     def _validate_api_key(cls, v: str) -> str:
@@ -424,7 +441,12 @@ class Settings(BaseSettings):
     def _is_placeholder_key(key: str) -> bool:
         """检测是否为占位符 key (未真正配置)."""
         k = (key or "").strip().lower()
-        return not k or k.startswith("sk-your") or k.startswith("your") or k == "change-this"
+        return (
+            not k
+            or k.startswith("sk-your")
+            or k.startswith("your")
+            or k.startswith("change-this")
+        )
 
     @field_validator("log_level")
     @classmethod
@@ -440,6 +462,18 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 "DASHSCOPE_API_KEY 未配置. 请编辑 .env 文件填入真实 API key. "
                 "申请地址: https://bailian.console.aliyun.com/"
+            )
+        if self.debug:
+            return
+
+        secret = (self.jwt_secret_key or "").strip()
+        if len(secret) < 32 or self._is_placeholder_key(secret):
+            raise RuntimeError(
+                "生产环境 JWT_SECRET_KEY 必须是至少 32 位的非占位随机密钥。"
+            )
+        if (self.admin_default_password or "").strip() == "admin123":
+            raise RuntimeError(
+                "生产环境不能使用默认管理员密码 admin123，请在 .env 中设置 ADMIN_DEFAULT_PASSWORD。"
             )
 
 

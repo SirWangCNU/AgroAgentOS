@@ -222,6 +222,7 @@ class DatabaseManager:
     def save_history_record(
         self,
         record_id: str,
+        user_id: int,
         question: str,
         answer: str = "",
         source: str = "chat",
@@ -234,6 +235,7 @@ class DatabaseManager:
         with self.session() as sess:
             record = HistoryRecord(
                 record_id=record_id,
+                user_id=user_id,
                 question=question,
                 answer=answer,
                 source=source,
@@ -251,13 +253,14 @@ class DatabaseManager:
 
     def get_history_records(
         self,
+        user_id: int,
         page: int = 1,
         page_size: int = 20,
         source: str | None = None,
     ) -> tuple[list[HistoryRecord], int]:
         """获取历史记录列表（分页）."""
         with self.session() as sess:
-            query = sess.query(HistoryRecord)
+            query = sess.query(HistoryRecord).filter(HistoryRecord.user_id == user_id)
             if source:
                 query = query.filter(HistoryRecord.source == source)
             total = query.count()
@@ -270,8 +273,17 @@ class DatabaseManager:
             )
             return records, total
 
-    def get_history_record(self, record_id: str) -> HistoryRecord | None:
+    def get_history_record(self, record_id: str, user_id: int) -> HistoryRecord | None:
         """获取单条历史记录."""
+        with self.session() as sess:
+            return (
+                sess.query(HistoryRecord)
+                .filter(HistoryRecord.record_id == record_id, HistoryRecord.user_id == user_id)
+                .first()
+            )
+
+    def get_history_record_for_admin(self, record_id: str) -> HistoryRecord | None:
+        """供受信任管理员审核时读取历史记录。"""
         with self.session() as sess:
             return sess.query(HistoryRecord).filter(HistoryRecord.record_id == record_id).first()
 
@@ -283,20 +295,24 @@ class DatabaseManager:
                 record.knowledge_base_uploaded = 1 if uploaded else 0
                 sess.flush()
 
-    def delete_history_record(self, record_id: str) -> bool:
+    def delete_history_record(self, record_id: str, user_id: int) -> bool:
         """删除历史记录."""
         with self.session() as sess:
-            record = sess.query(HistoryRecord).filter(HistoryRecord.record_id == record_id).first()
+            record = (
+                sess.query(HistoryRecord)
+                .filter(HistoryRecord.record_id == record_id, HistoryRecord.user_id == user_id)
+                .first()
+            )
             if record:
                 sess.delete(record)
                 sess.flush()
                 return True
             return False
 
-    def clear_history_records(self, source: str | None = None) -> int:
+    def clear_history_records(self, user_id: int, source: str | None = None) -> int:
         """清空历史记录."""
         with self.session() as sess:
-            query = sess.query(HistoryRecord)
+            query = sess.query(HistoryRecord).filter(HistoryRecord.user_id == user_id)
             if source:
                 query = query.filter(HistoryRecord.source == source)
             count = query.delete()

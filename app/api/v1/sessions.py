@@ -105,5 +105,5 @@ async def add_message(
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在")
 
-    result = session_service.add_message(session_id, role, content, image_url)
+    result = session_service.add_message(session_id, current_user.id, role, content, image_url)
     return ApiResponse(code="SUCCESS", data=result)

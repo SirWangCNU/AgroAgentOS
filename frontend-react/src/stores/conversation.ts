@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ChatMessage, Citation } from "../types/chat";
-import type { ProgressStep } from "../components/chat/ProgressSteps";
+import { ApiError } from "../api/client";
+import type { ProgressStep } from "../types/chat";
 import {
   createSession,
   listSessions,
@@ -192,12 +193,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           ],
         };
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load messages:", err);
       // Bug 修复: 404 (会话不存在/已删除) 时不抛错, 改为写入一个空 stub
       // 之前: 抛错 → Chat 组件显示 "对话不存在或已被删除" 整页错误, 用户体验差
       // 现在: 写入一个空消息的 stub → Chat 渲染 welcome 页面 + ChatInput, 用户可立即开始新对话
-      if (err?.status === 404) {
+      if (err instanceof ApiError && err.status === 404) {
         set((s) => {
           const exists = s.conversations.find((c) => c.id === id);
           if (exists) {

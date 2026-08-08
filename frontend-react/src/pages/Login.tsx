@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Leaf } from "lucide-react";
 import { login as apiLogin, register as apiRegister } from "../api/auth";
+import { getErrorMessage } from "../api/client";
 import { useAuthStore } from "../stores/auth";
 
 export default function Login() {
@@ -29,8 +30,8 @@ export default function Login() {
       const data = await apiLogin(username, password);
       authLogin(data.access_token, data.user);
       navigate("/dashboard", { replace: true });
-    } catch (err: any) {
-      setError(err.message || "登录失败");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "登录失败"));
     } finally {
       setLoading(false);
     }
@@ -54,8 +55,8 @@ export default function Login() {
       setTab("login");
       setUsername(regUsername);
       setPassword("");
-    } catch (err: any) {
-      setError(err.message || "注册失败");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "注册失败"));
     } finally {
       setLoading(false);
     }

@@ -49,11 +49,11 @@ async def rewrite_question(
     return question
 
 
-async def compact_if_needed(session_id: str) -> None:
+async def compact_if_needed(user_id: int, session_id: str) -> None:
     """超过 max_messages 时, 把较早消息合并进 summary."""
     if not settings.rag_chat_memory_enabled or not settings.rag_chat_compact_enabled:
         return
-    all_messages = await chat_memory.get_messages(session_id)
+    all_messages = await chat_memory.get_messages(user_id, session_id)
     if len(all_messages) <= settings.rag_chat_max_messages:
         return
     keep_count = max(2, settings.rag_chat_compact_keep_messages)
@@ -61,7 +61,7 @@ async def compact_if_needed(session_id: str) -> None:
     recent_messages = all_messages[-keep_count:]
     if not old_messages:
         return
-    old_summary = await chat_memory.get_summary(session_id)
+    old_summary = await chat_memory.get_summary(user_id, session_id)
     try:
         harness = get_agent_harness()
         prompt = harness.build_rag_compact_prompt(
@@ -80,9 +80,9 @@ async def compact_if_needed(session_id: str) -> None:
         summary = content_to_text(resp.content).strip()
         if summary:
             await chat_memory.set_summary(
-                session_id, summary[: settings.rag_chat_summary_max_chars]
+                user_id, session_id, summary[: settings.rag_chat_summary_max_chars]
             )
-            await chat_memory.replace_messages(session_id, recent_messages)
+            await chat_memory.replace_messages(user_id, session_id, recent_messages)
             logger.info(
                 f"[rag] session={session_id} compact 完成: "
                 f"{len(all_messages)} -> {len(recent_messages)} messages"

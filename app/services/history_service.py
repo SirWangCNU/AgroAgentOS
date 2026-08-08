@@ -29,6 +29,7 @@ _MAX_ANSWER_CHARS = 12000
 
 async def add_record(
     *,
+    user_id: int,
     question: str,
     answer: str = "",
     source: str = "chat",
@@ -45,6 +46,7 @@ async def add_record(
     try:
         sqlite_manager.save_history_record(
             record_id=record_id,
+            user_id=user_id,
             question=question[:2000],
             answer=(answer or "")[:_MAX_ANSWER_CHARS],
             source=source,
@@ -71,7 +73,7 @@ async def upload_record_to_kb(record_id: str) -> bool:
         True if uploaded successfully, False otherwise.
     """
     try:
-        record = sqlite_manager.get_history_record(record_id)
+        record = sqlite_manager.get_history_record_for_admin(record_id)
         if not record:
             logger.warning(f"[history] 记录不存在 record_id={record_id}")
             return False
@@ -118,6 +120,7 @@ async def upload_record_to_kb(record_id: str) -> bool:
 
 async def list_records(
     *,
+    user_id: int,
     page: int = 1,
     page_size: int = 20,
     source: str | None = None,
@@ -129,7 +132,7 @@ async def list_records(
     """
     try:
         records, total = sqlite_manager.get_history_records(
-            page=page, page_size=page_size, source=source
+            user_id=user_id, page=page, page_size=page_size, source=source
         )
 
         return {
@@ -143,10 +146,10 @@ async def list_records(
         return {"total": 0, "page": page, "page_size": page_size, "records": []}
 
 
-async def get_record(record_id: str) -> dict[str, Any] | None:
+async def get_record(record_id: str, user_id: int) -> dict[str, Any] | None:
     """获取单条记录详情."""
     try:
-        record = sqlite_manager.get_history_record(record_id)
+        record = sqlite_manager.get_history_record(record_id, user_id)
         if record is None:
             return None
         return _to_dict(record)
@@ -155,19 +158,19 @@ async def get_record(record_id: str) -> dict[str, Any] | None:
         return None
 
 
-async def delete_record(record_id: str) -> bool:
+async def delete_record(record_id: str, user_id: int) -> bool:
     """删除单条记录."""
     try:
-        return sqlite_manager.delete_history_record(record_id)
+        return sqlite_manager.delete_history_record(record_id, user_id)
     except Exception as e:
         logger.warning(f"[history] 删除记录失败: {type(e).__name__}: {e}")
         return False
 
 
-async def clear_records(source: str | None = None) -> int:
+async def clear_records(user_id: int, source: str | None = None) -> int:
     """清空历史记录, 返回删除数量."""
     try:
-        return sqlite_manager.clear_history_records(source=source)
+        return sqlite_manager.clear_history_records(user_id=user_id, source=source)
     except Exception as e:
         logger.warning(f"[history] 清空失败: {type(e).__name__}: {e}")
         return 0

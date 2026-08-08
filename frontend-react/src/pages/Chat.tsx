@@ -4,25 +4,29 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { chatStream } from "../api/chat";
 import { analyzeImage } from "../api/image";
-import { consumeSSE } from "../api/client";
+import { ApiError, consumeSSE, getErrorMessage } from "../api/client";
 import { addSessionMessage } from "../api/sessions";
 import { useConversationStore } from "../stores/conversation";
 import { useUIStore } from "../stores/ui";
 import WelcomeScreen from "../components/chat/WelcomeScreen";
 import MessageBubble from "../components/chat/MessageBubble";
 import ChatInput from "../components/chat/ChatInput";
-import ProgressSteps, {
-  toProgressStep,
-} from "../components/chat/ProgressSteps";
+import ProgressSteps from "../components/chat/ProgressSteps";
+import { toProgressStep } from "../lib/chat-progress";
+import type { ChatMessage, Citation } from "../types/chat";
 
 // 模块级 ref：跨组件卸载/重挂载保持状态，防止 navigate 导致 sendingRef 被重置
 const _globalSendingRef = { current: false };
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 export default function Chat() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{
+    sessionId: string;
+    message: string;
+  } | null>(null);
   // Bug 修复: 记录已加载的 sessionId, 防止 useEffect 因 activeId 变化重复触发 loadMessages
   // 之前的问题: setActive(sessionId) 触发 store 更新 → 组件 re-render → useEffect 依赖 [sessionId, activeId]
   // 重跑, 但此时 conv.find 仍找不到 (loadMessages 还在进行中), 会再次调用 loadMessages.
@@ -67,7 +71,6 @@ export default function Chat() {
       // 导致后续 addMessage 失败（addMessage 内部有 if (!activeId) return），
       // 用户消息不显示也不持久化，最终触发了 loadMessages 出现"加载对话记录"
       if (activeId && !_globalSendingRef.current) setActive(null);
-      setLoadError(null);
       return;
     }
 
@@ -77,8 +80,6 @@ export default function Chat() {
     }
 
     // Clear previous errors when navigating to a new conversation
-    setLoadError(null);
-
     // Load messages if not already loaded
     // Skip if we're mid-send: createNew() + addMessage() already populated the conversation
     // 双重保护：模块级 ref + store 中的 isStreaming 状态
@@ -112,22 +113,24 @@ export default function Chat() {
         loadedSessionRef.current.delete(sessionId);
         // 404 (会话不存在) 静默处理, 不弹错误 —— 用户可能刷新到一个旧链接,
         // 强制清空 loading 让 Chat 渲染 welcome 页面, 体验更平滑
-        if (err?.status === 404) {
+        if (err instanceof ApiError && err.status === 404) {
           useConversationStore.setState({ isLoadingMessages: false });
           return;
         }
-        const message = `加载对话失败: ${err?.message || "未知错误"}`;
-        setLoadError(message);
+        setLoadError({
+          sessionId,
+          message: `加载对话失败: ${getErrorMessage(err, "未知错误")}`,
+        });
       });
     } else {
       // store 已有消息也标记为已加载
       loadedSessionRef.current.add(sessionId);
     }
-  }, [sessionId, activeId]);
+  }, [sessionId, activeId, loadMessages, setActive]);
 
   // 当前激活会话 (从 store 取, 避免组件渲染时再次 fetch)
   const conversation = activeConversation();
-  const messages = conversation?.messages || [];
+  const messages = conversation?.messages ?? EMPTY_MESSAGES;
   const lastMsg = messages[messages.length - 1];
 
   // Auto-scroll on new messages or progress updates
@@ -173,8 +176,8 @@ export default function Chat() {
           content: text || "(图片分析)",
           type: "image",
         });
-      } catch (err: any) {
-        showToast(`图片分析失败: ${err.message}`, "error");
+      } catch (err: unknown) {
+        showToast(`图片分析失败: ${getErrorMessage(err, "未知错误")}`, "error");
         return;
       }
     } else {
@@ -210,8 +213,8 @@ export default function Chat() {
         const ev = event as Record<string, unknown>;
 
         if (ev.type === "progress") {
-          const stage = ev.stage as string;
-          const data = (ev.data || ev) as Record<string, unknown>;
+          const stage = typeof ev.stage === "string" ? ev.stage : "unknown";
+          const data = isRecord(ev.data) ? ev.data : ev;
 
           // llm_start means retrieval/search phase is done, transition to answer phase
           if (stage === "llm_start") {
@@ -243,14 +246,14 @@ export default function Chat() {
           const step = toProgressStep(ev, progressIndex++);
           addProgressStep(step);
         } else if (ev.type === "thinking") {
-          thinkingContent += ev.content as string;
+          thinkingContent += stringValue(ev.content);
           setThinking(thinkingContent);
         } else if (ev.type === "token") {
           if (inProgressPhase) {
             // Buffer tokens until progress phase ends
-            bufferedTokens += ev.content as string;
+            bufferedTokens += stringValue(ev.content);
           } else {
-            assistantContent += ev.content as string;
+            assistantContent += stringValue(ev.content);
             updateLastAssistant(assistantContent);
           }
         } else if (ev.type === "tool_call") {
@@ -261,17 +264,9 @@ export default function Chat() {
           );
           addProgressStep(step);
         } else if (ev.type === "citations") {
-          const citations = ev.citations as any[];
-          if (citations?.length) {
-            setLiveCitations(
-              citations.map((c) => ({
-                source: c.source || "",
-                chapter: c.chapter,
-                category: c.category,
-                preview: c.content || c.preview,
-                score: c.relevance_score || c.score,
-              }))
-            );
+          const citations = toCitations(ev.citations);
+          if (citations.length) {
+            setLiveCitations(citations);
           }
         } else if (ev.type === "error") {
           showToast(`错误: ${ev.message}`, "error");
@@ -291,8 +286,8 @@ export default function Chat() {
 
       // Refresh conversation list so sidebar shows updated message_count
       refreshConversations().catch(() => {});
-    } catch (err: any) {
-      showToast(`网络错误: ${err.message}`, "error");
+    } catch (err: unknown) {
+      showToast(`网络错误: ${getErrorMessage(err, "未知错误")}`, "error");
     } finally {
       _globalSendingRef.current = false;
       setStreaming(false);
@@ -327,13 +322,14 @@ export default function Chat() {
   }
 
   // Show error state if loading failed
-  if (sessionId && loadError) {
+  const errorForCurrentSession =
+    loadError && loadError.sessionId === sessionId ? loadError.message : null;
+  if (sessionId && errorForCurrentSession) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <div className="text-red-400 text-sm">{loadError}</div>
+          <div className="text-red-400 text-sm">{errorForCurrentSession}</div>
         <button
           onClick={() => {
-            setLoadError(null);
             navigate("/chat");
           }}
           className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
@@ -477,4 +473,42 @@ function getProgressDetail(
     return String(data.label);
   }
   return undefined;
+}
+
+function toCitations(value: unknown): Citation[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+    return [{
+      source: stringValue(item.source),
+      chapter: optionalString(item.chapter),
+      category: optionalString(item.category),
+      preview: optionalString(item.content) ?? optionalString(item.preview),
+      score: optionalNumber(item.relevance_score) ?? optionalNumber(item.score),
+    }];
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function optionalString(value: unknown): string | undefined {
+  const result = stringValue(value);
+  return result || undefined;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }

@@ -10,16 +10,7 @@ import {
   Database,
   User,
 } from "lucide-react";
-
-export interface ProgressStep {
-  id: string;
-  stage: string;
-  label: string;
-  detail?: string;
-  status: "running" | "done" | "error" | "skipped";
-  elapsed_ms?: number;
-  data?: Record<string, unknown>;
-}
+import type { ProgressStep } from "../../types/chat";
 
 interface Props {
   steps: ProgressStep[];
@@ -110,75 +101,4 @@ export default function ProgressSteps({ steps }: Props) {
       </div>
     </div>
   );
-}
-
-/** Convert raw SSE progress event to a ProgressStep */
-export function toProgressStep(ev: Record<string, unknown>, index: number): ProgressStep {
-  const stage = (ev.stage as string) || "unknown";
-  const data = (ev.data || ev) as Record<string, unknown>;
-
-  const statusMap: Record<string, ProgressStep["status"]> = {
-    rewrite: "running",
-    rewrite_done: "done",
-    retrieve: "running",
-    retrieve_done: "done",
-    retrieve_degraded: "skipped",
-    web: "running",
-    web_done: "done",
-    web_degraded: "skipped",
-    user_context: "running",
-    user_context_done: "done",
-    llm_start: "done",
-    tool_call: "done",
-    stats: "done",
-  };
-
-  const labelMap: Record<string, string> = {
-    rewrite: "理解问题",
-    rewrite_done: "理解完成",
-    retrieve: "检索知识库",
-    retrieve_done: "知识库命中",
-    retrieve_degraded: "知识库跳过",
-    web: "联网搜索",
-    web_done: "搜索完成",
-    web_degraded: "搜索跳过",
-    user_context: "加载农场数据",
-    user_context_done: "农场数据就绪",
-    llm_start: "生成回答",
-    tool_call: `调用 ${data.name || "工具"}`,
-    stats: "统计",
-  };
-
-  const detailMap: Record<string, string | undefined> = {
-    rewrite_done: data.rewritten
-      ? String(data.rewritten).slice(0, 30)
-      : undefined,
-    retrieve_done: data.hits
-      ? `${(data.hits as unknown[]).length} 条结果`
-      : data.top_k
-      ? `top-${data.top_k}`
-      : undefined,
-    web_done: data.results
-      ? `${(data.results as unknown[]).length} 条结果`
-      : data.skip_reason
-      ? String(data.skip_reason)
-      : undefined,
-    user_context_done: data.label ? String(data.label) : undefined,
-    llm_start: undefined,
-    tool_call: data.elapsed_ms
-      ? `${data.elapsed_ms}ms`
-      : data.status
-      ? String(data.status)
-      : undefined,
-  };
-
-  return {
-    id: `${stage}-${index}`,
-    stage,
-    label: labelMap[stage] || stage,
-    detail: detailMap[stage],
-    status: statusMap[stage] || "done",
-    elapsed_ms: data.elapsed_ms as number | undefined,
-    data,
-  };
 }
