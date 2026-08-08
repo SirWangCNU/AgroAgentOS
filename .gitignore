@@ -54,3 +54,4 @@ app.db-shm
 app.db-wal
 .mimocode/
 .workbuddy/
+提示词模板
