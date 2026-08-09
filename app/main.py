@@ -37,7 +37,6 @@ from app.api.v1 import (
     market,
     sessions,
     skills,
-    video,
 )
 from app.config import settings
 from app.core.mcp_client import mcp_client_manager
@@ -178,7 +177,6 @@ app.include_router(farms.router, prefix=API_PREFIX)
 app.include_router(image.router, prefix=API_PREFIX)
 app.include_router(sessions.router, prefix=API_PREFIX)
 app.include_router(market.router, prefix=API_PREFIX)
-app.include_router(video.router, prefix=API_PREFIX)
 
 
 # ============================================================

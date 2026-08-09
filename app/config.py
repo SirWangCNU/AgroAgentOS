@@ -393,12 +393,6 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = Field(default=1440, description="JWT 过期时间 (分钟, 默认24小时)")
     admin_default_password: str = Field(default="admin123", description="管理员默认密码 (仅首次创建时使用)")
 
-    # ==================== 视频生成 ====================
-    video_gen_api_key: str = Field(default="", description="视频生成 API Key (火山引擎)")
-    video_gen_base_url: str = Field(default="https://ark.cn-beijing.volces.com/api/v3", description="视频生成 API Base URL")
-    video_gen_model: str = Field(default="seedance-2.0-lite", description="视频生成模型名称")
-    video_gen_timeout: int = Field(default=300, description="视频生成超时 (秒)")
-
     # ==================== 计算属性 ====================
     @property
     def mcp_servers(self) -> Dict[str, Dict[str, Any]]:

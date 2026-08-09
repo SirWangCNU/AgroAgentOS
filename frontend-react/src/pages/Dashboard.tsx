@@ -5,13 +5,11 @@ import {
   Cpu,
   Tractor,
   BookOpen,
-  Megaphone,
   Users,
   MessageSquare,
   Sprout,
   ArrowRight,
   TrendingUp,
-  Film,
 } from "lucide-react";
 import { useAuthStore } from "../stores/auth";
 import { useHealthStore } from "../stores/health";
@@ -36,28 +34,12 @@ const TOOLS = [
     bg: "bg-accent-blue/10",
   },
   {
-    icon: Megaphone,
-    label: "营销生成",
-    desc: "AI 生成农产品营销文案",
-    path: "/workspace/marketing",
-    color: "text-accent-purple",
-    bg: "bg-accent-purple/10",
-  },
-  {
     icon: TrendingUp,
     label: "市场行情",
     desc: "价格、供需、政策补贴与销售建议",
     path: "/workspace/market",
     color: "text-accent-green",
     bg: "bg-accent-green/10",
-  },
-  {
-    icon: Film,
-    label: "AI 视频生成",
-    desc: "文本/图片生成农业短视频",
-    path: "/workspace/video",
-    color: "text-accent-purple",
-    bg: "bg-accent-purple/10",
   },
   {
     icon: MessageSquare,

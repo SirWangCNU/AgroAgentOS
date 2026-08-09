@@ -33,9 +33,7 @@ from app.core.sqlite import (
     ChatMessage,
     ChatSession,
     HistoryRecord,
-    MarketingTask,
     PestDiagnosis,
-    VideoTask,
     WeatherQuery,
 )
 
@@ -353,53 +351,6 @@ class DatabaseManager:
             sess.expunge(query)
             return query
 
-    def save_marketing_task(
-        self,
-        task_id: str,
-        product_name: str,
-        product_features: list[str] | None = None,
-        target_platform: str = "douyin",
-        content_style: str = "professional",
-        session_id: str | None = None,
-    ) -> MarketingTask:
-        """保存营销任务."""
-        with self.session() as sess:
-            task = MarketingTask(
-                task_id=task_id,
-                product_name=product_name,
-                target_platform=target_platform,
-                content_style=content_style,
-                session_id=session_id,
-            )
-            if product_features:
-                task.product_features = json.dumps(product_features, ensure_ascii=False)
-            sess.add(task)
-            sess.flush()
-            sess.expunge(task)
-            return task
-
-    def update_marketing_result(
-        self,
-        task_id: str,
-        title: str | None = None,
-        content: str | None = None,
-        script: str | None = None,
-        status: str = "completed",
-    ) -> None:
-        """更新营销任务结果."""
-        with self.session() as sess:
-            task = sess.query(MarketingTask).filter(MarketingTask.task_id == task_id).first()
-            if task:
-                if title:
-                    task.generated_title = title
-                if content:
-                    task.generated_content = content
-                if script:
-                    task.generated_script = script
-                task.status = status
-                task.completed_at = func.now()
-                sess.flush()
-
     def save_pest_diagnosis(
         self,
         diagnosis_id: str,
@@ -439,24 +390,6 @@ class DatabaseManager:
                     diagnosis.treatment_plan = treatment_plan
                 diagnosis.status = status
                 sess.flush()
-
-    def get_marketing_tasks(
-        self,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> tuple[list[MarketingTask], int]:
-        """获取营销任务列表."""
-        with self.session() as sess:
-            query = sess.query(MarketingTask)
-            total = query.count()
-            offset = (page - 1) * page_size
-            tasks = (
-                query.order_by(MarketingTask.created_at.desc())
-                .offset(offset)
-                .limit(page_size)
-                .all()
-            )
-            return tasks, total
 
     def get_pest_diagnoses(
         self,

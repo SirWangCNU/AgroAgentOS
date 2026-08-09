@@ -7,12 +7,10 @@ import {
   LayoutDashboard,
   Tractor,
   BookOpen,
-  Megaphone,
   Users,
   Leaf,
   MessageSquare,
   TrendingUp,
-  Film,
   UserCircle,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
@@ -22,9 +20,7 @@ const WORKSPACE_ITEMS = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/workspace" },
   { icon: Tractor, label: "农场管理", path: "/workspace/farms" },
   { icon: BookOpen, label: "智能体技能和知识库", path: "/workspace/knowledge" },
-  { icon: Megaphone, label: "营销生成", path: "/workspace/marketing" },
   { icon: TrendingUp, label: "市场行情", path: "/workspace/market" },
-  { icon: Film, label: "AI 视频生成", path: "/workspace/video" },
   { icon: Users, label: "用户管理", path: "/workspace/users", adminOnly: true },
 ];
 

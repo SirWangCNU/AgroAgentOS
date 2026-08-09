@@ -6,9 +6,7 @@ import Chat from "./pages/Chat";
 import Dashboard from "./pages/Dashboard";
 import Farms from "./pages/Farms";
 import Knowledge from "./pages/Knowledge";
-import Marketing from "./pages/Marketing";
 import MarketPrice from "./pages/MarketPrice";
-import VideoGen from "./pages/VideoGen";
 import Users from "./pages/Users";
 import Profile from "./pages/Profile";
 
@@ -38,9 +36,7 @@ export default function App() {
             <Route path="/workspace" element={<Dashboard />} />
             <Route path="/workspace/farms" element={<Farms />} />
             <Route path="/workspace/knowledge" element={<Knowledge />} />
-            <Route path="/workspace/marketing" element={<Marketing />} />
             <Route path="/workspace/market" element={<MarketPrice />} />
-            <Route path="/workspace/video" element={<VideoGen />} />
             <Route path="/workspace/users" element={<Users />} />
             <Route path="/profile" element={<Profile />} />
           </Route>

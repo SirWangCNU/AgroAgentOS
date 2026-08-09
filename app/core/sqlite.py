@@ -183,26 +183,6 @@ class WeatherQuery(Base):
     created_at = Column(DateTime, nullable=False, default=func.now())
 
 
-class MarketingTask(Base):
-    """营销任务表 - 记录农产品营销内容生成任务."""
-
-    __tablename__ = "marketing_tasks"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    task_id = Column(String(64), unique=True, nullable=False, index=True)
-    product_name = Column(String(256), nullable=False)
-    product_features = Column(Text, nullable=True)  # JSON array
-    target_platform = Column(String(64), nullable=False)  # douyin/xiaohongshu/live_stream/wechat
-    content_style = Column(String(64), nullable=True)  # professional/funny/emotional/storytelling
-    generated_title = Column(Text, nullable=True)
-    generated_content = Column(Text, nullable=True)
-    generated_script = Column(Text, nullable=True)
-    session_id = Column(String(128), nullable=True, index=True)
-    status = Column(String(32), nullable=False, default="pending")  # pending/generating/completed/failed
-    created_at = Column(DateTime, nullable=False, default=func.now())
-    completed_at = Column(DateTime, nullable=True)
-
-
 class PestDiagnosis(Base):
     """病虫害诊断记录表 - 记录病虫害诊断历史."""
 
@@ -454,53 +434,6 @@ class SQLiteManager:
             sess.expunge(query)
             return query
 
-    def save_marketing_task(
-        self,
-        task_id: str,
-        product_name: str,
-        product_features: list[str] | None = None,
-        target_platform: str = "douyin",
-        content_style: str = "professional",
-        session_id: str | None = None,
-    ) -> MarketingTask:
-        """保存营销任务."""
-        with self.session() as sess:
-            task = MarketingTask(
-                task_id=task_id,
-                product_name=product_name,
-                target_platform=target_platform,
-                content_style=content_style,
-                session_id=session_id,
-            )
-            if product_features:
-                task.product_features = json.dumps(product_features, ensure_ascii=False)
-            sess.add(task)
-            sess.flush()
-            sess.expunge(task)
-            return task
-
-    def update_marketing_result(
-        self,
-        task_id: str,
-        title: str | None = None,
-        content: str | None = None,
-        script: str | None = None,
-        status: str = "completed",
-    ) -> None:
-        """更新营销任务结果."""
-        with self.session() as sess:
-            task = sess.query(MarketingTask).filter(MarketingTask.task_id == task_id).first()
-            if task:
-                if title:
-                    task.generated_title = title
-                if content:
-                    task.generated_content = content
-                if script:
-                    task.generated_script = script
-                task.status = status
-                task.completed_at = func.now()
-                sess.flush()
-
     def save_pest_diagnosis(
         self,
         diagnosis_id: str,
@@ -540,24 +473,6 @@ class SQLiteManager:
                     diagnosis.treatment_plan = treatment_plan
                 diagnosis.status = status
                 sess.flush()
-
-    def get_marketing_tasks(
-        self,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> tuple[list[MarketingTask], int]:
-        """获取营销任务列表."""
-        with self.session() as sess:
-            query = sess.query(MarketingTask)
-            total = query.count()
-            offset = (page - 1) * page_size
-            tasks = (
-                query.order_by(MarketingTask.created_at.desc())
-                .offset(offset)
-                .limit(page_size)
-                .all()
-            )
-            return tasks, total
 
     def get_pest_diagnoses(
         self,
@@ -611,38 +526,6 @@ class SQLiteManager:
                 .limit(limit)
                 .all()
             )
-
-
-class VideoTask(Base):
-    """视频生成任务表."""
-
-    __tablename__ = "video_tasks"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    task_id = Column(String(128), unique=True, nullable=False, index=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    prompt = Column(Text, nullable=False)
-    image_url = Column(String(512), nullable=True)
-    model = Column(String(128), nullable=True)
-    status = Column(String(32), nullable=False, default="pending")
-    video_url = Column(String(1024), nullable=True)
-    error_message = Column(Text, nullable=True)
-    duration = Column(Float, nullable=True)
-    extra_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=func.now())
-    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
-
-    @property
-    def extra(self) -> dict[str, Any]:
-        if not self.extra_json:
-            return {}
-        try:
-            return json.loads(self.extra_json)
-        except Exception:
-            return {}
-
-    def set_extra(self, data: dict[str, Any]) -> None:
-        self.extra_json = json.dumps(data, ensure_ascii=False, default=str)
 
 
 # 向后兼容: 保留 SQLiteManager 类，但 sqlite_manager 单例使用统一的 DatabaseManager
