@@ -371,20 +371,25 @@ export default function Chat() {
   // Show welcome screen if no messages
   if (!messages.length) {
     return (
-      <>
-        <WelcomeScreen onQuickAction={handleQuickAction} />
-        <div className="pb-6">
-          <ChatInput
-            onSend={handleSend}
-            streaming={isStreaming}
-            disabled={isStreaming}
-            webSearch={webSearch}
-            onWebSearchChange={setWebSearch}
-            mcpTools={mcpTools}
-            onMcpToolsChange={setMcpTools}
-          />
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center gap-6">
+          <WelcomeScreen onQuickAction={handleQuickAction} />
+          <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1.55fr)_360px]">
+            <div className="lg:col-start-1">
+              <ChatInput
+                onSend={handleSend}
+                streaming={isStreaming}
+                disabled={isStreaming}
+                webSearch={webSearch}
+                onWebSearchChange={setWebSearch}
+                mcpTools={mcpTools}
+                onMcpToolsChange={setMcpTools}
+                containerClassName="w-full"
+              />
+            </div>
+          </div>
         </div>
-      </>
+      </div>
     );
   }
 

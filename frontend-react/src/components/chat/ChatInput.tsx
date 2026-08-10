@@ -16,6 +16,7 @@ interface Props {
   disabled?: boolean;
   streaming?: boolean;
   compact?: boolean;
+  containerClassName?: string;
   webSearch?: boolean;
   onWebSearchChange?: (v: boolean) => void;
   mcpTools?: boolean;
@@ -28,6 +29,7 @@ export default function ChatInput({
   disabled,
   streaming,
   compact,
+  containerClassName,
   webSearch = false,
   onWebSearchChange,
   mcpTools = true,
@@ -90,7 +92,12 @@ export default function ChatInput({
   ].filter(Boolean);
 
   return (
-    <div className={`w-full ${compact ? "max-w-2xl" : "max-w-3xl"} mx-auto px-4`}>
+    <div
+      className={
+        containerClassName ??
+        `w-full ${compact ? "max-w-2xl" : "max-w-3xl"} mx-auto px-4`
+      }
+    >
       {image && imagePreview && (
         <div className="mb-2 flex items-center gap-3 rounded-lg border border-border bg-bg-card px-3 py-2 shadow-sm">
           <img

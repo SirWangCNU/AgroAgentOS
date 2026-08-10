@@ -33,6 +33,27 @@ assert.equal(
 );
 
 assert.ok(
+  input.includes("containerClassName"),
+  "Chat input should let page layouts own the composer width when needed.",
+);
+
+assert.ok(
+  chat.includes(
+    'className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center gap-6"',
+  ),
+  "Empty chat should use one shared workbench shell for welcome content and composer.",
+);
+
+assert.ok(
+  chat.includes(
+    'className="grid w-full gap-6 lg:grid-cols-[minmax(0,1.55fr)_360px]"',
+  ) &&
+    chat.includes('className="lg:col-start-1"') &&
+    chat.includes('containerClassName="w-full"'),
+  "Welcome composer should align to the left workbench column on desktop.",
+);
+
+assert.ok(
   chat.includes("fileToDataUrl") && chat.includes("imageUrl: imagePreviewUrl"),
   "Chat should attach a local image preview URL to image messages.",
 );
