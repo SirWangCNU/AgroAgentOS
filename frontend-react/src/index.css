@@ -1,27 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #16a34a;
-  --color-primary-hover: #15803d;
-  --color-primary-light: #dcfce7;
-  --color-accent-green: #22c55e;
-  --color-accent-amber: #f59e0b;
-  --color-accent-red: #ef4444;
-  --color-accent-blue: #3b82f6;
-  --color-accent-purple: #8b5cf6;
-  --color-bg-main: #f8fafc;
-  --color-bg-card: #ffffff;
-  --color-bg-sidebar: #ffffff;
-  --color-bg-hover: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-text-primary: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
+  --color-primary: #2f6b45;
+  --color-primary-hover: #245338;
+  --color-primary-light: #e6f1e8;
+  --color-accent-green: #3f8f5c;
+  --color-accent-amber: #b97922;
+  --color-accent-red: #c94a3a;
+  --color-accent-blue: #376f9f;
+  --color-accent-purple: #7156a5;
+  --color-bg-main: #f4f6f1;
+  --color-bg-card: #fffefa;
+  --color-bg-sidebar: #fbfaf3;
+  --color-bg-hover: #edf1e8;
+  --color-border: #dbe2d4;
+  --color-text-primary: #1d2b22;
+  --color-text-secondary: #5d6c60;
+  --color-text-muted: #8b988c;
 }
 
 body {
   margin: 0;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Noto Sans SC", "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   background: var(--color-bg-main);
   color: var(--color-text-primary);

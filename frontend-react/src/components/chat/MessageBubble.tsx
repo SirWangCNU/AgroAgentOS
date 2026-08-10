@@ -19,8 +19,17 @@ export default function MessageBubble({ msg }: { msg: ChatMessage }) {
     return (
       <div className="flex justify-end mb-6">
         <div className="flex items-start gap-2 max-w-[80%]">
-          <div className="px-4 py-3 bg-primary text-white rounded-2xl rounded-br-sm text-sm whitespace-pre-wrap">
-            {msg.content}
+          <div className="overflow-hidden rounded-2xl rounded-br-sm bg-primary text-white shadow-sm">
+            {msg.imageUrl && (
+              <img
+                src={msg.imageUrl}
+                alt="用户上传的作物图片"
+                className="max-h-72 w-full max-w-sm object-cover"
+              />
+            )}
+            <div className="px-4 py-3 text-sm whitespace-pre-wrap">
+              {msg.content}
+            </div>
           </div>
           <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
             <User className="w-4 h-4 text-primary" />

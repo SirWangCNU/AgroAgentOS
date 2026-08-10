@@ -62,46 +62,30 @@ async def analyze_image(
 
     try:
         service = ImageAnalysisService.get_instance()
-        results = service.analyze(image_bytes)
+        analysis = service.analyze(
+            image_bytes,
+            content_type=file.content_type or "image/jpeg",
+        )
 
-        # 构建响应
         detections = [
             DetectionItem(
                 label=r.label,
                 chinese_name=r.chinese_name,
                 confidence=r.confidence,
-                bbox=list(r.bbox),
+                bbox=r.bbox,
             )
-            for r in results
+            for r in analysis.detections
         ]
 
-        # 生成摘要
-        if results:
-            items = [f"{r.chinese_name}({r.confidence:.0%})" for r in results[:5]]
-            summary = f"检测到 {len(results)} 个病虫害: {', '.join(items)}"
-        else:
-            summary = "未检测到明显病虫害症状, 图片可能为健康状态或需更清晰的图片"
-
-        # 获取图片尺寸
-        from PIL import Image
-        import io
-
-        img = Image.open(io.BytesIO(image_bytes))
-        image_size = list(img.size)
-
         return ImageAnalysisResponse(
-            success=True,
+            success=analysis.success,
             detections=detections,
-            summary=summary,
-            image_size=image_size,
+            summary=analysis.summary,
+            diagnosis=analysis.diagnosis,
+            image_size=analysis.image_size,
+            model=analysis.model,
         )
 
-    except FileNotFoundError as e:
-        logger.error(f"[image] 模型文件未找到: {e}")
-        return ImageAnalysisResponse(
-            success=False,
-            summary="识别模型未部署, 请管理员先下载模型文件",
-        )
     except Exception as e:
         logger.exception(f"[image] 推理异常: {e}")
         return ImageAnalysisResponse(

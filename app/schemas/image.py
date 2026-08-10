@@ -22,6 +22,8 @@ class ImageAnalysisResponse(BaseModel):
         default_factory=list, description="检测结果列表"
     )
     summary: str = Field(default="", description="识别结果摘要文本")
+    diagnosis: str = Field(default="", description="多模态模型生成的详细诊断文本")
+    model: str = Field(default="", description="使用的图像分析模型")
     image_size: list[int] = Field(
         default_factory=list, description="原始图片尺寸 [width, height]"
     )

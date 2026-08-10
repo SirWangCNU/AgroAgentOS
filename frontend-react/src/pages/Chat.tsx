@@ -149,52 +149,80 @@ export default function Chat() {
     // and calls loadMessages, which overwrites the user's first message.
     _globalSendingRef.current = true;
 
-    // Ensure we have an active conversation
-    let convId = activeId;
-    if (!convId) {
-      convId = await createNew();
-    }
+    try {
+      // Ensure we have an active conversation
+      let convId = activeId;
+      if (!convId) {
+        convId = await createNew();
+      }
 
-    // Clear previous live state
-    clearLiveState();
+      // Clear previous live state
+      clearLiveState();
 
-    // Image analysis
-    if (image) {
-      try {
-        const result = await analyzeImage(image);
-        if (result.success && result.detections.length > 0) {
-          const detText = result.detections
-            .map((d) => `${d.chinese_name}(${(d.confidence * 100).toFixed(0)}%)`)
-            .join(", ");
-          const userNote = text ? `\n用户补充说明: ${text}` : "";
-          finalQuestion = `[图片分析] 识别到: ${detText}。\n${result.summary}${userNote}\n请根据识别结果给出详细的病虫害防治建议。`;
-        } else {
-          finalQuestion = `[图片分析] ${result.summary || "未识别到病虫害"}${text ? `\n用户说明: ${text}` : ""}`;
-        }
+      if (image) {
+        const imagePreviewUrl = await fileToDataUrl(image);
         await addMessage({
           role: "user",
           content: text || "(图片分析)",
           type: "image",
+          imageUrl: imagePreviewUrl,
         });
-      } catch (err: unknown) {
-        showToast(`图片分析失败: ${getErrorMessage(err, "未知错误")}`, "error");
-        return;
+
+        // Navigate as soon as the user's message is visible. Image analysis can
+        // take seconds, so it should run after the chat view is already open.
+        if (!activeId) {
+          navigate(`/chat/${convId}`, { replace: true });
+        }
+
+        setStreaming(true);
+        addProgressStep({
+          id: `image-analysis-${Date.now()}`,
+          stage: "image_analysis",
+          label: "正在分析图片",
+          detail: "多模态模型识别病虫害",
+          status: "running",
+        });
+
+        try {
+          const result = await analyzeImage(image);
+          updateLastProgressStep({
+            status: "done",
+            detail: result.summary || "图片分析完成",
+          });
+
+          if (result.success && result.detections.length > 0) {
+            const detText = result.detections
+              .map((d) => `${d.chinese_name}(${(d.confidence * 100).toFixed(0)}%)`)
+              .join(", ");
+            const userNote = text ? `\n用户补充说明: ${text}` : "";
+            const diagnosis = result.diagnosis ? `\n详细诊断: ${result.diagnosis}` : "";
+            finalQuestion = `[图片分析] 识别到: ${detText}。\n${result.summary}${diagnosis}${userNote}\n请根据识别结果给出详细的病虫害防治建议。`;
+          } else {
+            const diagnosis = result.diagnosis ? `\n详细诊断: ${result.diagnosis}` : "";
+            finalQuestion = `[图片分析] ${result.summary || "未识别到病虫害"}${diagnosis}${text ? `\n用户说明: ${text}` : ""}`;
+          }
+        } catch (err: unknown) {
+          updateLastProgressStep({
+            status: "error",
+            detail: getErrorMessage(err, "未知错误"),
+          });
+          showToast(`图片分析失败: ${getErrorMessage(err, "未知错误")}`, "error");
+          return;
+        }
+      } else {
+        await addMessage({ role: "user", content: text });
+
+        // Navigate AFTER addMessage — ensures user message is in the store before
+        // the URL change triggers a component remount (different route = unmount/remount).
+        // This prevents the "加载对话记录中..." flash where loadMessages overwrites
+        // the user's first message.
+        if (!activeId) {
+          navigate(`/chat/${convId}`, { replace: true });
+        }
+
+        setStreaming(true);
       }
-    } else {
-      await addMessage({ role: "user", content: text });
-    }
 
-    // Navigate AFTER addMessage — ensures user message is in the store before
-    // the URL change triggers a component remount (different route = unmount/remount).
-    // This prevents the "加载对话记录中..." flash where loadMessages overwrites
-    // the user's first message.
-    if (!activeId) {
-      navigate(`/chat/${convId}`, { replace: true });
-    }
-
-    setStreaming(true);
-
-    try {
       const resp = await chatStream({
         session_id: convId!,
         question: finalQuestion,
@@ -511,4 +539,19 @@ function optionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("图片预览生成失败"));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("图片预览生成失败"));
+    reader.readAsDataURL(file);
+  });
 }

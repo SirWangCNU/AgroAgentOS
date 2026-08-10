@@ -1,5 +1,13 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Camera, Loader2, Square, Globe, Wrench } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Camera,
+  DatabaseZap,
+  Globe,
+  Loader2,
+  Send,
+  Square,
+  Wrench,
+} from "lucide-react";
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE } from "../../lib/constants";
 
 interface Props {
@@ -31,7 +39,6 @@ export default function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
@@ -76,130 +83,135 @@ export default function ChatInput({
     e.target.value = "";
   };
 
+  const activeCapabilities = [
+    webSearch ? "联网检索" : null,
+    mcpTools ? "农场工具" : null,
+    "知识库",
+  ].filter(Boolean);
+
   return (
     <div className={`w-full ${compact ? "max-w-2xl" : "max-w-3xl"} mx-auto px-4`}>
-      {/* Image preview */}
       {image && imagePreview && (
-        <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-bg-hover rounded-lg">
+        <div className="mb-2 flex items-center gap-3 rounded-lg border border-border bg-bg-card px-3 py-2 shadow-sm">
           <img
             src={imagePreview}
-            alt="preview"
-            className="w-10 h-10 object-cover rounded"
+            alt="待分析图片预览"
+            className="h-10 w-10 rounded-md object-cover"
           />
-          <span className="text-sm truncate flex-1">{image.name}</span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-text-primary">
+              {image.name}
+            </div>
+            <div className="text-xs text-text-muted">将随问题一起提交给智能体处理</div>
+          </div>
           <button
             onClick={() => {
               setImage(null);
               setImagePreview(null);
             }}
-            className="text-text-muted hover:text-accent-red text-xs"
+            className="rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-accent-red"
           >
             移除
           </button>
         </div>
       )}
 
-      {/* Input bar */}
-      <div className="flex items-end gap-2 p-3 bg-bg-card border border-border rounded-2xl shadow-sm">
-        <input
-          type="file"
-          ref={fileRef}
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="p-2 text-text-muted hover:text-accent-green rounded-lg transition-colors flex-shrink-0"
-          title="上传图片"
-        >
-          <Camera className="w-5 h-5" />
-        </button>
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="输入问题或上传图片..."
-          rows={1}
-          className="flex-1 bg-transparent outline-none text-sm resize-none max-h-[200px] py-2"
-          disabled={disabled}
-        />
-
-        {/* Toggle buttons */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Web search toggle */}
+      <div className="rounded-lg border border-border bg-bg-card shadow-[0_10px_30px_rgba(47,83,64,0.08)]">
+        <div className="flex items-end gap-2 px-3 py-3">
+          <input
+            type="file"
+            ref={fileRef}
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
           <button
-            onClick={() => onWebSearchChange?.(!webSearch)}
-            className={`p-1.5 rounded-lg transition-all ${
-              webSearch
-                ? "text-accent-amber bg-accent-amber/10"
-                : "text-text-muted hover:text-text-secondary"
-            }`}
-            title={webSearch ? "联网搜索：已开启" : "联网搜索：已关闭"}
+            onClick={() => fileRef.current?.click()}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-primary/10 hover:text-primary"
+            title="上传作物或田间图片"
           >
-            <Globe className="w-4 h-4" />
+            <Camera className="h-5 w-5" />
           </button>
 
-          {/* MCP tools toggle */}
-          <button
-            onClick={() => onMcpToolsChange?.(!mcpTools)}
-            className={`p-1.5 rounded-lg transition-all ${
-              mcpTools
-                ? "text-primary bg-primary/10"
-                : "text-text-muted hover:text-text-secondary"
-            }`}
-            title={mcpTools ? "MCP 工具：已开启" : "MCP 工具：已关闭"}
-          >
-            <Wrench className="w-4 h-4" />
-          </button>
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="描述作物、地块、症状，提交给智能体处理..."
+            rows={1}
+            className="max-h-[200px] min-h-9 flex-1 resize-none bg-transparent py-2 text-sm leading-5 text-text-primary outline-none placeholder:text-text-muted"
+            disabled={disabled}
+          />
+
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => onWebSearchChange?.(!webSearch)}
+              className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
+                webSearch
+                  ? "bg-accent-amber/10 text-accent-amber"
+                  : "text-text-muted hover:bg-bg-hover hover:text-text-secondary"
+              }`}
+              title={webSearch ? "联网检索已开启" : "联网检索已关闭"}
+            >
+              <Globe className="h-4 w-4" />
+            </button>
+
+            <button
+              onClick={() => onMcpToolsChange?.(!mcpTools)}
+              className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
+                mcpTools
+                  ? "bg-primary/10 text-primary"
+                  : "text-text-muted hover:bg-bg-hover hover:text-text-secondary"
+              }`}
+              title={mcpTools ? "农场工具已连接" : "农场工具已关闭"}
+            >
+              <Wrench className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mx-0.5 h-6 w-px bg-border" />
+
+          {streaming ? (
+            <button
+              onClick={onStop}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-red text-white transition-opacity hover:opacity-90"
+              title="停止生成"
+            >
+              <Square className="h-5 w-5" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={disabled || (!text.trim() && !image)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-white transition-all hover:bg-primary-hover disabled:opacity-30"
+              title="发送任务"
+            >
+              {disabled ? (
+                <Loader2 className="h-5 w-5 spinner" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
+            </button>
+          )}
         </div>
 
-        {/* Divider */}
-        <div className="w-px h-5 bg-border mx-0.5" />
-
-        {streaming ? (
-          <button
-            onClick={onStop}
-            className="p-2 bg-accent-red text-white rounded-lg hover:opacity-90 transition-opacity flex-shrink-0"
-            title="停止生成"
-          >
-            <Square className="w-5 h-5" />
-          </button>
-        ) : (
-          <button
-            onClick={handleSend}
-            disabled={disabled || (!text.trim() && !image)}
-            className="p-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-30 transition-all flex-shrink-0"
-          >
-            {disabled ? (
-              <Loader2 className="w-5 h-5 spinner" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
-          </button>
-        )}
-      </div>
-
-      {/* Status indicators */}
-      <div className="flex items-center justify-center gap-3 mt-2">
-        {webSearch && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-accent-amber">
-            <Globe className="w-3 h-3" />
-            联网搜索
-          </span>
-        )}
-        {mcpTools && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-primary">
-            <Wrench className="w-3 h-3" />
-            MCP 工具
-          </span>
-        )}
-        {!webSearch && !mcpTools && (
-          <span className="text-[11px] text-text-muted">
-            AgroAgentOS · 基于 RAG + 多智能体的农业 AI 助手
-          </span>
-        )}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2">
+          <div className="flex items-center gap-1.5 text-xs text-text-muted">
+            <DatabaseZap className="h-3.5 w-3.5 text-primary" />
+            <span>任务上下文会随对话持续整理</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {activeCapabilities.map((item) => (
+              <span
+                key={item}
+                className="rounded-md bg-bg-hover px-2 py-0.5 text-[11px] font-medium text-text-secondary"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

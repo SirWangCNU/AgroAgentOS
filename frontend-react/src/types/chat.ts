@@ -53,5 +53,7 @@ export interface ImageAnalysisResult {
   success: boolean;
   detections: DetectionItem[];
   summary: string;
+  diagnosis?: string;
+  model?: string;
   image_size: number[];
 }

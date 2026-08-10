@@ -317,7 +317,17 @@ class Settings(BaseSettings):
         description="探测结果缓存秒数 (防止每次调用都探测)",
     )
 
-    # ==================== YOLO 图像识别 ====================
+    # ==================== 多模态图像识别 ====================
+    dashscope_vision_model: str = Field(
+        default="qwen-vl-plus",
+        description="DashScope 多模态视觉模型, 用于农作物图片病虫害诊断",
+    )
+    dashscope_vision_timeout_sec: float = Field(
+        default=60.0,
+        description="DashScope 多模态视觉模型请求超时秒数",
+    )
+
+    # ==================== 旧 YOLO 图像识别配置 (保留兼容, 默认不再使用) ====================
     yolo_model_path: str = Field(
         default="models/pest_yolo.onnx",
         description="YOLO ONNX 模型文件路径 (相对于项目根目录)",
