@@ -7,13 +7,16 @@
     "dev": "vite",
     "dev:fresh": "node scripts/dev-fresh.mjs",
     "build": "tsc -b && vite build",
+    "test": "vitest run",
     "build:fresh": "node scripts/build-fresh.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "clean": "node scripts/clean-cache.mjs"
   },
   "dependencies": {
+    "@geoman-io/leaflet-geoman-free": "^2.20.0",
     "@tanstack/react-query": "^5.100.14",
+    "@turf/turf": "^7.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",
@@ -39,6 +42,7 @@
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^4.1.10"
   }
 }

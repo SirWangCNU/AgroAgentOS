@@ -59,3 +59,10 @@ export async function getFarmWeather(farmId: number): Promise<FarmWeatherSummary
   );
   return response.data;
 }
+
+export async function getFieldWeather(fieldId: number): Promise<FarmWeatherSummary> {
+  const response = await authFetch<ApiResponse<FarmWeatherSummary>>(
+    `/fields/${fieldId}/weather`
+  );
+  return response.data;
+}

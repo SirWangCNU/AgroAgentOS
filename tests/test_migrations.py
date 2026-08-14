@@ -44,9 +44,13 @@ def test_upgrade_to_head_removes_trajectory_tables(tmp_path: Path):
         history_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(history_records)")
         }
+        field_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(fields)")
+        }
 
     assert {"farms", "fields"}.issubset(tables)
     assert "user_id" in history_columns
+    assert "boundary_json" in field_columns
     assert "trajectory_points" not in tables
     assert "trajectory_files" not in tables
 
@@ -87,4 +91,8 @@ def test_database_at_legacy_head_can_upgrade_to_current_head(tmp_path: Path):
         columns = {
             row[1] for row in connection.execute("PRAGMA table_info(history_records)")
         }
+        field_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(fields)")
+        }
     assert "user_id" in columns
+    assert "boundary_json" in field_columns

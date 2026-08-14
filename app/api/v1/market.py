@@ -174,6 +174,7 @@ async def get_market_analysis(
 async def get_market_overview(
     crop: str = Query(default="水稻", description="农产品名"),
     location: str = Query(default="", description="城市名 (空则用用户农场位置)"),
+    include_analysis: bool = Query(default=True, description="是否包含较慢的 AI 综合分析"),
 ):
     location = resolve_location(location, _current_user_id())
     logger.info(f"[market-api] 聚合概览: crop={crop} location={location}")
@@ -188,10 +189,12 @@ async def get_market_overview(
     price_r, supply_r, policy_r = await asyncio.gather(
         price_task, supply_task, policy_task
     )
-    # 分析依赖前三者, 串行
-    analysis_r = await service.get_market_analysis(
-        crop, location, price_r, supply_r, policy_r
-    )
+    # AI 分析依赖前三者且通常最慢, 允许首屏跳过.
+    analysis_r = None
+    if include_analysis:
+        analysis_r = await service.get_market_analysis(
+            crop, location, price_r, supply_r, policy_r
+        )
 
     overview = MarketOverview(
         crop=crop,
@@ -240,7 +243,7 @@ async def get_market_overview(
             sales_advice=analysis_r.sales_advice,
             risk_warning=analysis_r.risk_warning,
             source=analysis_r.source,
-        ),
+        ) if analysis_r else None,
     )
 
     return ApiResponse.success(data=overview, message="行情概览获取成功")

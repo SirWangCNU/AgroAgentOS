@@ -24,6 +24,7 @@ from loguru import logger
 from app.schemas.weather import (
     FarmWeatherAlert,
     FarmWeatherCurrent,
+    FarmWeatherDaily,
     FarmWeatherSummary,
 )
 
@@ -615,37 +616,37 @@ def reset_weather_service() -> None:
     _weather_service = None
 
 
-async def get_farm_weather_summary(farm: "Farm") -> FarmWeatherSummary:
-    """获取农场管理页所需的实时天气与风险摘要。
-
-    农场未设置坐标、天气服务回退为 Mock 或请求异常时，均不把数据伪装成
-    实时天气返回给页面。
-    """
-    if farm.latitude is None or farm.longitude is None:
+async def get_coordinate_weather_summary(
+    latitude: float | None,
+    longitude: float | None,
+    *,
+    location_hint: str = "",
+    missing_reason: str = "FARM_LOCATION_REQUIRED",
+) -> FarmWeatherSummary:
+    """Build the objective weather summary used by farm and field pages."""
+    if latitude is None or longitude is None:
         return FarmWeatherSummary(
             available=False,
-            reason="FARM_LOCATION_REQUIRED",
+            reason=missing_reason,
         )
 
     try:
         service = get_weather_service()
-        current_result = await service.get_weather_by_coordinates(
-            farm.latitude, farm.longitude
-        )
+        current_result = await service.get_weather_by_coordinates(latitude, longitude)
         if current_result.source == "mock":
             return FarmWeatherSummary(
                 available=False,
                 reason="WEATHER_SERVICE_UNAVAILABLE",
             )
 
-        location = (farm.location or current_result.current.location).strip()
+        location = (location_hint or current_result.current.location).strip()
         if not location:
             return FarmWeatherSummary(
                 available=False,
                 reason="WEATHER_SERVICE_UNAVAILABLE",
             )
 
-        forecast_result = await service.get_forecast_with_alerts(location)
+        forecast_result = await service.get_forecast_with_alerts(location, days=3)
         if forecast_result.source == "mock":
             return FarmWeatherSummary(
                 available=False,
@@ -663,6 +664,17 @@ async def get_farm_weather_summary(farm: "Farm") -> FarmWeatherSummary:
                 wind_level=current.wind_level,
                 update_time=current.update_time,
             ),
+            daily=[
+                FarmWeatherDaily(
+                    date=day.date,
+                    min_temp=day.min_temp,
+                    max_temp=day.max_temp,
+                    precipitation_mm=day.precipitation_mm,
+                    condition=day.condition,
+                    wind_level=day.wind_level,
+                )
+                for day in forecast_result.daily[:3]
+            ],
             alerts=[
                 FarmWeatherAlert(
                     alert_type=alert.alert_type,
@@ -679,3 +691,23 @@ async def get_farm_weather_summary(farm: "Farm") -> FarmWeatherSummary:
             available=False,
             reason="WEATHER_SERVICE_UNAVAILABLE",
         )
+
+
+async def get_farm_weather_summary(farm: "Farm") -> FarmWeatherSummary:
+    """获取农场管理页所需的实时天气、三日趋势与风险摘要。"""
+    return await get_coordinate_weather_summary(
+        farm.latitude,
+        farm.longitude,
+        location_hint=getattr(farm, "location", "") or "",
+        missing_reason="FARM_LOCATION_REQUIRED",
+    )
+
+
+async def get_field_weather_summary(field: "Field", location_hint: str = "") -> FarmWeatherSummary:
+    """获取地块代表点对应的实时天气、三日趋势与风险摘要。"""
+    return await get_coordinate_weather_summary(
+        getattr(field, "latitude", None),
+        getattr(field, "longitude", None),
+        location_hint=location_hint,
+        missing_reason="FIELD_BOUNDARY_REQUIRED",
+    )

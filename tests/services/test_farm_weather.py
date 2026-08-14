@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.models.farm import Farm
+from app.models.farm import Field
 from app.models.user import User
 from app.schemas.weather import FarmWeatherSummary
 from app.services.weather_service import (
@@ -12,6 +13,7 @@ from app.services.weather_service import (
     WeatherData,
     WeatherForecastResult,
     WeatherResult,
+    get_field_weather_summary,
     get_farm_weather_summary,
 )
 
@@ -124,6 +126,35 @@ async def test_live_weather_summary_returns_metrics_and_risk_without_advice(
 
 
 @pytest.mark.asyncio
+async def test_field_weather_uses_field_representative_point_and_returns_three_day_forecast(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Using the farm marker for field weather would report the wrong micro-location after fields are drawn."""
+    from app.services import weather_service
+
+    fake = FakeWeatherService(make_weather_result("qweather"), make_forecast_result("qweather"))
+    monkeypatch.setattr(weather_service, "get_weather_service", lambda: fake)
+    field = Field(name="一号地", latitude=40.0005, longitude=116.3005)
+
+    result = await get_field_weather_summary(field, location_hint="寿光")
+
+    assert result.available is True
+    assert len(result.daily) == 1
+    assert result.daily[0].date == "2026-07-30"
+    assert fake.coordinate_calls == [(40.0005, 116.3005)]
+
+
+@pytest.mark.asyncio
+async def test_field_without_boundary_point_returns_boundary_required():
+    """Boundaryless legacy fields should not be presented as field-specific live weather."""
+    result = await get_field_weather_summary(Field(name="legacy"))
+
+    assert result.available is False
+    assert result.reason == "FIELD_BOUNDARY_REQUIRED"
+    assert result.current is None
+
+
+@pytest.mark.asyncio
 async def test_farm_weather_endpoint_uses_the_current_users_farm(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -150,3 +181,46 @@ async def test_farm_weather_endpoint_uses_the_current_users_farm(
     assert captured == {"farm_id": 12, "user_id": 7}
     assert response.code == "SUCCESS"
     assert response.data.reason == "FARM_LOCATION_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_field_weather_endpoint_uses_the_current_users_field(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The field weather route must preserve field ownership checks before querying weather."""
+    from app.api.v1 import farms as farms_api
+
+    field = Field(id=21, farm_id=12, name="一号地", latitude=40.0005, longitude=116.3005)
+    farm = Farm(id=12, user_id=7, name="北地", location="寿光")
+    current_user = User(id=7, username="farmer", email="farmer@example.com", hashed_password="hash")
+    captured: dict[str, int] = {}
+
+    def fake_get_field(field_id: int, user_id: int) -> Field:
+        captured["field_id"] = field_id
+        captured["user_id"] = user_id
+        return field
+
+    def fake_get_farm(farm_id: int, user_id: int) -> Farm:
+        captured["farm_id"] = farm_id
+        captured["farm_user_id"] = user_id
+        return farm
+
+    async def fake_summary(_: Field, location_hint: str = "") -> FarmWeatherSummary:
+        captured["location_hint"] = location_hint
+        return FarmWeatherSummary(available=False, reason="FIELD_BOUNDARY_REQUIRED")
+
+    monkeypatch.setattr(farms_api.farm_service, "get_field", fake_get_field)
+    monkeypatch.setattr(farms_api.farm_service, "get_farm", fake_get_farm)
+    monkeypatch.setattr(farms_api, "get_field_weather_summary", fake_summary)
+
+    response = await farms_api.get_field_weather(21, current_user)
+
+    assert captured == {
+        "field_id": 21,
+        "user_id": 7,
+        "farm_id": 12,
+        "farm_user_id": 7,
+        "location_hint": "寿光",
+    }
+    assert response.code == "SUCCESS"
+    assert response.data.reason == "FIELD_BOUNDARY_REQUIRED"

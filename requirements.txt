@@ -73,6 +73,8 @@ openpyxl>=3.1.0
 
 # ---------- 图表生成 ----------
 matplotlib>=3.8.0
+shapely>=2.1.0
+pyproj>=3.7.0
 
 # ---------- 图像识别 (YOLO ONNX 推理) ----------
 onnxruntime>=1.17.0

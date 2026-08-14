@@ -18,7 +18,7 @@ from app.schemas.farm import (
 )
 from app.schemas.weather import FarmWeatherSummary
 from app.services import farm_service
-from app.services.weather_service import get_farm_weather_summary
+from app.services.weather_service import get_farm_weather_summary, get_field_weather_summary
 
 router = APIRouter(tags=["农场管理"])
 
@@ -132,6 +132,18 @@ def get_field(
     """获取地块详情."""
     field = farm_service.get_field(field_id, current_user.id)
     return ApiResponse.success(data=FieldInfo.model_validate(field))
+
+
+@router.get("/fields/{field_id}/weather", response_model=ApiResponse[FarmWeatherSummary])
+async def get_field_weather(
+    field_id: int,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse:
+    """获取当前用户指定地块的实时天气、三日趋势和风险摘要。"""
+    field = farm_service.get_field(field_id, current_user.id)
+    farm = farm_service.get_farm(field.farm_id, current_user.id)
+    summary = await get_field_weather_summary(field, location_hint=farm.location or "")
+    return ApiResponse.success(data=summary, message="地块天气查询成功")
 
 
 @router.put("/fields/{field_id}", response_model=ApiResponse[FieldInfo])

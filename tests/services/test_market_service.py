@@ -23,14 +23,18 @@ from app.services.market_service import (
     MOCK_MARKET_PRICES,
     MOCK_POLICIES,
     MOCK_SUPPLY_DEMAND,
+    MarketAnalysisResult,
     MarketService,
     MarketPriceResult,
     PolicyResult,
     SupplyDemandData,
+    _analysis_cache,
+    _get_policy_from_redis,
     _price_cache,
     _supply_cache,
     get_market_service,
 )
+from app.api.v1 import market as market_api
 from app.tools.meta import TOOL_META, get_meta
 
 
@@ -45,6 +49,7 @@ def service():
     yield s
     _price_cache.clear()
     _supply_cache.clear()
+    _analysis_cache.clear()
 
 
 def _run(coro):
@@ -131,6 +136,31 @@ class TestGetSupplyDemand:
 class TestGetPolicySubsidies:
     """政策补贴查询."""
 
+    def test_policy_redis_cache_reads_decoded_payload(self):
+        """Redis 管理器返回已反序列化 dict 时应命中政策缓存."""
+        payload = {
+            "policies": [
+                {
+                    "title": "缓存政策",
+                    "category": "土地",
+                    "subsidy_amount": "每亩 120 元",
+                    "target": "实际种植主体",
+                    "conditions": "符合耕地保护要求",
+                    "deadline": "2026-10-31",
+                    "region": "北京",
+                    "source_url": "https://example.com/policy",
+                }
+            ],
+            "source": "redis_cache",
+            "update_time": "2026-08-10 10:00:00",
+        }
+        with patch("app.core.redis.redis_manager.get", return_value=payload):
+            result = _run(_get_policy_from_redis("北京"))
+
+        assert isinstance(result, PolicyResult)
+        assert result.source == "redis_cache"
+        assert result.policies[0].title == "缓存政策"
+
     def test_known_location(self, service):
         """已知位置返回匹配政策."""
         with patch(
@@ -187,6 +217,35 @@ class TestGetPolicySubsidies:
 class TestGetMarketAnalysis:
     """综合市场分析."""
 
+    def test_analysis_cache_reuses_llm_result(self, service):
+        """相同作物和位置的分析应复用缓存, 避免重复调用 LLM."""
+        price = _run(service.get_market_price("水稻", "北京"))
+        supply = _run(service.get_supply_demand("水稻"))
+        with patch(
+            "app.services.market_service._get_policy_from_redis",
+            return_value=None,
+        ), patch("app.services.market_service._set_policy_to_redis"):
+            policy = _run(service.get_policy_subsidies("北京"))
+
+        expected = MarketAnalysisResult(
+            crop="水稻",
+            location="北京",
+            price_summary="价格摘要",
+            trend_forecast="走势预测",
+            supply_demand_summary="供需摘要",
+            policy_summary="政策摘要",
+            sales_advice="销售建议",
+            risk_warning="风险提示",
+            source="llm",
+        )
+        with patch.object(service, "_llm_analyze", return_value=expected) as llm:
+            first = _run(service.get_market_analysis("水稻", "北京", price, supply, policy))
+            second = _run(service.get_market_analysis("水稻", "北京", price, supply, policy))
+
+        assert first.sales_advice == "销售建议"
+        assert second.sales_advice == "销售建议"
+        assert llm.call_count == 1
+
     def test_rule_based_fallback(self, service):
         """LLM 失败时回退规则分析."""
         with patch.object(
@@ -224,6 +283,31 @@ class TestGetMarketAnalysis:
         ):
             result = _run(service.get_market_analysis("玉米", "北京"))
         assert result.price_summary
+
+
+# ============================================================
+# 聚合概览 API
+# ============================================================
+
+class TestMarketOverviewApi:
+    """市场聚合概览接口."""
+
+    def test_overview_can_skip_analysis_for_fast_first_paint(self, service):
+        """首屏快数据查询应允许跳过 LLM 综合分析."""
+        with patch("app.api.v1.market.get_market_service", return_value=service), \
+            patch.object(service, "get_market_analysis", side_effect=AssertionError("LLM should not run")):
+            response = _run(
+                market_api.get_market_overview(
+                    crop="水稻",
+                    location="北京",
+                    include_analysis=False,
+                )
+            )
+
+        assert response.data.price is not None
+        assert response.data.supply_demand is not None
+        assert response.data.policy is not None
+        assert response.data.analysis is None
 
 
 # ============================================================

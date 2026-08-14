@@ -258,6 +258,7 @@ class _TTLCache:
 
 _price_cache = _TTLCache(ttl_seconds=1800)      # 30 分钟
 _supply_cache = _TTLCache(ttl_seconds=1800)     # 30 分钟
+_analysis_cache = _TTLCache(ttl_seconds=1800)   # 30 分钟
 _policy_cache_ttl = 6 * 3600                     # 政策缓存 6 小时
 
 
@@ -273,10 +274,12 @@ async def _get_policy_from_redis(location: str) -> Optional[PolicyResult]:
     """从 Redis 读政策缓存, 失败返回 None (不中断)."""
     try:
         from app.core.redis import redis_manager
-        raw = await redis_manager.get(_policy_cache_key(location))
+        raw = redis_manager.get(_policy_cache_key(location))
         if not raw:
             return None
-        data = json.loads(raw)
+        data = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(data, dict):
+            return None
         policies = [PolicySubsidy(**p) for p in data.get("policies", [])]
         return PolicyResult(
             location=location,
@@ -306,7 +309,7 @@ async def _set_policy_to_redis(location: str, result: PolicyResult) -> None:
             "source": result.source,
             "update_time": result.update_time,
         }
-        await redis_manager.set(
+        redis_manager.set(
             _policy_cache_key(location), payload, expire=_policy_cache_ttl
         )
     except Exception as e:
@@ -527,17 +530,25 @@ class MarketService:
         if policy_result is None:
             policy_result = await self.get_policy_subsidies(location)
 
+        cache_key = f"analysis:{crop}:{location}"
+        cached = await _analysis_cache.get(cache_key)
+        if cached:
+            logger.debug(f"[Market] 分析命中缓存: {crop}@{location}")
+            return cached
+
         try:
-            return await self._llm_analyze(
+            result = await self._llm_analyze(
                 crop, location, price_result, supply_result, policy_result
             )
         except Exception as e:
             logger.warning(
                 f"[Market] LLM 分析失败, 回退规则: {type(e).__name__}: {e}"
             )
-            return self._rule_based_analyze(
+            result = self._rule_based_analyze(
                 crop, location, price_result, supply_result, policy_result
             )
+        await _analysis_cache.set(cache_key, result)
+        return result
 
     async def _llm_analyze(
         self,

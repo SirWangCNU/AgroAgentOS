@@ -54,10 +54,12 @@ export async function getMarketAnalysis(
 
 export async function getMarketOverview(
   crop: string = "水稻",
-  location: string = ""
+  location: string = "",
+  includeAnalysis: boolean = true
 ): Promise<MarketOverview> {
   const params = new URLSearchParams({ crop });
   if (location) params.set("location", location);
+  params.set("include_analysis", String(includeAnalysis));
   const resp = await authFetch<ApiResponse<MarketOverview>>(
     `/market/overview?${params.toString()}`
   );

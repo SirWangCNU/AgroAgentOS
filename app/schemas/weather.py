@@ -62,12 +62,24 @@ class FarmWeatherAlert(BaseModel):
     severity: str
 
 
+class FarmWeatherDaily(BaseModel):
+    """农场/地块管理页展示的每日天气趋势."""
+
+    date: str
+    min_temp: float
+    max_temp: float
+    precipitation_mm: float = 0.0
+    condition: str = ""
+    wind_level: int = 0
+
+
 class FarmWeatherSummary(BaseModel):
     """按农场位置聚合的天气摘要，不包含农业行动建议。"""
 
     available: bool
     reason: Optional[str] = None
     current: Optional[FarmWeatherCurrent] = None
+    daily: List[FarmWeatherDaily] = Field(default_factory=list)
     alerts: List[FarmWeatherAlert] = Field(default_factory=list)
     source: Optional[str] = None
 

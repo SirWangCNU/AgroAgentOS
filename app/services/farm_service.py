@@ -1,5 +1,7 @@
 """农场和地块业务服务."""
 
+import json
+
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -12,12 +14,63 @@ from app.schemas.farm import (
     FieldCreateRequest,
     FieldUpdateRequest,
 )
+from app.services.field_geometry import (
+    OVERLAP_TOLERANCE_SQUARE_METERS,
+    analyze_boundary,
+    intersection_area_square_meters,
+)
 
 
 def _refresh_and_detach(sess: Session, instance):
     sess.refresh(instance)
     sess.expunge(instance)
     return instance
+
+
+def _require_user_farm(sess: Session, farm_id: int, user_id: int, *, lock: bool = False) -> Farm:
+    query = sess.query(Farm).filter(Farm.id == farm_id, Farm.user_id == user_id)
+    if lock:
+        query = query.with_for_update()
+    farm = query.first()
+    if not farm:
+        raise AppException(status_code=404, detail="农场不存在")
+    return farm
+
+
+def _field_shape(field: Field):
+    if not field.boundary_json:
+        return None
+    try:
+        return analyze_boundary(json.loads(field.boundary_json)).shape
+    except (TypeError, ValueError, AppException):
+        return None
+
+
+def _apply_boundary_to_field(field: Field, boundary: dict, existing_fields: list[Field]) -> None:
+    geometry = analyze_boundary(boundary)
+    for existing in existing_fields:
+        if existing.id == field.id:
+            continue
+        existing_shape = _field_shape(existing)
+        if existing_shape is None:
+            continue
+        overlap_area = intersection_area_square_meters(geometry.shape, existing_shape)
+        if overlap_area > OVERLAP_TOLERANCE_SQUARE_METERS:
+            raise AppException(
+                "地块边界与已有地块重叠",
+                code="FIELD_BOUNDARY_OVERLAP",
+                status_code=409,
+                detail={"overlap_square_meters": round(overlap_area, 2)},
+            )
+    field.boundary_json = json.dumps(geometry.normalized, ensure_ascii=False, separators=(",", ":"))
+    field.area_mu = geometry.area_mu
+    field.latitude = geometry.latitude
+    field.longitude = geometry.longitude
+
+
+def _recalculate_farm_area(sess: Session, farm: Farm) -> None:
+    fields = sess.query(Field).filter(Field.farm_id == farm.id).all()
+    farm.area_mu = round(sum((field.area_mu or 0.0) for field in fields), 4)
 
 
 # ==================== 农场 CRUD ====================
@@ -107,9 +160,8 @@ def get_field_count(farm_id: int) -> int:
 
 def create_field(farm_id: int, user_id: int, data: FieldCreateRequest) -> Field:
     """创建地块."""
-    # 验证农场存在且属于当前用户
-    get_farm(farm_id, user_id)
     with sqlite_manager.session() as sess:
+        farm = _require_user_farm(sess, farm_id, user_id, lock=True)
         field = Field(
             farm_id=farm_id,
             name=data.name,
@@ -124,7 +176,12 @@ def create_field(farm_id: int, user_id: int, data: FieldCreateRequest) -> Field:
             longitude=data.longitude,
             notes=data.notes,
         )
+        if data.boundary is not None:
+            existing_fields = sess.query(Field).filter(Field.farm_id == farm_id).all()
+            _apply_boundary_to_field(field, data.boundary, existing_fields)
         sess.add(field)
+        sess.flush()
+        _recalculate_farm_area(sess, farm)
         sess.flush()
         field_id = field.id
         _refresh_and_detach(sess, field)
@@ -167,12 +224,21 @@ def update_field(field_id: int, user_id: int, data: FieldUpdateRequest) -> Field
         field = sess.query(Field).filter(Field.id == field_id).first()
         if not field:
             raise AppException(status_code=404, detail="地块不存在")
-        farm = sess.query(Farm).filter(Farm.id == field.farm_id, Farm.user_id == user_id).first()
-        if not farm:
-            raise AppException(status_code=403, detail="无权修改该地块")
+        farm = _require_user_farm(sess, field.farm_id, user_id, lock=True)
         update_data = data.model_dump(exclude_unset=True)
+        boundary = update_data.pop("boundary", None)
+        existing_boundary_json = field.boundary_json
         for key, value in update_data.items():
+            if key in {"area_mu", "latitude", "longitude"} and (boundary is not None or existing_boundary_json):
+                continue
             setattr(field, key, value)
+        if boundary is not None:
+            existing_fields = sess.query(Field).filter(Field.farm_id == farm.id).all()
+            _apply_boundary_to_field(field, boundary, existing_fields)
+        elif existing_boundary_json:
+            _apply_boundary_to_field(field, json.loads(existing_boundary_json), [])
+        sess.flush()
+        _recalculate_farm_area(sess, farm)
         sess.flush()
         _refresh_and_detach(sess, field)
         logger.info(f"[Field] 更新地块: id={field_id} fields={list(update_data.keys())}")
@@ -185,8 +251,8 @@ def delete_field(field_id: int, user_id: int) -> None:
         field = sess.query(Field).filter(Field.id == field_id).first()
         if not field:
             raise AppException(status_code=404, detail="地块不存在")
-        farm = sess.query(Farm).filter(Farm.id == field.farm_id, Farm.user_id == user_id).first()
-        if not farm:
-            raise AppException(status_code=403, detail="无权删除该地块")
+        farm = _require_user_farm(sess, field.farm_id, user_id, lock=True)
         sess.delete(field)
+        sess.flush()
+        _recalculate_farm_area(sess, farm)
         logger.info(f"[Field] 删除地块: id={field_id}")

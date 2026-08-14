@@ -25,6 +25,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
+try:
+    from fastapi.routing import iter_route_contexts as _iter_route_contexts
+except ImportError:  # FastAPI < 0.138 keeps app.routes eagerly expanded.
+    _iter_route_contexts = None
+
 from app.api.middleware import setup_middlewares
 from app.api.v1 import (
     auth,
@@ -95,10 +100,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("应用已关闭")
 
 
+class AgroFastAPI(FastAPI):
+    """FastAPI app with a compatibility route view for tests and route audits."""
+
+    @property
+    def routes(self):  # type: ignore[override]
+        if _iter_route_contexts is None:
+            return self.router.routes
+        return list(_iter_route_contexts(self.router.routes))
+
+
 # ============================================================
 # 创建 FastAPI 实例
 # ============================================================
-app = FastAPI(
+app = AgroFastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="AgroAgentOS 智农协同平台 - 基于 LangGraph + RAG + MCP",

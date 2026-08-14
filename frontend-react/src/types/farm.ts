@@ -1,5 +1,10 @@
 export type FieldStatus = "idle" | "planting" | "fallow";
 
+export interface GeoJSONPolygon {
+  type: "Polygon";
+  coordinates: number[][][];
+}
+
 export interface Farm {
   id: number;
   name: string;
@@ -17,9 +22,16 @@ export interface Field {
   farm_id: number;
   name: string;
   area_mu: number;
+  soil_type: string;
   current_crop: string;
+  planting_date: string | null;
+  expected_harvest: string | null;
+  growth_stage: string;
   status: FieldStatus;
+  latitude: number | null;
+  longitude: number | null;
   notes: string;
+  boundary: GeoJSONPolygon | null;
 }
 
 export interface FarmInput {
@@ -33,8 +45,13 @@ export interface FarmInput {
 
 export interface FieldInput {
   name: string;
-  area_mu: number;
+  area_mu?: number;
+  soil_type?: string;
   current_crop: string;
+  planting_date?: string | null;
+  expected_harvest?: string | null;
+  growth_stage?: string;
   status: FieldStatus;
   notes: string;
+  boundary?: GeoJSONPolygon | null;
 }

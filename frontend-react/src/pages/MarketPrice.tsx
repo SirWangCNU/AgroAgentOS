@@ -12,7 +12,7 @@ import {
   AlertTriangle,
   MapPin,
 } from "lucide-react";
-import { getMarketOverview } from "../api/market";
+import { getMarketAnalysis, getMarketOverview } from "../api/market";
 import WorkspaceLayout from "../components/layout/WorkspaceLayout";
 import StatCard from "../components/ui/StatCard";
 import LoadingGrid from "../components/ui/LoadingGrid";
@@ -27,16 +27,27 @@ export default function MarketPrice() {
   const [crop, setCrop] = useState("水稻");
   const [inputCrop, setInputCrop] = useState("水稻");
   const [location, setLocation] = useState("");
+  const [inputLocation, setInputLocation] = useState("");
 
   const { data: overview, isLoading } = useQuery({
     queryKey: ["market-overview", crop, location],
-    queryFn: () => getMarketOverview(crop, location),
+    queryFn: () => getMarketOverview(crop, location, false),
     staleTime: 30 * 60 * 1000, // 30 分钟
   });
+
+  const { data: analysis, isLoading: isAnalysisLoading } = useQuery({
+    queryKey: ["market-analysis", crop, location],
+    queryFn: () => getMarketAnalysis(crop, location),
+    staleTime: 30 * 60 * 1000, // 30 分钟
+    enabled: !!overview,
+  });
+
+  const marketAnalysis = analysis ?? overview?.analysis ?? null;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputCrop.trim()) setCrop(inputCrop.trim());
+    setLocation(inputLocation.trim());
   };
 
   return (
@@ -60,8 +71,8 @@ export default function MarketPrice() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            value={inputLocation}
+            onChange={(e) => setInputLocation(e.target.value)}
             placeholder="位置 (空则用默认)"
             className="w-full pl-9 pr-4 py-2.5 text-sm border border-border rounded-xl outline-none focus:border-primary bg-bg-card transition-colors"
           />
@@ -311,7 +322,15 @@ export default function MarketPrice() {
           )}
 
           {/* AI 综合分析 */}
-          {overview.analysis && (
+          {isAnalysisLoading ? (
+            <section className="bg-bg-card rounded-xl border border-border p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Lightbulb className="w-5 h-5 text-accent-amber" />
+                AI 综合分析
+              </h3>
+              <LoadingGrid rows={1} cols={1} height="h-24" />
+            </section>
+          ) : marketAnalysis && (
             <section className="bg-bg-card rounded-xl border border-border p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Lightbulb className="w-5 h-5 text-accent-amber" />
@@ -321,25 +340,25 @@ export default function MarketPrice() {
                 <div>
                   <div className="font-medium mb-1">价格摘要</div>
                   <p className="text-text-muted">
-                    {overview.analysis.price_summary}
+                    {marketAnalysis.price_summary}
                   </p>
                 </div>
                 <div>
                   <div className="font-medium mb-1">走势预测</div>
                   <p className="text-text-muted">
-                    {overview.analysis.trend_forecast}
+                    {marketAnalysis.trend_forecast}
                   </p>
                 </div>
                 <div>
                   <div className="font-medium mb-1">供需摘要</div>
                   <p className="text-text-muted">
-                    {overview.analysis.supply_demand_summary}
+                    {marketAnalysis.supply_demand_summary}
                   </p>
                 </div>
                 <div>
                   <div className="font-medium mb-1">政策摘要</div>
                   <p className="text-text-muted">
-                    {overview.analysis.policy_summary}
+                    {marketAnalysis.policy_summary}
                   </p>
                 </div>
                 <div className="p-4 rounded-lg bg-accent-green/5 border border-accent-green/20">
@@ -347,7 +366,7 @@ export default function MarketPrice() {
                     <Lightbulb className="w-4 h-4 text-accent-green" />
                     销售建议
                   </div>
-                  <p>{overview.analysis.sales_advice}</p>
+                  <p>{marketAnalysis.sales_advice}</p>
                 </div>
                 <div className="p-4 rounded-lg bg-accent-red/5 border border-accent-red/20">
                   <div className="font-medium mb-1 flex items-center gap-2">
@@ -355,12 +374,12 @@ export default function MarketPrice() {
                     风险提示
                   </div>
                   <p className="text-text-muted">
-                    {overview.analysis.risk_warning}
+                    {marketAnalysis.risk_warning}
                   </p>
                 </div>
               </div>
               <p className="mt-4 text-xs text-text-muted">
-                分析来源: {overview.analysis.source}
+                分析来源: {marketAnalysis.source}
               </p>
             </section>
           )}

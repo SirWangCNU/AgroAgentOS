@@ -1,12 +1,14 @@
 """农场和地块相关的 Pydantic 模型."""
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 # ==================== 请求模型 ====================
+
+GeoJSONPolygon = dict[str, Any]
 
 
 class FarmCreateRequest(BaseModel):
@@ -45,6 +47,7 @@ class FieldCreateRequest(BaseModel):
     latitude: Optional[float] = Field(None, description="纬度")
     longitude: Optional[float] = Field(None, description="经度")
     notes: str = Field(default="", description="备注")
+    boundary: Optional[GeoJSONPolygon] = Field(None, description="GeoJSON Polygon 边界")
 
 
 class FieldUpdateRequest(BaseModel):
@@ -61,6 +64,7 @@ class FieldUpdateRequest(BaseModel):
     latitude: Optional[float] = Field(None, description="纬度")
     longitude: Optional[float] = Field(None, description="经度")
     notes: Optional[str] = Field(None, description="备注")
+    boundary: Optional[GeoJSONPolygon] = Field(None, description="GeoJSON Polygon 边界")
 
 
 # ==================== 响应模型 ====================
@@ -82,6 +86,7 @@ class FieldInfo(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     notes: str
+    boundary: Optional[GeoJSONPolygon] = None
     created_at: datetime
     updated_at: datetime
 
